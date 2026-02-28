@@ -1,0 +1,521 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e5]:
+    - generic [ref=e6]:
+      - link "HipComic" [ref=e8] [cursor=pointer]:
+        - /url: /
+        - img "HipComic" [ref=e9]:
+          - img [ref=e10]
+      - list [ref=e14]:
+        - listbox [ref=e15]:
+          - option "Home" [ref=e16] [cursor=pointer]:
+            - img [ref=e19]
+            - generic [ref=e22]: Home
+          - option "Auction Events" [ref=e23] [cursor=pointer]:
+            - img [ref=e26]
+            - generic [ref=e29]: Auction Events
+          - option "My Collection" [ref=e30] [cursor=pointer]:
+            - img [ref=e33]
+            - generic [ref=e36]: My Collection
+          - option "Comic Scanner" [ref=e37] [cursor=pointer]:
+            - img [ref=e40]
+            - generic [ref=e43]: Comic Scanner
+          - option "Price Guide" [selected] [ref=e44] [cursor=pointer]:
+            - img [ref=e47]
+            - generic [ref=e50]: Price Guide
+          - option "Following" [ref=e51] [cursor=pointer]:
+            - img [ref=e54]
+            - generic [ref=e57]: Following
+          - option "More" [ref=e58] [cursor=pointer]:
+            - img [ref=e61]
+            - generic [ref=e64]: More
+    - banner [ref=e65]:
+      - generic [ref=e66]:
+        - generic [ref=e67]:
+          - 'heading "X-Men #-1 (1997)" [level=2] [ref=e68]'
+          - generic [ref=e69]:
+            - button [ref=e70] [cursor=pointer]:
+              - img [ref=e73]
+            - button [ref=e76] [cursor=pointer]:
+              - img [ref=e79]
+        - combobox [ref=e84]:
+          - button [ref=e86] [cursor=pointer]:
+            - img [ref=e87]
+          - generic [ref=e89]:
+            - textbox "Search" [ref=e90]
+            - generic [ref=e93]:
+              - text: In the Price Guide
+              - button [ref=e94] [cursor=pointer]:
+                - img [ref=e95]
+        - generic [ref=e97]:
+          - generic [ref=e98]:
+            - button "Sign In" [ref=e99] [cursor=pointer]:
+              - generic [ref=e100]: Sign In
+            - button "Sign Up" [ref=e101] [cursor=pointer]:
+              - generic [ref=e102]: Sign Up
+          - link [ref=e103] [cursor=pointer]:
+            - /url: /cart
+            - button [ref=e104]:
+              - img [ref=e108]
+          - button [ref=e110] [cursor=pointer]:
+            - img [ref=e113]
+    - main [ref=e115]:
+      - generic [ref=e117]:
+        - generic [ref=e118]:
+          - generic [ref=e119]:
+            - generic [ref=e120]:
+              - generic [ref=e123]:
+                - heading "$4.04" [level=2] [ref=e124]
+                - heading "-$2.74 (-40.41%)" [level=4] [ref=e125]:
+                  - img [ref=e127]
+                  - text: "-$2.74 (-40.41%)"
+              - generic [ref=e129]:
+                - generic [ref=e130]:
+                  - button "Raw" [ref=e132] [cursor=pointer]:
+                    - generic [ref=e133]:
+                      - text: Raw
+                      - img [ref=e135]
+                  - 'button "Grade: 9.2 NM-" [ref=e141] [cursor=pointer]':
+                    - generic [ref=e142]:
+                      - text: "Grade: 9.2 NM-"
+                      - img [ref=e144]
+                - generic [ref=e147]:
+                  - button "1D" [ref=e148] [cursor=pointer]:
+                    - generic [ref=e149]: 1D
+                  - button "1W" [ref=e150] [cursor=pointer]:
+                    - generic [ref=e151]: 1W
+                  - button "1M" [ref=e152] [cursor=pointer]:
+                    - generic [ref=e153]: 1M
+                  - button "1Y" [ref=e154] [cursor=pointer]:
+                    - generic [ref=e155]: 1Y
+                  - button "All" [ref=e156] [cursor=pointer]:
+                    - generic [ref=e157]: All
+            - generic [ref=e158]:
+              - generic:
+                - generic:
+                  - img:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic: Apr 17
+                          - generic:
+                            - generic: Jun 04
+                          - generic:
+                            - generic: Jul 22
+                          - generic:
+                            - generic: Sep 08
+                          - generic:
+                            - generic: Oct 26
+                          - generic:
+                            - generic: Dec 13
+                        - generic:
+                          - generic:
+                            - generic: $4
+                          - generic:
+                            - generic: $5
+                          - generic:
+                            - generic: $6
+                          - generic:
+                            - generic: $7
+                  - img
+                  - img
+          - generic [ref=e163]:
+            - tablist [ref=e165]:
+              - generic [ref=e167]:
+                - tab "My Copies (0)" [ref=e170] [cursor=pointer]
+                - tab "Details" [selected] [ref=e171] [cursor=pointer]
+                - tab "Full Price Guide" [ref=e172] [cursor=pointer]
+                - tab "In 1,161 Collections" [ref=e681] [cursor=pointer]
+            - generic [ref=e179]:
+              - generic [ref=e180]:
+                - generic [ref=e181]:
+                  - generic [ref=e182]: Publisher
+                  - link "Marvel" [ref=e183] [cursor=pointer]:
+                    - /url: /price-guide?keywords=publisher%3A%22Marvel%22
+                - generic [ref=e184]:
+                  - generic [ref=e185]: Character
+                  - link "X-Men" [ref=e186] [cursor=pointer]:
+                    - /url: /price-guide?keywords=mainCharacter%3A%22X-Men%22
+                - generic [ref=e187]:
+                  - generic [ref=e188]: Editor
+                  - link "Bob Harras" [ref=e190] [cursor=pointer]:
+                    - /url: /price-guide?keywords=editors%3A%22Bob%20Harras%22
+              - generic [ref=e191]:
+                - generic [ref=e192]:
+                  - generic [ref=e193]: Series
+                  - link "X-Men (1991)" [ref=e194] [cursor=pointer]:
+                    - /url: /price-guide/us/marvel/comic/x-men-1991/
+                - generic [ref=e195]:
+                  - generic [ref=e196]: Artists
+                  - link "Carlos Pacheco" [ref=e198] [cursor=pointer]:
+                    - /url: /price-guide?keywords=artists%3A%22Carlos%20Pacheco%22
+                  - link "Art Thibert" [ref=e200] [cursor=pointer]:
+                    - /url: /price-guide?keywords=artists%3A%22Art%20Thibert%22
+                  - link "Chris Lichtner" [ref=e202] [cursor=pointer]:
+                    - /url: /price-guide?keywords=artists%3A%22Chris%20Lichtner%22
+                  - link "Aron Lusen" [ref=e204] [cursor=pointer]:
+                    - /url: /price-guide?keywords=artists%3A%22Aron%20Lusen%22
+                  - link "Richard Starkings" [ref=e206] [cursor=pointer]:
+                    - /url: /price-guide?keywords=artists%3A%22Richard%20Starkings%22
+              - generic [ref=e207]:
+                - generic [ref=e208]:
+                  - generic [ref=e209]: Issue
+                  - link "-1" [ref=e210] [cursor=pointer]:
+                    - /url: /price-guide/us/marvel/comic/x-men-1991/1-1/
+                - generic [ref=e211]:
+                  - generic [ref=e212]: Genre
+                  - link "Superhero" [ref=e213] [cursor=pointer]:
+                    - /url: /price-guide?keywords=genre%3A%22Superhero%22
+                - generic [ref=e214]:
+                  - generic [ref=e215]: Writer
+                  - link "Scott Lobdell" [ref=e217] [cursor=pointer]:
+                    - /url: /price-guide?keywords=writers%3A%22Scott%20Lobdell%22
+          - generic [ref=e218]:
+            - generic [ref=e219]:
+              - generic [ref=e220]:
+                - heading "Listings for Sale" [level=4] [ref=e221]
+                - text: Showing 1 to 10 of 18
+              - generic [ref=e222]:
+                - generic [ref=e224]:
+                  - button "All" [ref=e225] [cursor=pointer]:
+                    - generic [ref=e226]: All
+                  - button "Auction" [ref=e227] [cursor=pointer]:
+                    - generic [ref=e228]: Auction
+                  - button "Buy It Now" [ref=e229] [cursor=pointer]:
+                    - generic [ref=e230]: Buy It Now
+                - button "Best Match" [ref=e231] [cursor=pointer]:
+                  - generic [ref=e232]:
+                    - text: Best Match
+                    - img [ref=e234]
+            - generic [ref=e236]:
+              - link [ref=e238] [cursor=pointer]:
+                - /url: /listing/x-men-1-variant-cover-1997/20339871?sponsored=1
+              - generic [ref=e244]:
+                - 'link "X-Men #-1 Variant Cover (1997)" [ref=e245] [cursor=pointer]':
+                  - /url: /listing/x-men-1-variant-cover-1997/20339871?sponsored=1
+                  - 'heading "X-Men #-1 Variant Cover (1997)" [level=5] [ref=e246]'
+                - generic [ref=e247]:
+                  - generic [ref=e248]:
+                    - link "$5.00" [ref=e249] [cursor=pointer]:
+                      - /url: /listing/x-men-1-variant-cover-1997/20339871?sponsored=1
+                      - heading "$5.00" [level=2] [ref=e250]
+                    - generic [ref=e252]: or Best Offer
+                  - generic [ref=e253]:
+                    - generic [ref=e255]:
+                      - generic [ref=e256]: JAFComics
+                      - text: (11,796) 99.7%
+                    - generic [ref=e257]: Sponsored
+                  - generic [ref=e259]:
+                    - link "Add to Cart" [ref=e261] [cursor=pointer]:
+                      - /url: /listings/cart/add/id/20339871
+                      - generic [ref=e262]: Add to Cart
+                    - button [ref=e264] [cursor=pointer]:
+                      - img [ref=e267]
+            - generic [ref=e269]:
+              - link [ref=e271] [cursor=pointer]:
+                - /url: /listing/x-men-1-1997-x-men/19744736?sponsored=1
+              - generic [ref=e276]:
+                - 'link "X-Men #-1 (1997) X-Men" [ref=e277] [cursor=pointer]':
+                  - /url: /listing/x-men-1-1997-x-men/19744736?sponsored=1
+                  - 'heading "X-Men #-1 (1997) X-Men" [level=5] [ref=e278]'
+                - generic [ref=e279]:
+                  - generic [ref=e280]:
+                    - link "$3.32 $5.10" [ref=e281] [cursor=pointer]:
+                      - /url: /listing/x-men-1-1997-x-men/19744736?sponsored=1
+                      - heading "$3.32 $5.10" [level=2] [ref=e282]
+                    - generic [ref=e284]: or Best Offer
+                  - generic [ref=e285]:
+                    - generic [ref=e286]:
+                      - generic [ref=e287]:
+                        - generic [ref=e288]: Mark
+                        - text: (404,850) 99.9%
+                      - strong [ref=e289]:
+                        - img [ref=e291]
+                        - text: Top Rated Seller
+                    - generic [ref=e293]: Sponsored
+                  - generic [ref=e295]:
+                    - link "Add to Cart" [ref=e297] [cursor=pointer]:
+                      - /url: /listings/cart/add/id/19744736
+                      - generic [ref=e298]: Add to Cart
+                    - button [ref=e300] [cursor=pointer]:
+                      - img [ref=e303]
+            - generic [ref=e305]:
+              - link [ref=e307] [cursor=pointer]:
+                - /url: /listing/x-men-marvel-1991-1-1-x5-diff-cvrs-2-8-13-books/15947253
+              - generic [ref=e312]:
+                - 'link "*X-Men (Marvel, 1991) #-1, 1 (x5 Diff Cvrs), 2-8. 13 books." [ref=e313] [cursor=pointer]':
+                  - /url: /listing/x-men-marvel-1991-1-1-x5-diff-cvrs-2-8-13-books/15947253
+                  - 'heading "*X-Men (Marvel, 1991) #-1, 1 (x5 Diff Cvrs), 2-8. 13 books." [level=5] [ref=e314]'
+                - generic [ref=e315]:
+                  - generic [ref=e316]:
+                    - link "$50.00" [ref=e317] [cursor=pointer]:
+                      - /url: /listing/x-men-marvel-1991-1-1-x5-diff-cvrs-2-8-13-books/15947253
+                      - heading "$50.00" [level=2] [ref=e318]
+                    - generic [ref=e320]: +$7.99 shipping
+                  - generic [ref=e323]:
+                    - generic [ref=e324]: bbop
+                    - text: (609) 99.8%
+                  - generic [ref=e326]:
+                    - link "Add to Cart" [ref=e328] [cursor=pointer]:
+                      - /url: /listings/cart/add/id/15947253
+                      - generic [ref=e329]: Add to Cart
+                    - button [ref=e331] [cursor=pointer]:
+                      - img [ref=e334]
+            - generic [ref=e336]:
+              - link [ref=e338] [cursor=pointer]:
+                - /url: /listing/flashback-x-men-1/6985415
+              - generic [ref=e343]:
+                - 'link "flashback x-men #1" [ref=e344] [cursor=pointer]':
+                  - /url: /listing/flashback-x-men-1/6985415
+                  - 'heading "flashback x-men #1" [level=5] [ref=e345]'
+                - generic [ref=e346]:
+                  - generic [ref=e347]:
+                    - link "$15.00" [ref=e348] [cursor=pointer]:
+                      - /url: /listing/flashback-x-men-1/6985415
+                      - heading "$15.00" [level=2] [ref=e349]
+                    - generic [ref=e350]:
+                      - generic [ref=e351]: or Best Offer
+                      - generic [ref=e352]: +$6.00 shipping
+                  - generic [ref=e354]:
+                    - generic [ref=e355]:
+                      - generic [ref=e356]: lisajoe210
+                      - text: (65,352) 100%
+                    - strong [ref=e357]:
+                      - img [ref=e359]
+                      - text: Top Rated Seller
+                  - generic [ref=e362]:
+                    - link "Add to Cart" [ref=e364] [cursor=pointer]:
+                      - /url: /listings/cart/add/id/6985415
+                      - generic [ref=e365]: Add to Cart
+                    - button [ref=e367] [cursor=pointer]:
+                      - img [ref=e370]
+            - generic [ref=e372]:
+              - link [ref=e374] [cursor=pointer]:
+                - /url: /listing/x-men-1-1997/20339885?sponsored=1
+              - generic [ref=e379]:
+                - 'link "X-Men #-1 (1997)" [ref=e380] [cursor=pointer]':
+                  - /url: /listing/x-men-1-1997/20339885?sponsored=1
+                  - 'heading "X-Men #-1 (1997)" [level=5] [ref=e381]'
+                - generic [ref=e382]:
+                  - generic [ref=e383]:
+                    - link "$5.00" [ref=e384] [cursor=pointer]:
+                      - /url: /listing/x-men-1-1997/20339885?sponsored=1
+                      - heading "$5.00" [level=2] [ref=e385]
+                    - generic [ref=e387]: or Best Offer
+                  - generic [ref=e388]:
+                    - generic [ref=e390]:
+                      - generic [ref=e391]: JAFComics
+                      - text: (11,796) 99.7%
+                    - generic [ref=e392]: Sponsored
+                  - generic [ref=e394]:
+                    - link "Add to Cart" [ref=e396] [cursor=pointer]:
+                      - /url: /listings/cart/add/id/20339885
+                      - generic [ref=e397]: Add to Cart
+                    - button [ref=e399] [cursor=pointer]:
+                      - img [ref=e402]
+            - generic [ref=e404]:
+              - link [ref=e406] [cursor=pointer]:
+                - /url: /listing/x-men-flashback-1-nm-marvel-comic-books-wolverine-rogue-gambit-31-hh60/19996137?sponsored=1
+              - generic [ref=e411]:
+                - 'link "X-Men Flashback #1 NM Marvel Comic Books Wolverine Rogue Gambit 31 HH60" [ref=e412] [cursor=pointer]':
+                  - /url: /listing/x-men-flashback-1-nm-marvel-comic-books-wolverine-rogue-gambit-31-hh60/19996137?sponsored=1
+                  - 'heading "X-Men Flashback #1 NM Marvel Comic Books Wolverine Rogue Gambit 31 HH60" [level=5] [ref=e413]'
+                - generic [ref=e414]:
+                  - link "$7.49 $14.98" [ref=e416] [cursor=pointer]:
+                    - /url: /listing/x-men-flashback-1-nm-marvel-comic-books-wolverine-rogue-gambit-31-hh60/19996137?sponsored=1
+                    - heading "$7.49 $14.98" [level=2] [ref=e417]
+                  - generic [ref=e418]:
+                    - generic [ref=e420]:
+                      - generic [ref=e421]: AtlantaClassicComics
+                      - text: (53,579) 98.4%
+                    - generic [ref=e422]: Sponsored
+                  - generic [ref=e424]:
+                    - link "Add to Cart" [ref=e426] [cursor=pointer]:
+                      - /url: /listings/cart/add/id/19996137
+                      - generic [ref=e427]: Add to Cart
+                    - button [ref=e429] [cursor=pointer]:
+                      - img [ref=e432]
+            - generic [ref=e434]:
+              - link [ref=e436] [cursor=pointer]:
+                - /url: /listing/x-men-1-flashback-everything-changes-92-1997/9264970
+              - generic [ref=e441]:
+                - 'link "X-MEN #1 FLASHBACK EVERYTHING CHANGES! (9.2) 1997" [ref=e442] [cursor=pointer]':
+                  - /url: /listing/x-men-1-flashback-everything-changes-92-1997/9264970
+                  - 'heading "X-MEN #1 FLASHBACK EVERYTHING CHANGES! (9.2) 1997" [level=5] [ref=e443]'
+                - generic [ref=e444]:
+                  - generic [ref=e445]:
+                    - link "$9.91" [ref=e446] [cursor=pointer]:
+                      - /url: /listing/x-men-1-flashback-everything-changes-92-1997/9264970
+                      - heading "$9.91" [level=2] [ref=e447]
+                    - generic [ref=e449]: +$8.55 shipping
+                  - generic [ref=e451]:
+                    - generic [ref=e452]:
+                      - generic [ref=e453]: anthonyscomicbookart
+                      - text: (12,157) 99.9%
+                    - strong [ref=e454]:
+                      - img [ref=e456]
+                      - text: Top Rated Seller
+                  - generic [ref=e459]:
+                    - link "Add to Cart" [ref=e461] [cursor=pointer]:
+                      - /url: /listings/cart/add/id/9264970
+                      - generic [ref=e462]: Add to Cart
+                    - button [ref=e464] [cursor=pointer]:
+                      - img [ref=e467]
+            - generic [ref=e469]:
+              - link [ref=e471] [cursor=pointer]:
+                - /url: /listing/x-men-1-july-1997-marvel-vf-nm/12830656
+              - generic [ref=e476]:
+                - link "X-Men -1 (July 1997, Marvel) VF/NM" [ref=e477] [cursor=pointer]:
+                  - /url: /listing/x-men-1-july-1997-marvel-vf-nm/12830656
+                  - heading "X-Men -1 (July 1997, Marvel) VF/NM" [level=5] [ref=e478]
+                - generic [ref=e479]:
+                  - generic [ref=e480]:
+                    - link "$1.95" [ref=e481] [cursor=pointer]:
+                      - /url: /listing/x-men-1-july-1997-marvel-vf-nm/12830656
+                      - heading "$1.95" [level=2] [ref=e482]
+                    - generic [ref=e484]: +$5.95 shipping
+                  - generic [ref=e486]:
+                    - generic [ref=e487]:
+                      - generic [ref=e488]: aclem
+                      - text: (3,622) 100%
+                    - strong [ref=e489]:
+                      - img [ref=e491]
+                      - text: Top Rated Seller
+                  - generic [ref=e494]:
+                    - link "Add to Cart" [ref=e496] [cursor=pointer]:
+                      - /url: /listings/cart/add/id/12830656
+                      - generic [ref=e497]: Add to Cart
+                    - button [ref=e499] [cursor=pointer]:
+                      - img [ref=e502]
+            - generic [ref=e504]:
+              - link [ref=e506] [cursor=pointer]:
+                - /url: /listing/flashback-x-men-1-vf-marvel-comic-book-cyclops-wolverine-19-hh11/17369681?sponsored=1
+              - generic [ref=e511]:
+                - 'link "Flashback X-Men #1 VF Marvel Comic Book Cyclops Wolverine 19 HH11" [ref=e512] [cursor=pointer]':
+                  - /url: /listing/flashback-x-men-1-vf-marvel-comic-book-cyclops-wolverine-19-hh11/17369681?sponsored=1
+                  - 'heading "Flashback X-Men #1 VF Marvel Comic Book Cyclops Wolverine 19 HH11" [level=5] [ref=e513]'
+                - generic [ref=e514]:
+                  - generic [ref=e515]:
+                    - link "$6.49 $12.98" [ref=e516] [cursor=pointer]:
+                      - /url: /listing/flashback-x-men-1-vf-marvel-comic-book-cyclops-wolverine-19-hh11/17369681?sponsored=1
+                      - heading "$6.49 $12.98" [level=2] [ref=e517]
+                    - generic [ref=e519]: +$6.98 shipping
+                  - generic [ref=e520]:
+                    - generic [ref=e522]:
+                      - generic [ref=e523]: AtlantaClassicComics
+                      - text: (53,579) 98.4%
+                    - generic [ref=e524]: Sponsored
+                  - generic [ref=e526]:
+                    - link "Add to Cart" [ref=e528] [cursor=pointer]:
+                      - /url: /listings/cart/add/id/17369681
+                      - generic [ref=e529]: Add to Cart
+                    - button [ref=e531] [cursor=pointer]:
+                      - img [ref=e534]
+            - generic [ref=e536]:
+              - link [ref=e538] [cursor=pointer]:
+                - /url: /listing/x-men-1-vf-nm-marvel-comic-book-flashback-15-tj48/16353856?sponsored=1
+              - generic [ref=e543]:
+                - 'link "X-Men #1 VF-NM Marvel Comic Book Flashback 15 TJ48" [ref=e544] [cursor=pointer]':
+                  - /url: /listing/x-men-1-vf-nm-marvel-comic-book-flashback-15-tj48/16353856?sponsored=1
+                  - 'heading "X-Men #1 VF-NM Marvel Comic Book Flashback 15 TJ48" [level=5] [ref=e545]'
+                - generic [ref=e546]:
+                  - generic [ref=e547]:
+                    - link "$5.00 $9.99" [ref=e548] [cursor=pointer]:
+                      - /url: /listing/x-men-1-vf-nm-marvel-comic-book-flashback-15-tj48/16353856?sponsored=1
+                      - heading "$5.00 $9.99" [level=2] [ref=e549]
+                    - generic [ref=e551]: +$6.98 shipping
+                  - generic [ref=e552]:
+                    - generic [ref=e554]:
+                      - generic [ref=e555]: AtlantaClassicComics
+                      - text: (53,579) 98.4%
+                    - generic [ref=e556]: Sponsored
+                  - generic [ref=e558]:
+                    - link "Add to Cart" [ref=e560] [cursor=pointer]:
+                      - /url: /listings/cart/add/id/16353856
+                      - generic [ref=e561]: Add to Cart
+                    - button [ref=e563] [cursor=pointer]:
+                      - img [ref=e566]
+            - navigation "Wrapper" [ref=e569]:
+              - list [ref=e570]:
+                - listitem [ref=e571]:
+                  - button "Previous" [disabled]:
+                    - generic:
+                      - img
+                - listitem [ref=e572]:
+                  - button "Current Page" [ref=e573] [cursor=pointer]: "1"
+                - listitem [ref=e574]:
+                  - button "Page" [ref=e575] [cursor=pointer]: "2"
+                - listitem [ref=e576]:
+                  - button "Next" [ref=e577] [cursor=pointer]:
+                    - img [ref=e579]
+        - generic [ref=e581]:
+          - generic [ref=e582]:
+            - generic [ref=e583]:
+              - link [ref=e584] [cursor=pointer]:
+                - /url: https://www.hipcomic.com/listing/x-men-1-variant-cover-1997/20339871
+              - generic [ref=e590]:
+                - 'link "X-Men #-1 Variant Cover (1997)" [ref=e591] [cursor=pointer]':
+                  - /url: https://www.hipcomic.com/listing/x-men-1-variant-cover-1997/20339871
+                  - 'heading "X-Men #-1 Variant Cover (1997)" [level=5] [ref=e592]'
+                - generic [ref=e593]:
+                  - heading "$5.00" [level=2] [ref=e594]
+                  - generic [ref=e595]: JAFComics
+                - link "Add to Cart" [ref=e596] [cursor=pointer]:
+                  - /url: https://www.hipcomic.com/listing/x-men-1-variant-cover-1997/20339871
+                  - generic [ref=e597]: Add to Cart
+            - generic [ref=e602]:
+              - button "Add to Want List" [ref=e603] [cursor=pointer]:
+                - generic [ref=e604]:
+                  - img [ref=e606]
+                  - text: Add to Want List
+              - 'button "Issue: 1-1" [ref=e612] [cursor=pointer]':
+                - generic [ref=e613]:
+                  - text: "Issue: 1-1"
+                  - img [ref=e615]
+          - generic [ref=e617]:
+            - heading "Variants" [level=4] [ref=e618]
+            - 'link "#-1 Direct Edition (1997) 9.2 NM- Raw FMV: $4.04 0 Likes" [ref=e620] [cursor=pointer]':
+              - /url: /price-guide/us/marvel/comic/x-men-1991/1-1/direct-edition/?grade=9.2&resolution=Y
+              - generic [ref=e625]:
+                - heading "#-1 Direct Edition (1997)" [level=5] [ref=e626]
+                - generic [ref=e627]:
+                  - generic [ref=e628]:
+                    - generic [ref=e629]: 9.2 NM-
+                    - generic [ref=e630]:
+                      - text: "Raw FMV:"
+                      - strong [ref=e631]: $4.04
+                  - img [ref=e632]
+                  - button "0 Likes" [ref=e634]:
+                    - generic [ref=e635]:
+                      - text: 0 Likes
+                      - img [ref=e637]
+            - 'link "#-1 Variant Cover (1997) 9.2 NM- Raw FMV: $11.48 0 Likes" [ref=e640] [cursor=pointer]':
+              - /url: /price-guide/us/marvel/comic/x-men-1991/1-1/variant-cover/?grade=9.2&resolution=Y
+              - generic [ref=e645]:
+                - heading "#-1 Variant Cover (1997)" [level=5] [ref=e646]
+                - generic [ref=e647]:
+                  - generic [ref=e648]:
+                    - generic [ref=e649]: 9.2 NM-
+                    - generic [ref=e650]:
+                      - text: "Raw FMV:"
+                      - strong [ref=e651]: $11.48
+                  - img [ref=e652]
+                  - button "0 Likes" [ref=e655]:
+                    - generic [ref=e656]:
+                      - text: 0 Likes
+                      - img [ref=e658]
+            - 'link "#-1 Newsstand Edition (1997) 9.2 NM- Raw FMV: $5.45 0 Likes" [ref=e661] [cursor=pointer]':
+              - /url: /price-guide/us/marvel/comic/x-men-1991/1-1/newsstand-edition/?grade=9.2&resolution=Y
+              - generic [ref=e666]:
+                - heading "#-1 Newsstand Edition (1997)" [level=5] [ref=e667]
+                - generic [ref=e668]:
+                  - generic [ref=e669]:
+                    - generic [ref=e670]: 9.2 NM-
+                    - generic [ref=e671]:
+                      - text: "Raw FMV:"
+                      - strong [ref=e672]: $5.45
+                  - button "0 Likes" [ref=e674]:
+                    - generic [ref=e675]:
+                      - text: 0 Likes
+                      - img [ref=e677]
+  - img [ref=e679]

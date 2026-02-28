@@ -1,0 +1,601 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - navigation [ref=e3]:
+      - generic [ref=e4]:
+        - menubar [ref=e5]:
+          - generic [ref=e6]:
+            - menuitem [ref=e7] [cursor=pointer]:
+              - link [ref=e9]:
+                - /url: https://www.facebook.com/ComicsPriceGuide
+                - img [ref=e10]
+            - menuitem [ref=e12] [cursor=pointer]:
+              - link [ref=e14]:
+                - /url: https://x.com/cpguide
+                - img [ref=e15]
+            - menuitem [ref=e17] [cursor=pointer]:
+              - link [ref=e19]:
+                - /url: https://www.instagram.com/comicspriceguide/
+                - img [ref=e20]
+            - menuitem [ref=e22] [cursor=pointer]:
+              - link [ref=e24]:
+                - /url: https://play.google.com/store/apps/details?id=com.arkham
+                - img [ref=e25]
+            - menuitem [ref=e27] [cursor=pointer]:
+              - link [ref=e29]:
+                - /url: https://apps.apple.com/us/app/comics-price-guide/id1371496914
+                - img [ref=e30]
+        - menubar [ref=e32]:
+          - generic [ref=e33]:
+            - menuitem "Register" [ref=e34] [cursor=pointer]:
+              - link "Register" [ref=e36]:
+                - /url: /signup
+                - img [ref=e37]
+                - text: Register
+            - menuitem "Login" [ref=e39] [cursor=pointer]:
+              - generic [ref=e41]:
+                - img [ref=e42]
+                - text: Login
+    - generic [ref=e46]:
+      - generic [ref=e47]:
+        - link "Comics Price Guide":
+          - /url: /
+          - img "Comics Price Guide" [ref=e48] [cursor=pointer]
+      - generic [ref=e49]:
+        - navigation [ref=e51]:
+          - list [ref=e54]:
+            - listitem [ref=e55]:
+              - button "Price Guide" [ref=e56] [cursor=pointer]
+            - listitem [ref=e57]:
+              - button "Community" [ref=e58] [cursor=pointer]
+            - listitem [ref=e59]:
+              - button "Buy/Sell" [ref=e60] [cursor=pointer]
+            - listitem [ref=e61]:
+              - link "Blog" [ref=e62] [cursor=pointer]:
+                - /url: https://blog.comicspriceguide.com
+            - listitem [ref=e63]:
+              - link "Forums" [ref=e64] [cursor=pointer]:
+                - /url: /forum
+            - listitem [ref=e65]:
+              - button "About" [ref=e66] [cursor=pointer]
+        - list [ref=e67]:
+          - listitem [ref=e68]:
+            - generic [ref=e69]:
+              - img [ref=e70]
+              - strong [ref=e74]: "Members:"
+            - text: 1,165,078
+          - listitem [ref=e75]:
+            - generic [ref=e76]:
+              - img [ref=e77]
+              - strong [ref=e81]: "Values:"
+            - text: 244,725,951
+          - listitem [ref=e82]:
+            - generic [ref=e83]:
+              - img [ref=e84]
+              - strong [ref=e88]: "Publishers:"
+            - link "6,712" [ref=e89] [cursor=pointer]:
+              - /url: /publishers
+          - listitem [ref=e90]:
+            - generic [ref=e91]:
+              - img [ref=e92]
+              - strong [ref=e96]: "Comics:"
+            - link "1,289,272" [ref=e97] [cursor=pointer]:
+              - /url: /search
+    - generic [ref=e99]:
+      - generic [ref=e103]:
+        - generic [ref=e104]: Search
+        - textbox "search-comics-addon" [ref=e105]:
+          - /placeholder: by Title / UPC / ISBN
+        - generic [ref=e106]:
+          - generic [ref=e108]:
+            - generic [ref=e109]: "Issue # (optional)"
+            - 'textbox "Issue # (optional)" [ref=e110]'
+          - generic [ref=e112]:
+            - generic [ref=e113]: Comic Type
+            - combobox "Comic Type" [ref=e114]:
+              - option "Issue" [selected]
+              - option "Special"
+              - option "Giant-Size"
+              - option "King-Size"
+              - option "Super Special"
+              - option "Prestige Format"
+              - option "Hard Cover (GN)"
+              - option "Soft Cover (GN)"
+              - option "Trade Paperback"
+              - option "Comicback"
+              - option "Ashcan"
+              - option "Digest"
+              - option "Treasury-Size"
+              - option "Slipcase"
+              - option "Box Set"
+              - option "Collector Set"
+              - option "Magazine"
+              - option "Mini-Comic"
+          - generic [ref=e116]:
+            - generic [ref=e117]: Country
+            - combobox "Country" [ref=e118]:
+              - option "All Countries"
+              - option "USA, UK, Canada, Australia" [selected]
+              - option "USA (United States) Only"
+              - option "UK (United Kingdom) Only"
+              - option "Canada Only"
+              - option "Australia Only"
+              - option "--------------------"
+              - option "Argentina"
+              - option "Belgium"
+              - option "Brazil"
+              - option "Bulgaria"
+              - option "Chile"
+              - option "China"
+              - option "Colombia"
+              - option "Congo (Zaire)"
+              - option "Croatia"
+              - option "Czech Republic"
+              - option "Denmark"
+              - option "Egypt"
+              - option "Finland"
+              - option "France"
+              - option "Germany"
+              - option "Greece"
+              - option "Hong Kong"
+              - option "Hungary"
+              - option "Iceland"
+              - option "India"
+              - option "Ireland"
+              - option "Israel"
+              - option "Italy"
+              - option "Japan"
+              - option "Kenya"
+              - option "Latvia"
+              - option "Luxembourg"
+              - option "Mexico"
+              - option "Netherlands"
+              - option "New Zealand"
+              - option "Norway"
+              - option "Philippines"
+              - option "Poland"
+              - option "Portugal"
+              - option "Puerto Rico"
+              - option "Romania"
+              - option "Russia"
+              - option "Singapore"
+              - option "Slovenia"
+              - option "South Africa"
+              - option "Spain"
+              - option "Sweden"
+              - option "Switzerland"
+              - option "Turkey"
+              - option "United Arab Emirates"
+              - option "Thialand"
+              - option "Lebanon"
+              - option "Bermuda"
+              - option "Austria"
+              - option "British Virgin Islands"
+              - option "Iraq"
+              - option "Malaysia"
+              - option "Serbia and Montenegro (Yugoslavia)"
+              - option "South Korea"
+              - option "Taiwan"
+              - option "Ukraine"
+          - generic [ref=e120]:
+            - generic [ref=e121]: Search By
+            - combobox "Search By" [ref=e122]:
+              - option "All Words" [selected]
+              - option "Any Words"
+              - option "Starts With"
+              - option "Exact Phrase"
+          - separator [ref=e123]
+          - generic [ref=e125]:
+            - button "Close" [ref=e126] [cursor=pointer]
+            - button "Search" [ref=e127] [cursor=pointer]
+      - generic [ref=e131]:
+        - generic [ref=e132]: Search
+        - textbox "search-publishers-addon" [ref=e133]:
+          - /placeholder: by Publisher
+        - generic [ref=e134]:
+          - generic [ref=e135]: COMMON PUBLISHERS
+          - generic [ref=e136]:
+            - list [ref=e138]:
+              - listitem [ref=e139]:
+                - link "Marvel" [ref=e140] [cursor=pointer]:
+                  - /url: /publishers/marvel
+              - listitem [ref=e141]:
+                - link "DC" [ref=e142] [cursor=pointer]:
+                  - /url: /publishers/dc
+              - listitem [ref=e143]:
+                - link "Image" [ref=e144] [cursor=pointer]:
+                  - /url: /publishers/image
+              - listitem [ref=e145]:
+                - link "Dark Horse" [ref=e146] [cursor=pointer]:
+                  - /url: /publishers/dark-horse
+              - listitem [ref=e147]:
+                - link "IDW" [ref=e148] [cursor=pointer]:
+                  - /url: /publishers/idw
+            - list [ref=e150]:
+              - listitem [ref=e151]:
+                - link "Boom! Studios" [ref=e152] [cursor=pointer]:
+                  - /url: /publishers/boom-studios
+              - listitem [ref=e153]:
+                - link "Tokyo Pop" [ref=e154] [cursor=pointer]:
+                  - /url: /publishers/tokyopop
+              - listitem [ref=e155]:
+                - link "Titan" [ref=e156] [cursor=pointer]:
+                  - /url: /publishers/titan
+              - listitem [ref=e157]:
+                - link "Dell" [ref=e158] [cursor=pointer]:
+                  - /url: /publishers/dell
+              - listitem [ref=e159]:
+                - link "Fantagraphic Books" [ref=e160] [cursor=pointer]:
+                  - /url: /publishers/fantagraphic-books
+            - generic [ref=e162]:
+              - button "Close" [ref=e163] [cursor=pointer]
+              - button "Search" [ref=e164] [cursor=pointer]
+    - generic [ref=e166]:
+      - generic [ref=e167]: Welcome to ComicsPriceGuide.com!
+      - text: View market values for books, store your collection, and meet fellow comic fans!
+      - button "Join Today! It's Free!" [ref=e169] [cursor=pointer]
+  - iframe [ref=e458]:
+    - generic [active] [ref=f869e1]:
+      - link "Techblog Activate Account OPEN" [ref=f869e4] [cursor=pointer]:
+        - /url: https://www.googleadservices.com/pagead/aclk?sa=L&ai=CgjFECE-jaZS7J-aprr4PhtXl8Qai946XfqD2jZrSE7fah6CPDhABIOGXuxNgye7ni8ikrBSgAbn8isc-yAEBqQIYG1rAftGzPuACAKgDAcgDCqoE1QJP0A_UB-C6znjgnxj4R-wzONJM6tV8Z5ZcrENmTmywE7euaTLwAkGPTlpjpFtROYEdPxRw_BAu4Copz5zQlr4W8YBYVjk8xRXQQJW9ihTt3d6tjPKPVgEV1TsCy2ilbNEIK4xdAJpf8EcJsTtL6_thwEkVhovW_MJVmv0xXagmYVVgC2bUvTSwhC5eNXulfleMhtIPSwEwM7Yfzqf4EQU3s7pj3oGiKZIGdLEyQC6OzlhViQ0RY6KvZqjCv5enAIZ00ZdChIKl4YhiTlzFOd2mJifX4WVz5C6CLKZaaHaRQjylWxMpQvbmU-AL6xpN8AssgRwbvWwu0hMfE6H84UaKZ0siitCzfYD1nqMKw40N-xr0SlC8mxA_OMtpkbPU4-swPWz-1upxhwnhNfFSI1I6hiSpkdtGABAkS-HY2uCzbEGmLAKbXp8QdqF5TBMMIcS5bQHFEMAEta30sIsF4AQBiAXs77P4UoAHubTbphmoB6fMsQKoB-LYsQKoB6a-G6gHzM6xAqgH89EbqAeW2BuoB6qbsQKoB47OG6gHk9gbqAfw4BuoB-6WsQKoB_6esQKoB6--sQKoB9XJG6gH2baxAqgHmgaoB_-esQKoB9-fsQKoB_jCsQKoB_vCsQLYBwHSCDAIgGEQARidATIIioKAgICAgAg6DoBAgMCAgICAqIACqIMQSL39wTpYh_TQpYL9kgOxCSyH9Bu_PxISgAoBmAsByAsBogwLKgYKBNbasQKQAQGqDQJVU8gNAeINEwjUotOlgv2SAxXmlMsBHYZqOW7qDRMIkLLUpYL9kgMV5pTLAR2Gajlu8A0CiA7___________8B2BMMiBQE0BUBmBYByhYCCgD4FgGAFwGyFyIYASoeLzE1NzA4MjA1L0NQR19IRUFEX0xlYWRlcmJvYXJkuhcCOAGqGCsJAAAAAEAK7kASHi8xNTcwODIwNS9DUEdfSEVBRF9MZWFkZXJib2FyZBgBshgJEgLFaBgBIgEA0BgB6BgBwhkCCAE&ae=1&gclid=EAIaIQobChMIlN_WpYL9kgMV5pTLAR2GajluEAEYASAAEgLniPD_BwE&num=1&cid=CAQSrAEA56J1edFPWaQN_ohOlVhuVsPKwOyZ5v3TRdxRiziVHoKs6nb7VEvM-VmsVuCteu3L94TquGqF48GG1DwwOWy8tb0NJm-5mc-NfPrFM7ZOheuyVch0tNat05aka5lQZwMFMIKn05siL47Sr9UQKvhKN8xPDHFFEFwn0rdhUAGMGW3pWqVDSFcMuSd268YAxv18QQSfoTiiZEXx5C2LCRONFPQWGFs_IXoSpNU8GAE&sig=AOD64_38QMMNCRGKNKZeHSQFhdriFpCOXg&client=ca-pub-2083774829111970&rf=4&nb=2&adurl=https://track.techblog.page/5fb37efa-5594-4e76-9e64-cdf5cef1dc1d%3Fkeyword%3D%26placement%3Dwww.comicspriceguide.com%26matchtype%3D%26network%3Dd%26adposition%3D%26adgroupid%3D174854051509%26sitelink%3D%7Bsitelink%7D%26creative%3D741410637246%26source%3D65f06124-ceb7-4389-8e76-d0dcf941c38e%26gad_source%3D5%26gad_campaignid%3D22264215532%26gclid%3DEAIaIQobChMIlN_WpYL9kgMV5pTLAR2GajluEAEYASAAEgLniPD_BwE
+        - generic [ref=f869e5]:
+          - generic [ref=f869e8]:
+            - generic "Techblog" [ref=f869e9]:
+              - link "Techblog" [ref=f869e10]
+            - generic "Techblog" [ref=f869e11]:
+              - link "Activate Account" [ref=f869e12]
+          - link "OPEN" [ref=f869e14]:
+            - generic [ref=f869e16]:
+              - generic: OPEN
+              - img [ref=f869e17]
+      - generic [ref=f869e20]:
+        - link [ref=f869e22] [cursor=pointer]:
+          - /url: https://adssettings.google.com/whythisad?source=display&reasons=AcrBLeUYXyAYSkWPj-97DSRIr2EXxJe_hMciryudDj54_rDRhR5lm1s4OGzIQ5z2WFKq6XmW8MYWNCFEmc1mAkXj7W624hXTzjajPaLSLdsL3RpUUw3lMgANk64e1gwSMgNqtkZ8qW_s1wEJLi8E1jNmgw-qRqbLa4KpB4KYhm4td-WGTLuht7R7VaDGhxE5TQX_r3TYm5Ts0dVGUUG2Cp-nUpMHv0kZdho9WGRSbM0g9AJS9knlfehXkgUwo-aNZTSLwA_AuFvcbYiin7rDtdQt6TUQeVHmzVqxYoe_kN9TTnKX9cHtfyd81tQRJ3nGf-LWznxzC5m121CE-NzAmGUskJghNJ69bBdzTV3O1yoroxSP0WmGxOxs3Ey2hCRBjBNQQKWJnz_-QeLKfXOtYXYiNvkPhSbzuUgITjAxJO-ZQOXp1RlO2Cei3vHA90Xf572ZKREZn2HdCWNYsWKwJukLFIemKIRZEUcg8lZ1hOTILrrRRfBxobPm6EirGP3eQ4WUqB4rIz3r7BqRfUS13lPJ8ipimtrSgfvrvHkfgjFrl7t8jhiowj3kUmEsGYPTWU8AN9_fdXSK0iF8BfJtbt9nFoL-Isp9NLg6cQcqFhlScmk54lDweCin3Ps8ukcWsrWKWoRqk1y3dHNtAyENYV05ETe1xZU7S2dBF-TbZkagoci_xuLFk_mfJ-DNURC5-KrjNsOlPr3X115PGB6vI72pRmVweb4yFUKDsuigPC3sog71d4iuAyQDiaLbrjW1bulb2Oi-3b5dz8eztsv5Fvy3CDCCwPGyQ3KnUxmOXU1U2J0YGXn0rY4jFRrh39SvqExD4X5sFvU6MEKJMQ4F0e0Fb3hd9miTtXJkov0YjDFyhBW9OqelXUL-6lcV8nsMFK08wKwiZnEbRA135aQdqhv1vuZiPp0m_-qmYsZIwMfMome_zxjQXxwtT72gkWZ61-DHKgGIC5weTHt_9T_xe_RUhsJaeTwGCHO50-P11i1XNnixemdTyL3BulDfAq_RC6FzKE9P6pmAkGIIbjuoTy0db120VrXOUS6YpofIJ6hKX5CML-VD0XAKhwvl7eesMw7TOcZW9Zj1oAz2qWD64x6BpFBYc28Z94faHiwc9oJcMfWfSzJgDyu-gM37t59p3udayVKrA41hoeqHMLSLpj5wKOsq8c45vYRGbkJY17LQ2EjQYFxhXeGrE_z1-t-Bd3_Np34OFIgzrqA-xzZzt-ETZQ4SKNBlS5lugivfHDiqbssMvSKE3pD-yBUwD-U-CMliPvNgSkPQMOJ-JCd8bmy1IVHfqJbed-d8a7h-XsDBPGXf5zlkSfkB0Z6Jjy-_GYNhgrNl7KfgT1rLXGSI3-IjMtSWXwgXnUQFiVxT093L1JO7r7W0ODH6wMqGht2z_REvaLWnG6PaX952z5kpG4sAjv7pyufz4rNH-jOEQjLYpGIBxBej8IsEJDyn9Ca8VjVFK7JXl1yaUx_7pYzBxRZLInMMy_ZJ8GX_Q7XICNOYf75kd-II_qw3ILNCDJgWW7l0iwSS6vkxA4ZlMCBubQE0-S3vlr_EUzawOgor78VvWJwpvyh2KdhEkkSZ4wYpPVZ1bmL4e6a6Lrf0n5Xr36b57vcfX8KyB17eEDl_0hPb-sv6ya3n1AU41UzUqbRm2eolxP8Hw8Eh__1C5lCHRoyy_bp0KuLlTKKh4-H5HvlcKCSP5afLrxbf2Ti3FegF1HlcdMpMrprnbrR1zxO80gALElVFGH_AhunEmJJuj2aQKRBhafDKnrMdCLfteT_nDrn7OYGcFU7SlrouuyBWYH1nfFXKmWqhW7P1YsUwtv9RaVobetbB8v9Y_DEQYX53znMm18mIzYByHl4tLKYYFHymXYpRNB2Ds4gTm_m7BCidl3Po-wlF1OPiwUOSqcECDPZXTjn8eH07fFbeR4M6bqGedjP_OyUZ0hrpa0H4X_UPyA--YZJMKl-3u2zMnXaUQhkh6DsecnQQHeaQ6C8M4TICGfRxs12Vw7auVXJlR7P1IXw7c4Txp4s71O22HuC4pa_P2dbxNhPhHgdNJD6kIzXEfx7VkM031XmXj-hxpN8qOM2ePVs_hGmZWCiV8CKRW5Tzay9ZZKXppy_YVFw3_0EgEBK2iB41-m3VpawAW-riunhoSoHm21Lx-BWoni8asxD7x0d_VbVvjBRcJ1pM3DzBDtv8NdZ0PKfbtpk1Xump2SwPVXcjWXufZ4WjoeVZTwMYfROGyZItlZfauv4SpTaUxNYf40-nkrtLbqBYNjp9yt7HQ3jjbI9MTcHcVjmqA5NnFXTwMOHrBaeIoncGMD-IW1Ylh75s7l__XdVscePeQpZ9nJAyrJkLQuVF5_Hc4CobNfsv4F8wnKO9Dl4hEIvrLRgt345fXlfeaBxJQDUw_s6f8ukaTUiel4TxMFZoL2YU4SEfPrZDdINH4rTPesFiShl50t0sSctY7MKZU4QclsR9MDfNvQQ-lzf3ppgUl63h1sz-fB52c10NGdq1rdXzjVcg_cdN7dog-XxDbvQhTQxvsF6oPr-NIXzN9JsoNTfet4-Nf1g28IW8lpbdGe4ZG1UE2hhqS6paGk9j3SekyoMgSXdTfRYPk7v9roAI45XHn42fr9LI0-jeo3sCFw&opi=122715837
+          - img [ref=f869e24]
+        - link [ref=f869e26] [cursor=pointer]:
+          - /url: https://adssettings.google.com/whythisad?source=display&reasons=AcrBLeUYXyAYSkWPj-97DSRIr2EXxJe_hMciryudDj54_rDRhR5lm1s4OGzIQ5z2WFKq6XmW8MYWNCFEmc1mAkXj7W624hXTzjajPaLSLdsL3RpUUw3lMgANk64e1gwSMgNqtkZ8qW_s1wEJLi8E1jNmgw-qRqbLa4KpB4KYhm4td-WGTLuht7R7VaDGhxE5TQX_r3TYm5Ts0dVGUUG2Cp-nUpMHv0kZdho9WGRSbM0g9AJS9knlfehXkgUwo-aNZTSLwA_AuFvcbYiin7rDtdQt6TUQeVHmzVqxYoe_kN9TTnKX9cHtfyd81tQRJ3nGf-LWznxzC5m121CE-NzAmGUskJghNJ69bBdzTV3O1yoroxSP0WmGxOxs3Ey2hCRBjBNQQKWJnz_-QeLKfXOtYXYiNvkPhSbzuUgITjAxJO-ZQOXp1RlO2Cei3vHA90Xf572ZKREZn2HdCWNYsWKwJukLFIemKIRZEUcg8lZ1hOTILrrRRfBxobPm6EirGP3eQ4WUqB4rIz3r7BqRfUS13lPJ8ipimtrSgfvrvHkfgjFrl7t8jhiowj3kUmEsGYPTWU8AN9_fdXSK0iF8BfJtbt9nFoL-Isp9NLg6cQcqFhlScmk54lDweCin3Ps8ukcWsrWKWoRqk1y3dHNtAyENYV05ETe1xZU7S2dBF-TbZkagoci_xuLFk_mfJ-DNURC5-KrjNsOlPr3X115PGB6vI72pRmVweb4yFUKDsuigPC3sog71d4iuAyQDiaLbrjW1bulb2Oi-3b5dz8eztsv5Fvy3CDCCwPGyQ3KnUxmOXU1U2J0YGXn0rY4jFRrh39SvqExD4X5sFvU6MEKJMQ4F0e0Fb3hd9miTtXJkov0YjDFyhBW9OqelXUL-6lcV8nsMFK08wKwiZnEbRA135aQdqhv1vuZiPp0m_-qmYsZIwMfMome_zxjQXxwtT72gkWZ61-DHKgGIC5weTHt_9T_xe_RUhsJaeTwGCHO50-P11i1XNnixemdTyL3BulDfAq_RC6FzKE9P6pmAkGIIbjuoTy0db120VrXOUS6YpofIJ6hKX5CML-VD0XAKhwvl7eesMw7TOcZW9Zj1oAz2qWD64x6BpFBYc28Z94faHiwc9oJcMfWfSzJgDyu-gM37t59p3udayVKrA41hoeqHMLSLpj5wKOsq8c45vYRGbkJY17LQ2EjQYFxhXeGrE_z1-t-Bd3_Np34OFIgzrqA-xzZzt-ETZQ4SKNBlS5lugivfHDiqbssMvSKE3pD-yBUwD-U-CMliPvNgSkPQMOJ-JCd8bmy1IVHfqJbed-d8a7h-XsDBPGXf5zlkSfkB0Z6Jjy-_GYNhgrNl7KfgT1rLXGSI3-IjMtSWXwgXnUQFiVxT093L1JO7r7W0ODH6wMqGht2z_REvaLWnG6PaX952z5kpG4sAjv7pyufz4rNH-jOEQjLYpGIBxBej8IsEJDyn9Ca8VjVFK7JXl1yaUx_7pYzBxRZLInMMy_ZJ8GX_Q7XICNOYf75kd-II_qw3ILNCDJgWW7l0iwSS6vkxA4ZlMCBubQE0-S3vlr_EUzawOgor78VvWJwpvyh2KdhEkkSZ4wYpPVZ1bmL4e6a6Lrf0n5Xr36b57vcfX8KyB17eEDl_0hPb-sv6ya3n1AU41UzUqbRm2eolxP8Hw8Eh__1C5lCHRoyy_bp0KuLlTKKh4-H5HvlcKCSP5afLrxbf2Ti3FegF1HlcdMpMrprnbrR1zxO80gALElVFGH_AhunEmJJuj2aQKRBhafDKnrMdCLfteT_nDrn7OYGcFU7SlrouuyBWYH1nfFXKmWqhW7P1YsUwtv9RaVobetbB8v9Y_DEQYX53znMm18mIzYByHl4tLKYYFHymXYpRNB2Ds4gTm_m7BCidl3Po-wlF1OPiwUOSqcECDPZXTjn8eH07fFbeR4M6bqGedjP_OyUZ0hrpa0H4X_UPyA--YZJMKl-3u2zMnXaUQhkh6DsecnQQHeaQ6C8M4TICGfRxs12Vw7auVXJlR7P1IXw7c4Txp4s71O22HuC4pa_P2dbxNhPhHgdNJD6kIzXEfx7VkM031XmXj-hxpN8qOM2ePVs_hGmZWCiV8CKRW5Tzay9ZZKXppy_YVFw3_0EgEBK2iB41-m3VpawAW-riunhoSoHm21Lx-BWoni8asxD7x0d_VbVvjBRcJ1pM3DzBDtv8NdZ0PKfbtpk1Xump2SwPVXcjWXufZ4WjoeVZTwMYfROGyZItlZfauv4SpTaUxNYf40-nkrtLbqBYNjp9yt7HQ3jjbI9MTcHcVjmqA5NnFXTwMOHrBaeIoncGMD-IW1Ylh75s7l__XdVscePeQpZ9nJAyrJkLQuVF5_Hc4CobNfsv4F8wnKO9Dl4hEIvrLRgt345fXlfeaBxJQDUw_s6f8ukaTUiel4TxMFZoL2YU4SEfPrZDdINH4rTPesFiShl50t0sSctY7MKZU4QclsR9MDfNvQQ-lzf3ppgUl63h1sz-fB52c10NGdq1rdXzjVcg_cdN7dog-XxDbvQhTQxvsF6oPr-NIXzN9JsoNTfet4-Nf1g28IW8lpbdGe4ZG1UE2hhqS6paGk9j3SekyoMgSXdTfRYPk7v9roAI45XHn42fr9LI0-jeo3sCFw&opi=122715837
+          - img [ref=f869e28]
+      - img [ref=f869e31] [cursor=pointer]
+      - generic [ref=f869e42]:
+        - img [ref=f869e45]
+        - generic [ref=f869e48]:
+          - text: Ads by
+          - img [ref=f869e49]
+        - generic [ref=f869e52]:
+          - generic [ref=f869e55] [cursor=pointer]: Stop seeing this ad
+          - link [ref=f869e57] [cursor=pointer]:
+            - /url: https://adssettings.google.com/whythisad?source=display&reasons=AcrBLeUYXyAYSkWPj-97DSRIr2EXxJe_hMciryudDj54_rDRhR5lm1s4OGzIQ5z2WFKq6XmW8MYWNCFEmc1mAkXj7W624hXTzjajPaLSLdsL3RpUUw3lMgANk64e1gwSMgNqtkZ8qW_s1wEJLi8E1jNmgw-qRqbLa4KpB4KYhm4td-WGTLuht7R7VaDGhxE5TQX_r3TYm5Ts0dVGUUG2Cp-nUpMHv0kZdho9WGRSbM0g9AJS9knlfehXkgUwo-aNZTSLwA_AuFvcbYiin7rDtdQt6TUQeVHmzVqxYoe_kN9TTnKX9cHtfyd81tQRJ3nGf-LWznxzC5m121CE-NzAmGUskJghNJ69bBdzTV3O1yoroxSP0WmGxOxs3Ey2hCRBjBNQQKWJnz_-QeLKfXOtYXYiNvkPhSbzuUgITjAxJO-ZQOXp1RlO2Cei3vHA90Xf572ZKREZn2HdCWNYsWKwJukLFIemKIRZEUcg8lZ1hOTILrrRRfBxobPm6EirGP3eQ4WUqB4rIz3r7BqRfUS13lPJ8ipimtrSgfvrvHkfgjFrl7t8jhiowj3kUmEsGYPTWU8AN9_fdXSK0iF8BfJtbt9nFoL-Isp9NLg6cQcqFhlScmk54lDweCin3Ps8ukcWsrWKWoRqk1y3dHNtAyENYV05ETe1xZU7S2dBF-TbZkagoci_xuLFk_mfJ-DNURC5-KrjNsOlPr3X115PGB6vI72pRmVweb4yFUKDsuigPC3sog71d4iuAyQDiaLbrjW1bulb2Oi-3b5dz8eztsv5Fvy3CDCCwPGyQ3KnUxmOXU1U2J0YGXn0rY4jFRrh39SvqExD4X5sFvU6MEKJMQ4F0e0Fb3hd9miTtXJkov0YjDFyhBW9OqelXUL-6lcV8nsMFK08wKwiZnEbRA135aQdqhv1vuZiPp0m_-qmYsZIwMfMome_zxjQXxwtT72gkWZ61-DHKgGIC5weTHt_9T_xe_RUhsJaeTwGCHO50-P11i1XNnixemdTyL3BulDfAq_RC6FzKE9P6pmAkGIIbjuoTy0db120VrXOUS6YpofIJ6hKX5CML-VD0XAKhwvl7eesMw7TOcZW9Zj1oAz2qWD64x6BpFBYc28Z94faHiwc9oJcMfWfSzJgDyu-gM37t59p3udayVKrA41hoeqHMLSLpj5wKOsq8c45vYRGbkJY17LQ2EjQYFxhXeGrE_z1-t-Bd3_Np34OFIgzrqA-xzZzt-ETZQ4SKNBlS5lugivfHDiqbssMvSKE3pD-yBUwD-U-CMliPvNgSkPQMOJ-JCd8bmy1IVHfqJbed-d8a7h-XsDBPGXf5zlkSfkB0Z6Jjy-_GYNhgrNl7KfgT1rLXGSI3-IjMtSWXwgXnUQFiVxT093L1JO7r7W0ODH6wMqGht2z_REvaLWnG6PaX952z5kpG4sAjv7pyufz4rNH-jOEQjLYpGIBxBej8IsEJDyn9Ca8VjVFK7JXl1yaUx_7pYzBxRZLInMMy_ZJ8GX_Q7XICNOYf75kd-II_qw3ILNCDJgWW7l0iwSS6vkxA4ZlMCBubQE0-S3vlr_EUzawOgor78VvWJwpvyh2KdhEkkSZ4wYpPVZ1bmL4e6a6Lrf0n5Xr36b57vcfX8KyB17eEDl_0hPb-sv6ya3n1AU41UzUqbRm2eolxP8Hw8Eh__1C5lCHRoyy_bp0KuLlTKKh4-H5HvlcKCSP5afLrxbf2Ti3FegF1HlcdMpMrprnbrR1zxO80gALElVFGH_AhunEmJJuj2aQKRBhafDKnrMdCLfteT_nDrn7OYGcFU7SlrouuyBWYH1nfFXKmWqhW7P1YsUwtv9RaVobetbB8v9Y_DEQYX53znMm18mIzYByHl4tLKYYFHymXYpRNB2Ds4gTm_m7BCidl3Po-wlF1OPiwUOSqcECDPZXTjn8eH07fFbeR4M6bqGedjP_OyUZ0hrpa0H4X_UPyA--YZJMKl-3u2zMnXaUQhkh6DsecnQQHeaQ6C8M4TICGfRxs12Vw7auVXJlR7P1IXw7c4Txp4s71O22HuC4pa_P2dbxNhPhHgdNJD6kIzXEfx7VkM031XmXj-hxpN8qOM2ePVs_hGmZWCiV8CKRW5Tzay9ZZKXppy_YVFw3_0EgEBK2iB41-m3VpawAW-riunhoSoHm21Lx-BWoni8asxD7x0d_VbVvjBRcJ1pM3DzBDtv8NdZ0PKfbtpk1Xump2SwPVXcjWXufZ4WjoeVZTwMYfROGyZItlZfauv4SpTaUxNYf40-nkrtLbqBYNjp9yt7HQ3jjbI9MTcHcVjmqA5NnFXTwMOHrBaeIoncGMD-IW1Ylh75s7l__XdVscePeQpZ9nJAyrJkLQuVF5_Hc4CobNfsv4F8wnKO9Dl4hEIvrLRgt345fXlfeaBxJQDUw_s6f8ukaTUiel4TxMFZoL2YU4SEfPrZDdINH4rTPesFiShl50t0sSctY7MKZU4QclsR9MDfNvQQ-lzf3ppgUl63h1sz-fB52c10NGdq1rdXzjVcg_cdN7dog-XxDbvQhTQxvsF6oPr-NIXzN9JsoNTfet4-Nf1g28IW8lpbdGe4ZG1UE2hhqS6paGk9j3SekyoMgSXdTfRYPk7v9roAI45XHn42fr9LI0-jeo3sCFw&opi=122715837
+            - generic [ref=f869e58]:
+              - text: Why this ad?
+              - img [ref=f869e59]
+      - generic [ref=f869e62]:
+        - generic [ref=f869e65] [cursor=pointer]: Not interested in this ad
+        - generic [ref=f869e68] [cursor=pointer]: Seen this ad multiple times
+        - generic [ref=f869e71] [cursor=pointer]: Ad was inappropriate
+        - generic [ref=f869e74] [cursor=pointer]: Ad covered content
+      - generic [ref=f869e80]: We'll try not to show that ad again
+      - generic [ref=f869e86]:
+        - text: Ad closed by
+        - img [ref=f869e87]
+  - generic [ref=e173]:
+    - generic [ref=e174]:
+      - list [ref=e175]:
+        - listitem [ref=e176]:
+          - link "All Publishers" [ref=e177] [cursor=pointer]:
+            - /url: /publishers/
+        - listitem [ref=e178]:
+          - text: /
+          - link "Marvel" [ref=e179] [cursor=pointer]:
+            - /url: /publishers/marvel
+        - listitem [ref=e180]:
+          - text: /
+          - link "X-MEN" [ref=e181] [cursor=pointer]:
+            - /url: /titles/x-men/rluy
+        - listitem [ref=e182]: "/ #-1"
+      - generic [ref=e183]:
+        - generic [ref=e185]:
+          - generic [ref=e186]:
+            - text: July 1997 • Volume 2 •
+            - generic:
+              - link:
+                - /url: /exclusives//
+            - text: • Usa •
+            - generic [ref=e187]: DIRECT EDITION
+            - text: • 458 Collected
+          - generic [ref=e188]: "X-MEN #-1"
+        - generic [ref=e190]:
+          - tablist [ref=e192]:
+            - tab "DETAILS" [selected] [ref=e193] [cursor=pointer]:
+              - generic [ref=e195]: DETAILS
+            - tab "VALUES" [ref=e196] [cursor=pointer]:
+              - generic [ref=e198]: VALUES
+            - tab "VARIANTS" [ref=e199] [cursor=pointer]:
+              - generic [ref=e201]: VARIANTS
+            - tab "COLLECTION" [ref=e202] [cursor=pointer]:
+              - generic [ref=e204]: COLLECTION
+          - 'link "Issue #0.5" [ref=e208] [cursor=pointer]':
+            - /url: /titles/x-men/0.5/phxvks
+            - text: "Issue #0.5"
+            - img [ref=e209]
+          - generic [ref=e213]:
+            - 'link "(Marvel) Cover for X-MEN #-1" [ref=e215] [cursor=pointer]':
+              - /url: /image/rluy/phvpiu
+              - 'img "(Marvel) Cover for X-MEN #-1" [ref=e216]'
+            - generic [ref=e217]:
+              - generic [ref=e218]: Basic Information
+              - generic [ref=e219]:
+                - generic [ref=e220]:
+                  - strong [ref=e222]: Published
+                  - text: July 1997
+                - generic [ref=e223]:
+                  - strong [ref=e225]: Comic Age
+                  - text: Modern
+                - generic [ref=e226]:
+                  - strong [ref=e228]: Cover Price
+                  - text: "1.95"
+                - generic [ref=e229]:
+                  - strong [ref=e231]: UPC
+                  - text: "75960601772099911"
+              - generic [ref=e233]: Characters
+              - generic [ref=e235]: Creators
+              - generic [ref=e236]:
+                - generic [ref=e237]:
+                  - generic [ref=e238]: Writer
+                  - link "Scott Lobdell" [ref=e241] [cursor=pointer]:
+                    - /url: /creators/scott-lobdell
+                - generic [ref=e242]:
+                  - generic [ref=e243]: Penciler
+                  - link "Carlos Pacheco" [ref=e246] [cursor=pointer]:
+                    - /url: /creators/carlos-pacheco
+                - generic [ref=e247]:
+                  - generic [ref=e248]: Cover Penciler
+                  - generic [ref=e249]:
+                    - link "Art Thibert" [ref=e251] [cursor=pointer]:
+                      - /url: /creators/art-thibert
+                    - text: ","
+                    - link "Carlos Pacheco" [ref=e253] [cursor=pointer]:
+                      - /url: /creators/carlos-pacheco
+                - generic [ref=e254]:
+                  - generic [ref=e255]: Inker
+                  - link "Art Thibert" [ref=e258] [cursor=pointer]:
+                    - /url: /creators/art-thibert
+                - generic [ref=e259]:
+                  - generic [ref=e260]: Letterer
+                  - generic [ref=e261]:
+                    - link "Richard Starkings" [ref=e263] [cursor=pointer]:
+                      - /url: /creators/richard-starkings
+                    - text: ","
+                    - link "Comicraft" [ref=e265] [cursor=pointer]:
+                      - /url: /creators/comicraft
+                - generic [ref=e266]:
+                  - generic [ref=e267]: Colorist
+                  - generic [ref=e268]:
+                    - link "Aron Lusen" [ref=e270] [cursor=pointer]:
+                      - /url: /creators/aron-lusen
+                    - text: ","
+                    - link "Christian Lichtner" [ref=e272] [cursor=pointer]:
+                      - /url: /creators/christian-lichtner
+                - generic [ref=e273]:
+                  - generic [ref=e274]: Editor
+                  - generic [ref=e275]:
+                    - link "Bob Harras" [ref=e277] [cursor=pointer]:
+                      - /url: /creators/bob-harras
+                    - text: ","
+                    - link "Mark Powers" [ref=e279] [cursor=pointer]:
+                      - /url: /creators/mark-powers
+              - generic [ref=e281]: Crossovers / Story Arcs
+              - generic [ref=e283]: Stories
+              - generic [ref=e284]:
+                - generic [ref=e285]: Stories may contain spoilers
+                - generic [ref=e287]:
+                  - img [ref=e288]
+                  - text: I Had A Dream!
+                  - img [ref=e292]
+                  - separator [ref=e297]
+      - generic [ref=e299]:
+        - tablist [ref=e301]:
+          - tab "FOR SALE" [selected] [ref=e302] [cursor=pointer]:
+            - generic [ref=e304]: FOR SALE
+          - tab "WANTED BY" [ref=e305] [cursor=pointer]:
+            - generic [ref=e307]: WANTED BY
+        - generic [ref=e310]:
+          - generic [ref=e311]: Here is a list of members who are selling this issue.
+          - generic [ref=e312]:
+            - link "beren12" [ref=e314] [cursor=pointer]:
+              - /url: /members/beren12
+              - img "beren12" [ref=e315]
+            - generic [ref=e316]:
+              - generic [ref=e317]:
+                - link "BEREN12" [ref=e318] [cursor=pointer]:
+                  - /url: /sales/beren12/x-men/-1/pcstbsr
+                - strong [ref=e319]:
+                  - text: (
+                  - link "6886" [ref=e320] [cursor=pointer]:
+                    - /url: /cpg-member/beren12/feedback
+                  - text: )
+                - text: 100% Positive
+              - generic [ref=e321]: $1.00:9.4
+          - generic [ref=e322]:
+            - link "chas39" [ref=e324] [cursor=pointer]:
+              - /url: /members/chas39
+              - img "chas39" [ref=e325]
+            - generic [ref=e326]:
+              - generic [ref=e327]:
+                - link "CHAS39" [ref=e328] [cursor=pointer]:
+                  - /url: /sales/chas39/x-men/-1/phvuhqx
+                - strong [ref=e329]:
+                  - text: (
+                  - link "29" [ref=e330] [cursor=pointer]:
+                    - /url: /cpg-member/chas39/feedback
+                  - text: )
+                - text: 100% Positive
+              - generic [ref=e331]: $1.50:7.0
+          - generic [ref=e332]:
+            - link "cptkirki" [ref=e334] [cursor=pointer]:
+              - /url: /members/cptkirki
+              - img "cptkirki" [ref=e335]
+            - generic [ref=e336]:
+              - generic [ref=e337]:
+                - link "CPTKIRKI" [ref=e338] [cursor=pointer]:
+                  - /url: /sales/cptkirki/x-men/-1/pcqpntx
+                - strong [ref=e339]:
+                  - text: (
+                  - link "333" [ref=e340] [cursor=pointer]:
+                    - /url: /cpg-member/cptkirki/feedback
+                  - text: )
+                - text: 100% Positive
+              - generic [ref=e341]: $1.00:9.4
+          - generic [ref=e342]:
+            - link "dominicd" [ref=e344] [cursor=pointer]:
+              - /url: /members/dominicd
+              - img "dominicd" [ref=e345]
+            - generic [ref=e346]:
+              - generic [ref=e347]:
+                - link "DOMINICD" [ref=e348] [cursor=pointer]:
+                  - /url: /sales/dominicd/x-men/-1/pmsthsp
+                - strong [ref=e349]:
+                  - text: (
+                  - link "0" [ref=e350] [cursor=pointer]:
+                    - /url: /cpg-member/dominicd/feedback
+                  - text: )
+              - generic [ref=e351]: $2.00:9.4
+          - generic [ref=e352]:
+            - link "markb242" [ref=e354] [cursor=pointer]:
+              - /url: /members/markb242
+              - img "markb242" [ref=e355]
+            - generic [ref=e356]:
+              - generic [ref=e357]:
+                - link "MARKB242" [ref=e358] [cursor=pointer]:
+                  - /url: /sales/markb242/x-men/-1/pbsplpt
+                - strong [ref=e359]:
+                  - text: (
+                  - link "75" [ref=e360] [cursor=pointer]:
+                    - /url: /cpg-member/markb242/feedback
+                  - text: )
+                - text: 100% Positive
+              - generic [ref=e361]: $2.00:9.4
+          - generic [ref=e362]:
+            - link "mikemhpdx" [ref=e364] [cursor=pointer]:
+              - /url: /members/mikemhpdx
+              - img "mikemhpdx" [ref=e365]
+            - generic [ref=e366]:
+              - generic [ref=e367]:
+                - link "MIKEMHPDX" [ref=e368] [cursor=pointer]:
+                  - /url: /sales/mikemhpdx/x-men/-1/pcpwkxu
+                - strong [ref=e369]:
+                  - text: (
+                  - link "89" [ref=e370] [cursor=pointer]:
+                    - /url: /cpg-member/mikemhpdx/feedback
+                  - text: )
+                - text: 100% Positive
+              - generic [ref=e371]: $3.00:9.4
+          - generic [ref=e372]:
+            - link "monhae" [ref=e374] [cursor=pointer]:
+              - /url: /members/monhae
+              - img "monhae" [ref=e375]
+            - generic [ref=e376]:
+              - generic [ref=e377]:
+                - link "MONHAE" [ref=e378] [cursor=pointer]:
+                  - /url: /sales/monhae/x-men/-1/pmtulyu
+                - strong [ref=e379]:
+                  - text: (
+                  - link "2" [ref=e380] [cursor=pointer]:
+                    - /url: /cpg-member/monhae/feedback
+                  - text: )
+                - text: 100% Positive
+              - generic [ref=e381]: $3.00:9.4
+          - generic [ref=e382]:
+            - link "thedizz39" [ref=e384] [cursor=pointer]:
+              - /url: /members/thedizz39
+              - img "thedizz39" [ref=e385]
+            - generic [ref=e386]:
+              - generic [ref=e387]:
+                - link "THEDIZZ39" [ref=e388] [cursor=pointer]:
+                  - /url: /sales/thedizz39/x-men/-1/pbrsjts
+                - strong [ref=e389]:
+                  - text: (
+                  - link "3724" [ref=e390] [cursor=pointer]:
+                    - /url: /cpg-member/thedizz39/feedback
+                  - text: )
+                - text: 99.9% Positive
+              - generic [ref=e391]: $3.00:9.4
+    - generic [ref=e393]:
+      - generic [ref=e394]:
+        - text: Contributors
+        - generic [ref=e395]: Members who have contributed information on this page.
+      - generic [ref=e397]:
+        - link "WILLYJ... 9 WILLYJ..." [ref=e399] [cursor=pointer]:
+          - /url: /members/
+          - img "WILLYJ..." [ref=e400]
+          - generic [ref=e401]: "9"
+          - text: WILLYJ...
+        - link "ROCKNR... 9 ROCKNR..." [ref=e403] [cursor=pointer]:
+          - /url: /members/
+          - img "ROCKNR..." [ref=e404]
+          - generic [ref=e405]: "9"
+          - text: ROCKNR...
+        - link "OFFICI... 8 OFFICI..." [ref=e407] [cursor=pointer]:
+          - /url: /members/
+          - img "OFFICI..." [ref=e408]
+          - generic [ref=e409]: "8"
+          - text: OFFICI...
+  - iframe [ref=e461]:
+    - generic [ref=f870e3]:
+      - link "Sleep Apnea? Try This Japanese Trick (It's Genius!) Sleep Apnea? Try This Japanese Trick (It's Genius!) derilamemoryfoam.com OPEN" [ref=f870e4] [cursor=pointer]:
+        - /url: https://tracenep.admaster.cc/ju/ic?tn=2ce2e6e33746b4224011d22068a89c02&trackingid=55488a37beef1f16218510c3b59d51d1&acid=34267&data=pwJHckYeO0VBIbn5zgUISkujPIQr4CIWXf3JrcLHR-7hROn9ZxCCZE1jG0Kb6sEoZ9ZVnYE8MIIex-zd0gojuRjhRXPxHdfCXgh0OopCN0UzZVs-mg0QkhEPZ-DtTdNFNPBvenCdsVpsJYAxwA4L9HHjhg8PWfD6ngXP3uIBFdN1iws_HsRTx_Rjy6H9YFbd8_l7IOerqsInOdX3oJKeJEvHbPSMvpEfwoQ0m1xNeKcA0SdVHdCAGC2L-eMQ6Yt7kEqneq3ejcq9ObqZX5n0zq8CDpuug3bQ6KE181wsS1ltaQc1DZZQgnrHA-mhnGvW0UAjQUikMcb36VIN3e8i9qMozr_m6GdsZaDZi1MyQxY-bn97rFgHqUP6hywYmC3eLn4lonbdd0d_dncOhCHZp_CIX_sKM0bTbOoUjU2ATbMvJ4vyLQrjhxuYN5xIgYmWslzgVQdlQsYDggyYNrUUEO17xzCTF0A_JQxdFZeCaB83sPVUyfVmo4KjE4b8pyLPta2_JcA9KJXwS3fLqnp_PMMpTi78hpBqBu0v1rqU0Z4A9a34B8kV5JDHwa8TnEo_q_1_YHBhDizcu_dM4t2GOO8XPhhlgCsgCJ8CeQ9NddEqCnsUCeUFIVuFD8G5byyQ7QikvcqwIr9G77OKwDhsTCKm_mI59hhIGIOuOq4mT1CUQqVJflGxWlyVmGKGLvXLWDPdfl3VX7kZ4O3L45asr3PjUYF2IxVFq_qBqhAfruCu63iaT8LZydTJiVjErabCr7rATF-r9TGoDjC25pq7BFPbjreHIYXGfI9t2ao8zyoUwFUee1OmqBUt8Go46mg_ImHg375uM8lfxK2bUB8lbhORZWWH1NISF0Dp4L0k4FiHRtgcJ_0ZWg09BlD2OrH8I4E9OAdlZNfxBGyZ_uaMzRob2H8RFr-6ydeWndaQXlZYQFI3xeOxwibJa7rzZFSOv60S-iwZVn8_3O4sI5kyIPpPQGGCWwOjgfH7GiZJht6tSa5nt0S0qT9hmt-t55bNGuYKyXEbyFtc26bIg0Jy2zTeetkBzw7hkmo96j_Y5_myQorzKl79nAEHRvpg6AKbGbwPdzs9jHAydYmSQdsGWiyEMS9Es4rNOgGLJAHKiPj0NGcRrzDGCLvJ6eU6dWF-FsxvZtfdIlvE31xEG5Sa-1CT4eb0RmP7fzm13YLZ4KI9xLLOny6sdprJYY7eVkGMFQquVPAiokmPhmGvSJUeAn-OP86mPmgIAIjh3MVhwzdV6PtE53bqJnH0mo9X9bv7YY6XAFzVkWpH_O5Jr8eibZuJKrmaV3UKyrEn8x9hFixGEXD7na0nPU-kCeUg7Iz3wc7IKUb7cZQoCWupTxxtdV2_QCkkw1x4FclkFc-Tx7d2xIe6s7PIGZ9hQCB_pfI0xNp7DhqPfvF8kkCg5lzi3-V-Rezg4mhSPCFJ__4BzdnuBJ6TElAoMaqTp69anksv9xE_1Lkxjmu4Xo--gPZI5kVeME5khGrbFt2l57_8EnmyzyT9uq8tU12CzM3jK34pCf8z2P70nlx6dbg0tc6edaWdPZJbsEaNnaBhHfDlevPvXQBc0Fx10d1wnmijKNvOmJYqmFOt9rbQIVct__l0deLvdE6QE3TLrMekITqMPPBAA_949_UvEZquVkVwE9wymFnYP7KQsq7rt7eyqX6DbjI9MPU7o8jLJr_dYLazk6OZzqqtGg_zLMRGwcRPRceXNoLuEzaqY5oTcJ7I6PQ4KiGbuhKk86fxOmNH-7emLjp6so5NarobSxFiMYTdXfWDgWX9qIzSDCIzmv6jPKgXyFgM9oYzDSlTNh_OoKqZbInKmbqbJzo8UqVyTo8xwKng_9KNd28YjBsA0eLzDrPsTpUY_joAsInkEeM4S_9y-s36rNVcCStJLljyQrltm-O44kiVjwLW-Wo4_oKathniPAlDuf6LwhNKXOT5Tj9Ngl9_KmKR5bqYqupfmBYEkQUCfyARN-5iBXbzMeOJ4_q0Wpa_ukASJ7HnaXfrxIyh_DjtdYMpKxe_RKvtq6BiLlu0UtFzmm0xskh5a6gE2if4oqujQ3UOL_AOUM1pxtILZuP-I583I_l9yWC0GVxbB1SP&uid=CAESEJC4TvAGCbbHdg0WMExflvQ&mguid=&ap=0.02527&tid=106&gprice=_NFEHXaUOdbgy8900-_XSj8fyMtrsOlLMYl-X7lRp4g&campaignid=4631847&google_click_url=https://adclick.g.doubleclick.net/aclk%3Fsa%3DL%26ai%3DC9_xvCE-jaZa7J-aprr4PhtXl8QaltoSEe8z8yrWgE8CNtwEQASDhl7sTYMnu54vIpKwUyAEJ4AIAqAMByAMCqgS4Ak_Qu1d-MFJ1xFwtu_hbMbCQldsRxQwmUTpvxgm6s26hKhFxnGt08TScXtyBiihdXEZda25Gccrj_pJnC7slGHoPI-6NbdYGOeexiqezC7sE5XQQeoUHARC23tMEKaum2Gfk43ynpPVl3Skx4V6a_d5P5kRmhlEV1reZwE9MhYe1mbf4prWXjubDYMmY4oQW6AIBlzCwI9O8mTUXxsRhLcUirC9qGVMFPirahorI88nfEQWFFtEOjFVgARksGgwjApIN3EU3Kidv_R8E9qVF5zVAcojyW7Q4uwfRGb0yZY3TJIwWOUijDDB0cbjmjVETbnimxwavuBp0wVA6_cQVN9H4MTkYBbN_lz2xuwAI5_BZa56zjoLRDpSTry9Inj6z4_MueWCOvl5GLn2xS9uxzF2QkXiPqb4MqOAEAYAGneG2p8HXiZ9_oAYhqAeT2LECqAeU2LECqAeV2LECqAemvhuoB5bYG6gHqpuxAqgH_56xAqgH35-xAqgHrb6xAqgHv9OxAtgHANIILQiAYRABMgiKgoCAgICACDoOgECAwICAgICogAKogxBIvf3BOliH9NClgv2SA_oLAggBgAwBqg0CVVPiDRMI1aLTpYL9kgMV5pTLAR2Gajlu6g0TCJGy1KWC_ZIDFeaUywEdhmo5bogO____________AdAVAYAXAbIXGhgMKhQvMTU3MDgyMDUvQ1BHX0Zvb3RlclABqhghCc3MzMwEiNNAEhQvMTU3MDgyMDUvQ1BHX0Zvb3RlchgB%26num%3D1%26sig%3DAOD64_1TS2grWqtx8X3eWGL9p5MXCJgNHw%26client%3Dca-pub-2083774829111970%26adurl%3D
+        - img "Sleep Apnea? Try This Japanese Trick (It's Genius!)" [ref=f870e5]
+        - generic [ref=f870e6]:
+          - generic [ref=f870e7]:
+            - generic [ref=f870e8]: Sleep Apnea? Try This Japanese Trick (It's Genius!)
+            - generic [ref=f870e9]: derilamemoryfoam.com
+          - generic [ref=f870e11]: OPEN
+      - link "ad" [ref=f870e12] [cursor=pointer]:
+        - /url: //www.admaster.cc/privacy
+        - img [ref=f870e13]
+  - img [ref=e413]
+  - contentinfo [ref=e414]:
+    - generic [ref=e417]:
+      - generic [ref=e418]:
+        - link "ComicsPriceGuide.com The largest online source for comic book pricing in the world." [ref=e420] [cursor=pointer]:
+          - /url: /
+          - generic [ref=e421]:
+            - generic [ref=e422]: ComicsPriceGuide.com
+            - generic [ref=e423]: The largest online source for comic book pricing in the world.
+        - generic [ref=e424]:
+          - link [ref=e425] [cursor=pointer]:
+            - /url: https://www.instagram.com/comicspriceguide/
+            - img [ref=e426]
+          - link [ref=e428] [cursor=pointer]:
+            - /url: https://www.facebook.com/ComicsPriceGuide/
+            - img [ref=e429]
+          - link [ref=e431] [cursor=pointer]:
+            - /url: https://twitter.com/cpguide
+            - img [ref=e432]
+      - generic [ref=e434]:
+        - link [ref=e435] [cursor=pointer]:
+          - /url: https://itunes.apple.com/us/app/comics-price-guide/id1371496914?mt=8
+          - img [ref=e436]
+        - link [ref=e437] [cursor=pointer]:
+          - /url: https://play.google.com/store/apps/details?id=com.arkham
+          - img [ref=e438]
+    - generic [ref=e439]:
+      - generic [ref=e441]:
+        - generic [ref=e443]:
+          - link "About Us" [ref=e444] [cursor=pointer]:
+            - /url: /about
+          - text: "|"
+          - link "Terms of Service" [ref=e445] [cursor=pointer]:
+            - /url: /terms-of-service
+          - text: "|"
+          - link "Privacy Policy" [ref=e446] [cursor=pointer]:
+            - /url: /privacy-policy
+          - text: "|"
+          - link "Advertising" [ref=e447] [cursor=pointer]:
+            - /url: /advertising
+          - text: "|"
+          - link "Contact" [ref=e448] [cursor=pointer]:
+            - /url: /contact-us
+        - generic [ref=e449]:
+          - generic [ref=e450]: Original Content © and logo ® 1995-2026 ComicsPriceGuide.com, Inc.
+          - generic [ref=e451]: All other material © and logos ® are owned by respective copyright holders.
+          - generic [ref=e452]: No publishers are sponsors of CPG. All rights reserved
+      - img [ref=e454] [cursor=pointer]

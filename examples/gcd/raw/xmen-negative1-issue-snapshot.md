@@ -1,0 +1,937 @@
+- generic [ref=e2]:
+  - navigation [ref=e3]:
+    - link "GCD" [ref=e6] [cursor=pointer]:
+      - /url: /
+      - img "GCD" [ref=e7]
+    - generic [ref=e10]:
+      - combobox [ref=e12]:
+        - option "Everything" [selected]
+        - option "Series Name"
+        - 'option "Series Name & Issue #"'
+        - option "Creator Name"
+        - option [disabled]
+        - option "Writer"
+        - option "Penciller"
+        - option "Inker"
+        - option "Colorist"
+        - option "Letterer"
+        - option "Editor"
+        - option "Any Credit"
+        - option "Story Title"
+        - option "Feature"
+        - option "Character"
+        - option [disabled]
+        - option "Job Number"
+        - option "ISBN"
+        - option "Barcode"
+        - option [disabled]
+        - option "Feature Name"
+        - option "Character Name"
+        - option "Group Name"
+        - option "Keyword"
+        - option "Publisher Name"
+        - option "Brand Group Name"
+        - option "Brand Emblem Name"
+        - option "Indicia Publisher Name"
+      - searchbox "Search..." [ref=e13]
+      - button [ref=e14] [cursor=pointer]:
+        - img [ref=e15]
+      - combobox [disabled] [ref=e17]:
+        - option "Name"
+        - option "Date"
+    - generic [ref=e19]:
+      - link "Advanced Query" [ref=e20] [cursor=pointer]:
+        - /url: /search/advanced/
+        - button "Advanced Query" [ref=e21]
+      - link "Donate" [ref=e22] [cursor=pointer]:
+        - /url: /donate/
+        - button "Donate" [ref=e23]
+      - button [ref=e25] [cursor=pointer]:
+        - generic:
+          - img
+  - navigation [ref=e26]:
+    - generic [ref=e27]:
+      - link "X-Men" [ref=e28] [cursor=pointer]:
+        - /url: /series/4254/
+      - text: "#-1 [Direct Edition]"
+    - generic [ref=e29]: July 1997
+  - navigation [ref=e30]:
+    - generic [ref=e31]:
+      - link "Marvel" [ref=e32] [cursor=pointer]:
+        - /url: /publisher/78/
+      - text: ", 1991 Series"
+    - generic [ref=e34]:
+      - link "ᐸ Previous Issue" [ref=e35] [cursor=pointer]:
+        - /url: /issue/84808/
+      - generic [ref=e36]:
+        - combobox [ref=e37]:
+          - option "1 [Cover A] *3"
+          - option "1 [Cover B] *3"
+          - option "1 [Cover C] *3"
+          - option "1 [Cover D] *3"
+          - option "1 [Special Collectors Edition]"
+          - option "2 *3"
+          - option "3 *3"
+          - option "4 *3"
+          - option "5 *3"
+          - option "6 *3"
+          - option "7 *3"
+          - option "8 *3"
+          - option "9 *3"
+          - option "10 *3"
+          - option "11 *4"
+          - option "12 *3"
+          - option "13 *3"
+          - option "14 *3"
+          - option "15 *3"
+          - option "16 *3"
+          - option "17 *3"
+          - option "18 *3"
+          - option "19 *3"
+          - option "20 *3"
+          - option "21 *3"
+          - option "22 *3"
+          - option "23 *3"
+          - option "24 *3"
+          - option "25 *5"
+          - option "26 *3"
+          - option "27 *2"
+          - option "28 *2"
+          - option "29 *2"
+          - option "30 *2"
+          - option "31 *2"
+          - option "32 *2"
+          - option "33 *2"
+          - option "34 *2"
+          - option "35 *2"
+          - option "36 *3"
+          - option "37 *3"
+          - option "38 *3"
+          - option "39 *3"
+          - option "40 *3"
+          - option "41 *3"
+          - option "42 *2"
+          - option "43 *2"
+          - option "44 *2"
+          - option "45 *2"
+          - option "46 *2"
+          - option "47 *2"
+          - option "48 *2"
+          - option "49 *3"
+          - option "50 *6"
+          - option "51 *3"
+          - option "52 *3"
+          - option "53 *3"
+          - option "54 *4"
+          - option "55 *3"
+          - option "56 *3"
+          - option "57 *3"
+          - option "58 *3"
+          - option "59 *2"
+          - option "60 *2"
+          - option "61 *2"
+          - option "62 *3"
+          - option "63 *2"
+          - option "64 *2"
+          - option "65 *2"
+          - option "-1 *3" [selected]
+          - option "66 *2"
+          - option "67 *2"
+          - option "68 *2"
+          - option "69 *2"
+          - option "70 *2"
+          - option "71 *2"
+          - option "72 *2"
+          - option "73 *2"
+          - option "74 *2"
+          - option "75 *2"
+          - option "76 *2"
+          - option "77 *2"
+          - option "78 *2"
+          - option "79 *2"
+          - option "80 *4"
+          - option "81 *2"
+          - option "82 *2"
+          - option "83 *2"
+          - option "84 *2"
+          - option "85 *2"
+          - option "86 *2"
+          - option "87 *2"
+          - option "88 *2"
+          - option "89 *2"
+          - option "90 *2"
+          - option "91 *2"
+          - option "92 *2"
+          - option "93 *4"
+          - option "94 *2"
+          - option "95 *4"
+          - option "96 *4"
+          - option "97 *3"
+          - option "98 *2"
+          - option "99 *2"
+          - option "100 *10"
+          - option "101 *2"
+          - option "102 *2"
+          - option "103 *2"
+          - option "104 *2"
+          - option "105 *2"
+          - option "106 *2"
+          - option "107 *2"
+          - option "108 *2"
+          - option "109 *2"
+          - option "110 *2"
+          - option "111 *2"
+          - option "112 *2"
+          - option "113 *2"
+        - button "Go" [ref=e38]
+      - link "Next Issue ᐳ" [ref=e39] [cursor=pointer]:
+        - /url: /issue/84809/
+  - generic [ref=e41]:
+    - generic [ref=e42]:
+      - generic [ref=e44]:
+        - generic [ref=e45]:
+          - generic [ref=e46]:
+            - generic [ref=e47]: "Volume: 1"
+            - generic [ref=e48]: "Price: 1.95 USD; 2.75 CAD"
+            - generic [ref=e49]: "Pages: 44"
+            - generic [ref=e50]: "On-sale Date: 1997-05-21"
+          - text: "Editing:"
+          - link "Jason Liebig" [ref=e51] [cursor=pointer]:
+            - /url: /creator/34440/
+          - text: (credited) (assistant editor);
+          - link "Mark Powers" [ref=e52] [cursor=pointer]:
+            - /url: /creator/8855/
+          - text: (credited) (associate editor);
+          - link "Bob Harras" [ref=e53] [cursor=pointer]:
+            - /url: /creator/1430/
+          - text: (credited) (editor, editor in chief)
+        - generic [ref=e54]:
+          - link:
+            - /url: "?display=list"
+            - img
+          - link [ref=e55] [cursor=pointer]:
+            - /url: "?display=grid"
+            - img [ref=e56]
+      - generic [ref=e58]:
+        - generic [ref=e59]:
+          - 'link "Cover Thumbnail for X-Men (Marvel, 1991 series) #-1 [Direct Edition]" [ref=e60] [cursor=pointer]':
+            - /url: cover/4/
+            - 'img "Cover Thumbnail for X-Men (Marvel, 1991 series) #-1 [Direct Edition]" [ref=e61]'
+          - link "Edit Cover" [ref=e62] [cursor=pointer]:
+            - /url: /edit_covers/125295/
+          - link "Cover Gallery" [ref=e63] [cursor=pointer]:
+            - /url: /series/4254/covers/?page=4
+          - generic [ref=e64]:
+            - 'link "Cover Thumbnail for X-Men (1991 series) #-1 [Variant Edition]" [ref=e66] [cursor=pointer]':
+              - /url: /issue/1035261/
+              - 'img "Cover Thumbnail for X-Men (1991 series) #-1 [Variant Edition]" [ref=e67]'
+            - 'link "Cover Thumbnail for X-Men (1991 series) #-1 [Newsstand]" [ref=e69] [cursor=pointer]':
+              - /url: /issue/1125054/
+              - 'img "Cover Thumbnail for X-Men (1991 series) #-1 [Newsstand]" [ref=e70]'
+        - generic [ref=e72]:
+          - heading "Flashback (Table of Contents)" [level=2] [ref=e73]:
+            - generic [ref=e74]:
+              - generic [ref=e75]: Flashback
+              - link "(Table of Contents)" [ref=e77] [cursor=pointer]:
+                - /url: "#toc_366000"
+          - heading "X-Men / cover / 1 page" [level=3] [ref=e78]:
+            - generic [ref=e80]:
+              - link "X-Men" [ref=e82] [cursor=pointer]:
+                - /url: /feature/35/
+              - generic [ref=e83]: / cover / 1 page
+          - table [ref=e85]:
+            - rowgroup [ref=e86]:
+              - 'row "Pencils: Carlos Pacheco (signed as CARLOS PACHECO [scratched] ) (with all due respect)" [ref=e87]':
+                - cell "Pencils:" [ref=e88]
+                - cell "Carlos Pacheco (signed as CARLOS PACHECO [scratched] ) (with all due respect)" [ref=e89]:
+                  - generic [ref=e91]:
+                    - link "Carlos Pacheco" [ref=e92] [cursor=pointer]:
+                      - /url: /creator/1902/
+                    - text: (signed as
+                    - link "CARLOS PACHECO [scratched]" [ref=e93] [cursor=pointer]:
+                      - /url: /creator_signature/11638/
+                      - text: CARLOS PACHECO [scratched]
+                      - img [ref=e95]
+                    - text: ) (with all due respect)
+              - 'row "Inks: Art Thibert (signed as A.T. )" [ref=e96]':
+                - cell "Inks:" [ref=e97]
+                - cell "Art Thibert (signed as A.T. )" [ref=e98]:
+                  - generic [ref=e100]:
+                    - link "Art Thibert" [ref=e101] [cursor=pointer]:
+                      - /url: /creator/798/
+                    - text: (signed as
+                    - link "A.T." [ref=e102] [cursor=pointer]:
+                      - /url: /creator_signature/11630/
+                      - text: A.T.
+                      - img [ref=e104]
+                    - text: )
+              - 'row "Colors: ?" [ref=e105]':
+                - cell "Colors:" [ref=e106]
+                - cell "?" [ref=e107]:
+                  - generic [ref=e109]: "?"
+              - 'row "Letters: ?" [ref=e110]':
+                - cell "Letters:" [ref=e111]
+                - cell "?" [ref=e112]:
+                  - generic [ref=e114]: "?"
+          - separator [ref=e115]
+          - generic [ref=e116]:
+            - list [ref=e117]:
+              - listitem [ref=e118]: Genre:superhero
+              - listitem
+            - list [ref=e119]:
+              - listitem
+              - listitem
+              - listitem [ref=e120]: First Line of Dialogue or Text:Erik -- please don't do this -- !
+              - listitem [ref=e121]:
+                - text: "Keywords:"
+                - link "flashback" [ref=e122] [cursor=pointer]:
+                  - /url: /keyword/flashback/story/
+            - generic [ref=e123]: "Characters:"
+            - list [ref=e124]:
+              - listitem [ref=e125]:
+                - generic [ref=e127]:
+                  - link "Magneto" [ref=e128] [cursor=pointer]:
+                    - /url: /character/6498/
+                  - text: "["
+                  - link "Erik Lehnsherr" [ref=e129] [cursor=pointer]:
+                    - /url: /character/6497/
+                  - text: "]"
+              - listitem [ref=e130]:
+                - generic [ref=e132]:
+                  - link "Professor X" [ref=e133] [cursor=pointer]:
+                    - /url: /character/6265/
+                  - text: "["
+                  - link "Charles Xavier" [ref=e134] [cursor=pointer]:
+                    - /url: /character/6269/
+                  - text: "]"
+              - listitem [ref=e135]:
+                - generic [ref=e136]:
+                  - link "Amelia Voght" [ref=e138] [cursor=pointer]:
+                    - /url: /character/16036/
+                  - generic [ref=e140]: (without a universe)
+            - group [ref=e142]:
+              - generic "Reprints (3)" [ref=e143]:
+                - img [ref=e144]
+                - text: Reprints (3)
+              - definition [ref=e146]:
+                - list [ref=e147]:
+                  - listitem [ref=e148]:
+                    - img "US" [ref=e149]
+                    - text: in
+                    - 'link "Marvel Vision (Marvel, 1996 series) #19 (July 1997)" [ref=e150] [cursor=pointer]':
+                      - /url: /issue/2512545/#3857126
+                  - listitem [ref=e151]:
+                    - img "IT" [ref=e152]
+                    - text: in
+                    - 'link "Gli Incredibili X-Men (Marvel Italia, 1994 series) #95 (maggio 1998)" [ref=e153] [cursor=pointer]':
+                      - /url: /issue/65018/#326660
+                  - listitem [ref=e154]:
+                    - img "DE" [ref=e155]
+                    - text: in
+                    - 'link "X-Men (Panini Deutschland, 1997 series) #33 ([Oktober] 1999)" [ref=e156] [cursor=pointer]':
+                      - /url: /issue/559256/#4433563
+      - group [ref=e157]:
+        - generic "This issue has 2 variants" [ref=e158]:
+          - img [ref=e159]
+          - text: This issue has 2 variants
+        - list [ref=e162]:
+          - listitem [ref=e163]:
+            - link "#-1 [Variant Edition]" [ref=e164] [cursor=pointer]:
+              - /url: /issue/1035261/
+          - listitem [ref=e165]:
+            - link "#-1 [Newsstand]" [ref=e166] [cursor=pointer]:
+              - /url: /issue/1125054/
+      - heading "Issue Data" [level=3] [ref=e167]
+      - list [ref=e168]:
+        - listitem [ref=e169]:
+          - text: "Publisher's Brand:"
+          - link "Marvel Comics Group [under character box]" [ref=e170] [cursor=pointer]:
+            - /url: /brand_emblem/35/
+            - text: Marvel Comics Group [under character box]
+            - img [ref=e172]
+        - listitem [ref=e173]:
+          - text: "Indicia / Colophon Publisher:"
+          - link "Marvel Comics" [ref=e174] [cursor=pointer]:
+            - /url: /indicia_publisher/31/
+        - listitem [ref=e175]: "Indicia Frequency: monthly"
+        - listitem [ref=e176]: "Publisher's Age Guidelines: Approved by the Comics Code Authority"
+        - listitem [ref=e177]: "Printer: ?"
+        - listitem [ref=e178]: "Barcode: 759606017720 99911"
+        - listitem [ref=e179]:
+          - text: "Keywords:"
+          - link "flashback" [ref=e180] [cursor=pointer]:
+            - /url: /keyword/flashback/issue/
+      - generic [ref=e182]:
+        - text: "Parts of this issue are reprinted:"
+        - list [ref=e183]:
+          - listitem [ref=e184]:
+            - img "US" [ref=e185]
+            - text: in
+            - 'link "X-Men: The Trial of Gambit (Marvel, 2016 series) (2016)" [ref=e186] [cursor=pointer]':
+              - /url: /issue/1604107/
+      - heading "Indexer Notes" [level=3] [ref=e187]
+      - paragraph [ref=e189]: "Published between X-Men #65 and 66"
+      - generic [ref=e190]:
+        - 'heading "I Had a Dream (Table of Contents: 1)" [level=2] [ref=e191]':
+          - generic [ref=e192]:
+            - generic [ref=e193]: I Had a Dream
+            - 'link "(Table of Contents: 1)" [ref=e195] [cursor=pointer]':
+              - /url: "#toc_366001"
+        - heading "X-Men / comic story / 22 pages" [level=3] [ref=e196]:
+          - generic [ref=e198]:
+            - link "X-Men" [ref=e200] [cursor=pointer]:
+              - /url: /feature/35/
+            - generic [ref=e201]: / comic story / 22 pages
+        - table [ref=e203]:
+          - rowgroup [ref=e204]:
+            - 'row "Script: Scott Lobdell (credited)" [ref=e205]':
+              - cell "Script:" [ref=e206]
+              - cell "Scott Lobdell (credited)" [ref=e207]:
+                - generic [ref=e209]:
+                  - link "Scott Lobdell" [ref=e210] [cursor=pointer]:
+                    - /url: /creator/11974/
+                  - text: (credited)
+            - 'row "Pencils: Carlos Pacheco (credited)" [ref=e211]':
+              - cell "Pencils:" [ref=e212]
+              - cell "Carlos Pacheco (credited)" [ref=e213]:
+                - generic [ref=e215]:
+                  - link "Carlos Pacheco" [ref=e216] [cursor=pointer]:
+                    - /url: /creator/1902/
+                  - text: (credited)
+            - 'row "Inks: Art Thibert (credited)" [ref=e217]':
+              - cell "Inks:" [ref=e218]
+              - cell "Art Thibert (credited)" [ref=e219]:
+                - generic [ref=e221]:
+                  - link "Art Thibert" [ref=e222] [cursor=pointer]:
+                    - /url: /creator/798/
+                  - text: (credited)
+            - 'row "Colors: Christian Lichtner (credited as Chris Lichtner) Aron Lusen (credited)" [ref=e223]':
+              - cell "Colors:" [ref=e224]
+              - cell "Christian Lichtner (credited as Chris Lichtner) Aron Lusen (credited)" [ref=e225]:
+                - generic [ref=e226]:
+                  - generic [ref=e227]:
+                    - link "Christian Lichtner" [ref=e228] [cursor=pointer]:
+                      - /url: /creator/2294/
+                    - text: (credited as
+                    - link "Chris Lichtner" [ref=e229] [cursor=pointer]:
+                      - /url: /creator/2294/
+                    - text: )
+                  - generic [ref=e230]:
+                    - link "Aron Lusen" [ref=e231] [cursor=pointer]:
+                      - /url: /creator/24426/
+                    - text: (credited)
+            - 'row "Letters: Richard Starkings (credited) Kolja Fuchs of Comicraft (credited as Comicraft/KF)" [ref=e232]':
+              - cell "Letters:" [ref=e233]
+              - cell "Richard Starkings (credited) Kolja Fuchs of Comicraft (credited as Comicraft/KF)" [ref=e234]:
+                - generic [ref=e235]:
+                  - generic [ref=e236]:
+                    - link "Richard Starkings" [ref=e237] [cursor=pointer]:
+                      - /url: /creator/11107/
+                    - text: (credited)
+                  - generic [ref=e238]:
+                    - link "Kolja Fuchs" [ref=e239] [cursor=pointer]:
+                      - /url: /creator/7886/
+                    - text: of
+                    - link "Comicraft" [ref=e240] [cursor=pointer]:
+                      - /url: /creator/2517/
+                    - text: (credited as
+                    - link "Comicraft/KF" [ref=e241] [cursor=pointer]:
+                      - /url: /creator/7886/
+                    - text: )
+        - separator [ref=e242]
+        - generic [ref=e243]:
+          - list [ref=e244]:
+            - listitem [ref=e245]: Genre:superhero
+            - listitem
+          - list [ref=e246]:
+            - listitem
+            - listitem
+            - listitem [ref=e247]: First Line of Dialogue or Text:I wanted you to see this, Charles.
+            - listitem
+          - generic [ref=e248]: "Characters:"
+          - list [ref=e249]:
+            - listitem [ref=e250]:
+              - generic [ref=e251]:
+                - generic [ref=e252]:
+                  - link "Angel" [ref=e253] [cursor=pointer]:
+                    - /url: /character/6736/
+                  - text: "["
+                  - link "Warren Worthington III" [ref=e254] [cursor=pointer]:
+                    - /url: /character/6735/
+                  - text: "]"
+                - generic [ref=e255]: (cameo)
+            - listitem [ref=e256]:
+              - generic [ref=e257]:
+                - generic [ref=e258]:
+                  - link "Bastion" [ref=e259] [cursor=pointer]:
+                    - /url: /character/35027/
+                  - text: "["
+                  - link "Sebastion Gilberti" [ref=e260] [cursor=pointer]:
+                    - /url: /character/35029/
+                  - text: "]"
+                - generic [ref=e262]: (without a universe)
+                - generic [ref=e263]: (villain)
+            - listitem [ref=e264]:
+              - generic [ref=e265]:
+                - generic [ref=e266]:
+                  - link "Beast" [ref=e267] [cursor=pointer]:
+                    - /url: /character/6733/
+                  - text: "["
+                  - link "Hank McCoy" [ref=e268] [cursor=pointer]:
+                    - /url: /character/6734/
+                  - text: "]"
+                - generic [ref=e269]: (cameo)
+            - listitem [ref=e270]:
+              - generic [ref=e271]:
+                - generic [ref=e272]:
+                  - link "Bishop" [ref=e273] [cursor=pointer]:
+                    - /url: /character/284/
+                  - text: "["
+                  - link "Lucas Bishop" [ref=e274] [cursor=pointer]:
+                    - /url: /character/6652/
+                  - text: "]"
+                - generic [ref=e276]: (Earth-1191)
+                - generic [ref=e277]: (cameo)
+            - listitem [ref=e278]:
+              - generic [ref=e279]:
+                - generic [ref=e280]:
+                  - link "Boomer" [ref=e281] [cursor=pointer]:
+                    - /url: /character/498/
+                  - text: "["
+                  - link "Tabitha Smith" [ref=e282] [cursor=pointer]:
+                    - /url: /character/490/
+                  - text: "]"
+                - generic [ref=e284]: (without a universe)
+                - generic [ref=e285]: (cameo)
+            - listitem [ref=e286]:
+              - generic [ref=e287]:
+                - generic [ref=e288]:
+                  - link "Cable" [ref=e289] [cursor=pointer]:
+                    - /url: /character/39701/
+                  - text: "["
+                  - link "Nathan Summers" [ref=e290] [cursor=pointer]:
+                    - /url: /character/39699/
+                  - text: "]"
+                - generic [ref=e291]: (cameo)
+            - listitem [ref=e292]:
+              - generic [ref=e293]:
+                - generic [ref=e294]:
+                  - link "Colossus" [ref=e295] [cursor=pointer]:
+                    - /url: /character/13970/
+                  - text: "["
+                  - link "Piotr Rasputin" [ref=e296] [cursor=pointer]:
+                    - /url: /character/13976/
+                  - text: "]"
+                - generic [ref=e297]: (cameo)
+            - listitem [ref=e298]:
+              - generic [ref=e299]:
+                - generic [ref=e300]:
+                  - link "Cyclops" [ref=e301] [cursor=pointer]:
+                    - /url: /character/6731/
+                  - text: "["
+                  - link "Scott Summers" [ref=e302] [cursor=pointer]:
+                    - /url: /character/6732/
+                  - text: "]"
+                - generic [ref=e303]: (cameo)
+            - listitem [ref=e304]:
+              - generic [ref=e305]:
+                - generic [ref=e306]:
+                  - link "Dazzler" [ref=e307] [cursor=pointer]:
+                    - /url: /character/39725/
+                  - text: "["
+                  - link "Alison Blaire" [ref=e308] [cursor=pointer]:
+                    - /url: /character/39727/
+                  - text: "]"
+                - generic [ref=e309]: (cameo)
+            - listitem [ref=e310]:
+              - generic [ref=e311]:
+                - link "Jean Grey" [ref=e313] [cursor=pointer]:
+                  - /url: /character/6268/
+                - generic [ref=e314]: (cameo)
+            - listitem [ref=e315]:
+              - generic [ref=e316]:
+                - generic [ref=e317]:
+                  - link "Havok" [ref=e318] [cursor=pointer]:
+                    - /url: /character/15912/
+                  - text: "["
+                  - link "Alex Summers" [ref=e319] [cursor=pointer]:
+                    - /url: /character/15910/
+                  - text: "]"
+                - generic [ref=e320]: (cameo)
+            - listitem [ref=e321]:
+              - generic [ref=e322]:
+                - link "Howard the Duck" [ref=e324] [cursor=pointer]:
+                  - /url: /character/39838/
+                - generic [ref=e326]: (Howard the Duck's original homeworld - Earth-47920)
+                - generic [ref=e327]: (cameo)
+            - listitem [ref=e328]:
+              - generic [ref=e329]:
+                - generic [ref=e330]:
+                  - link "Iceman" [ref=e331] [cursor=pointer]:
+                    - /url: /character/6404/
+                  - text: "["
+                  - link "Bobby Drake" [ref=e332] [cursor=pointer]:
+                    - /url: /character/6405/
+                  - text: "]"
+                - generic [ref=e333]: (cameo)
+            - listitem [ref=e334]:
+              - generic [ref=e335]:
+                - link "Stan Lee" [ref=e337] [cursor=pointer]:
+                  - /url: /character/7665/
+                - generic [ref=e339]: (The real world - Earth-1218)
+                - generic [ref=e340]: (guest)
+            - listitem [ref=e341]:
+              - generic [ref=e342]:
+                - link "Leech" [ref=e344] [cursor=pointer]:
+                  - /url: /character/15303/
+                - generic [ref=e346]: (without a universe)
+                - generic [ref=e347]: (cameo)
+            - listitem [ref=e348]:
+              - generic [ref=e349]:
+                - link "Artie Maddicks" [ref=e351] [cursor=pointer]:
+                  - /url: /character/15302/
+                - generic [ref=e353]: (without a universe)
+                - generic [ref=e354]: (cameo)
+            - listitem [ref=e355]:
+              - generic [ref=e356]:
+                - generic [ref=e357]:
+                  - link "Magneto" [ref=e358] [cursor=pointer]:
+                    - /url: /character/6498/
+                  - text: "["
+                  - link "Erik Lehnsherr" [ref=e359] [cursor=pointer]:
+                    - /url: /character/6497/
+                  - text: "]"
+                - generic [ref=e360]: (villain)
+            - listitem [ref=e361]:
+              - generic [ref=e362]:
+                - generic [ref=e363]:
+                  - link "Nightcrawler" [ref=e364] [cursor=pointer]:
+                    - /url: /character/14682/
+                  - text: "["
+                  - link "Kurt Wagner" [ref=e365] [cursor=pointer]:
+                    - /url: /character/14717/
+                  - text: "]"
+                - generic [ref=e366]: (cameo)
+            - listitem [ref=e367]:
+              - generic [ref=e368]:
+                - link "Carlos Pacheco" [ref=e370] [cursor=pointer]:
+                  - /url: /character/35028/
+                - generic [ref=e372]: (without a universe)
+                - generic [ref=e373]: (guest)
+            - listitem [ref=e374]:
+              - generic [ref=e376]:
+                - link "Professor X" [ref=e377] [cursor=pointer]:
+                  - /url: /character/6265/
+                - text: "["
+                - link "Charles Xavier" [ref=e378] [cursor=pointer]:
+                  - /url: /character/6269/
+                - text: "]"
+            - listitem [ref=e379]:
+              - generic [ref=e380]:
+                - generic [ref=e381]:
+                  - link "Quicksilver" [ref=e382] [cursor=pointer]:
+                    - /url: /character/10574/
+                  - text: "["
+                  - link "Pietro Maximoff" [ref=e383] [cursor=pointer]:
+                    - /url: /character/10573/
+                  - text: "]"
+                - generic [ref=e384]: (guest)
+            - listitem [ref=e385]:
+              - generic [ref=e386]:
+                - generic [ref=e387]:
+                  - link "Rogue" [ref=e388] [cursor=pointer]:
+                    - /url: /character/15988/
+                  - text: "["
+                  - link "Anna Marie" [ref=e389] [cursor=pointer]:
+                    - /url: /character/16006/
+                  - text: "]"
+                - generic [ref=e390]: (cameo)
+            - listitem [ref=e391]:
+              - generic [ref=e392]:
+                - generic [ref=e393]:
+                  - link "Scarlet Witch" [ref=e394] [cursor=pointer]:
+                    - /url: /character/6432/
+                  - text: "["
+                  - link "Wanda Maximoff" [ref=e395] [cursor=pointer]:
+                    - /url: /character/6431/
+                  - text: "]"
+                - generic [ref=e396]: (guest)
+            - listitem [ref=e397]:
+              - link "Tabitha Smith" [ref=e400] [cursor=pointer]:
+                - /url: /character/490/
+            - listitem [ref=e401]:
+              - generic [ref=e402]:
+                - generic [ref=e403]:
+                  - link "Spider-Man" [ref=e404] [cursor=pointer]:
+                    - /url: /character/6122/
+                  - text: "["
+                  - link "Peter Parker" [ref=e405] [cursor=pointer]:
+                    - /url: /character/6123/
+                  - text: "]"
+                - generic [ref=e406]: (cameo)
+            - listitem [ref=e407]:
+              - generic [ref=e408]:
+                - generic [ref=e409]:
+                  - link "Strong Guy" [ref=e410] [cursor=pointer]:
+                    - /url: /character/13434/
+                  - text: "["
+                  - link "Guido Carosella" [ref=e411] [cursor=pointer]:
+                    - /url: /character/13489/
+                  - text: "]"
+                - generic [ref=e412]: (cameo)
+            - listitem [ref=e413]:
+              - generic [ref=e414]:
+                - generic [ref=e415]:
+                  - link "Sunspot" [ref=e416] [cursor=pointer]:
+                    - /url: /character/39721/
+                  - text: "["
+                  - link "Roberto Da Costa" [ref=e417] [cursor=pointer]:
+                    - /url: /character/39722/
+                  - text: "]"
+                - generic [ref=e418]: (cameo)
+            - listitem [ref=e419]:
+              - generic [ref=e420]:
+                - link "Amelia Voght" [ref=e422] [cursor=pointer]:
+                  - /url: /character/16036/
+                - generic [ref=e424]: (without a universe)
+                - generic [ref=e425]: (guest)
+            - listitem [ref=e426]:
+              - generic [ref=e427]:
+                - generic [ref=e428]:
+                  - link "Wolverine" [ref=e429] [cursor=pointer]:
+                    - /url: /character/6303/
+                  - text: "["
+                  - link "Logan" [ref=e430] [cursor=pointer]:
+                    - /url: /character/6439/
+                  - text: "]"
+                - generic [ref=e431]: (cameo)
+          - text: Marvel Bullpen (cameo)
+          - generic [ref=e432]:
+            - term [ref=e433]: "Synopsis:"
+            - definition [ref=e434]: Stan introduces a past tale of Xavier and Magneto meeting in a concentration camp to discuss the future of mutants everywhere.
+            - group [ref=e435]:
+              - generic "Reprints (3)" [ref=e436]:
+                - img [ref=e437]
+                - text: Reprints (3)
+              - definition [ref=e439]:
+                - list [ref=e440]:
+                  - listitem [ref=e441]:
+                    - img "IT" [ref=e442]
+                    - text: in
+                    - 'link "Gli Incredibili X-Men (Marvel Italia, 1994 series) #95 (maggio 1998)" [ref=e443] [cursor=pointer]':
+                      - /url: /issue/65018/#326661
+                  - listitem [ref=e444]:
+                    - img "DE" [ref=e445]
+                    - text: in
+                    - 'link "X-Men (Panini Deutschland, 1997 series) #33 ([Oktober] 1999)" [ref=e446] [cursor=pointer]':
+                      - /url: /issue/559256/#4433558
+                  - listitem [ref=e447]:
+                    - img "GR" [ref=e448]
+                    - text: in
+                    - 'link "X-Men [Χ-Μεν] (Modern Times [Μόντερν Τάιμς], 1998 series) #10 (2000?)" [ref=e449] [cursor=pointer]':
+                      - /url: /issue/2025708/
+      - generic [ref=e450]:
+        - 'heading "[no title indexed] (Table of Contents: 2)" [level=2] [ref=e451]':
+          - generic [ref=e452]:
+            - generic [ref=e453]: "[no title indexed]"
+            - 'link "(Table of Contents: 2)" [ref=e455] [cursor=pointer]':
+              - /url: "#toc_1227316"
+        - heading "Let's Visit the X-Men / letters page / 2 pages" [level=3] [ref=e456]:
+          - generic [ref=e458]:
+            - link "Let's Visit the X-Men" [ref=e460] [cursor=pointer]:
+              - /url: /feature/17908/
+            - generic [ref=e461]: / letters page / 2 pages
+        - table [ref=e463]:
+          - rowgroup [ref=e464]:
+            - 'row "Script: Jason Liebig ? Mark Powers ?" [ref=e465]':
+              - cell "Script:" [ref=e466]
+              - cell "Jason Liebig ? Mark Powers ?" [ref=e467]:
+                - generic [ref=e468]:
+                  - link "Jason Liebig ?" [ref=e470] [cursor=pointer]:
+                    - /url: /creator/34440/
+                  - link "Mark Powers ?" [ref=e472] [cursor=pointer]:
+                    - /url: /creator/8855/
+            - 'row "Letters: typeset" [ref=e473]':
+              - cell "Letters:" [ref=e474]
+              - cell "typeset" [ref=e475]:
+                - generic [ref=e477]: typeset
+        - heading "Indexer Notes" [level=3] [ref=e478]
+        - paragraph [ref=e480]: "Letters from readers: Sandra Esteves, Amelia Thompson, Anthony Buchanan; Fred Stockton, and Steve Hites."
+      - generic [ref=e481]:
+        - 'heading "Operation Zero Tolerance Interview (Table of Contents: 3)" [level=2] [ref=e482]':
+          - generic [ref=e483]:
+            - generic [ref=e484]: Operation Zero Tolerance Interview
+            - 'link "(Table of Contents: 3)" [ref=e486] [cursor=pointer]':
+              - /url: "#toc_366002"
+        - heading "X-Men / text article / 3 pages" [level=3] [ref=e487]:
+          - generic [ref=e489]:
+            - link "X-Men" [ref=e491] [cursor=pointer]:
+              - /url: /feature/35/
+            - generic [ref=e492]: / text article / 3 pages
+        - table [ref=e494]:
+          - rowgroup [ref=e495]:
+            - 'row "Script: Scott Lobdell" [ref=e496]':
+              - cell "Script:" [ref=e497]
+              - cell "Scott Lobdell" [ref=e498]:
+                - link "Scott Lobdell" [ref=e501] [cursor=pointer]:
+                  - /url: /creator/11974/
+            - 'row "Pencils: Carlos Pacheco (illustrations)" [ref=e502]':
+              - cell "Pencils:" [ref=e503]
+              - cell "Carlos Pacheco (illustrations)" [ref=e504]:
+                - generic [ref=e506]:
+                  - link "Carlos Pacheco" [ref=e507] [cursor=pointer]:
+                    - /url: /creator/1902/
+                  - text: (illustrations)
+            - 'row "Inks: Art Thibert (illustrations)" [ref=e508]':
+              - cell "Inks:" [ref=e509]
+              - cell "Art Thibert (illustrations)" [ref=e510]:
+                - generic [ref=e512]:
+                  - link "Art Thibert" [ref=e513] [cursor=pointer]:
+                    - /url: /creator/798/
+                  - text: (illustrations)
+            - 'row "Colors: ?" [ref=e514]':
+              - cell "Colors:" [ref=e515]
+              - cell "?" [ref=e516]:
+                - generic [ref=e518]: "?"
+            - 'row "Letters: typeset" [ref=e519]':
+              - cell "Letters:" [ref=e520]
+              - cell "typeset" [ref=e521]:
+                - generic [ref=e523]: typeset
+        - separator [ref=e524]
+        - generic [ref=e525]:
+          - list [ref=e526]:
+            - listitem [ref=e527]: Genre:superhero
+            - listitem
+          - list:
+            - listitem
+            - listitem
+            - listitem
+            - listitem
+          - generic [ref=e528]: "Characters:"
+          - list [ref=e529]:
+            - listitem [ref=e530]:
+              - generic [ref=e531]:
+                - generic [ref=e532]:
+                  - link "Bastion" [ref=e533] [cursor=pointer]:
+                    - /url: /character/35027/
+                  - text: "["
+                  - link "Sebastion Gilberti" [ref=e534] [cursor=pointer]:
+                    - /url: /character/35029/
+                  - text: "]"
+                - generic [ref=e536]: (without a universe)
+            - listitem [ref=e537]:
+              - generic [ref=e539]:
+                - link "Professor X" [ref=e540] [cursor=pointer]:
+                  - /url: /character/6265/
+                - text: "["
+                - link "Charles Xavier" [ref=e541] [cursor=pointer]:
+                  - /url: /character/6269/
+                - text: "]"
+        - heading "Indexer Notes" [level=3] [ref=e542]
+        - paragraph [ref=e544]: Preview of upcoming Operation Zero Tolerance storyline.
+    - generic [ref=e546]:
+      - generic [ref=e547]: Editing
+      - generic [ref=e548]:
+        - button "Log In To Edit" [ref=e550] [cursor=pointer]:
+          - button "Log In To Edit" [ref=e551]
+        - generic [ref=e553] [cursor=pointer]:
+          - text: "Download:"
+          - link "(JSON)" [ref=e554]:
+            - /url: /api/issue/125295/?format=json
+        - link "Report Information" [ref=e555] [cursor=pointer]:
+          - /url: http://errors.comics.org/enter_bug.cgi?product=GCD&bug_file_loc=https://www.comics.org/issue/125295/&short_desc=X-Men%20%281991%20series%29%20%23-1%20%5BDirect%20Edition%5D
+          - generic [ref=e556]:
+            - text: Report Information
+            - img [ref=e557]
+        - group [ref=e558]:
+          - generic "my.comics.org" [ref=e559]:
+            - generic [ref=e560]:
+              - img [ref=e561]
+              - text: my.comics.org
+        - link "View Change History" [ref=e563] [cursor=pointer]:
+          - /url: /issue/125295/history/
+          - generic [ref=e564]: View Change History
+      - generic [ref=e565]: Table of Contents
+      - list [ref=e567]:
+        - listitem [ref=e568]:
+          - link "Flashback" [ref=e570] [cursor=pointer]:
+            - /url: "#366000"
+          - link "X-Men" [ref=e572] [cursor=pointer]:
+            - /url: /feature/35/
+        - listitem [ref=e573]:
+          - link "I Had a Dream" [ref=e575] [cursor=pointer]:
+            - /url: "#366001"
+          - link "X-Men" [ref=e577] [cursor=pointer]:
+            - /url: /feature/35/
+        - listitem [ref=e578]:
+          - link "[no title indexed]" [ref=e580] [cursor=pointer]:
+            - /url: "#1227316"
+          - link "Let's Visit the X-Men" [ref=e582] [cursor=pointer]:
+            - /url: /feature/17908/
+        - listitem [ref=e583]:
+          - link "Operation Zero Tolerance Interview" [ref=e585] [cursor=pointer]:
+            - /url: "#366002"
+          - link "X-Men" [ref=e587] [cursor=pointer]:
+            - /url: /feature/35/
+      - generic [ref=e588]: Related Links
+      - list [ref=e589]:
+        - listitem [ref=e590]:
+          - link "Series Cover Gallery" [ref=e591] [cursor=pointer]:
+            - /url: /series/4254/covers/?page=4
+        - listitem [ref=e592]:
+          - link "Series Details by Issue" [ref=e593] [cursor=pointer]:
+            - /url: /series/4254/details/
+        - listitem [ref=e594]:
+          - link "Series Monthly Timeline" [ref=e595] [cursor=pointer]:
+            - /url: /series/4254/details/timeline/
+        - listitem [ref=e596]:
+          - link "Indicia Scan" [ref=e597] [cursor=pointer]:
+            - /url: /issue/125295/image/
+      - generic [ref=e598]: Issue was modified by, among others
+      - list [ref=e599]:
+        - listitem [ref=e600]: Katie
+        - listitem [ref=e601]: Henry Andrews
+        - listitem [ref=e602]: Peter Croome
+        - listitem [ref=e603]: Katy Hayhurst
+        - listitem [ref=e604]: Hunter Johnson
+        - listitem [ref=e605]: Kelly Langston-Smith
+        - listitem [ref=e606]: Darrel McCann
+        - listitem [ref=e607]: Antonio Pontes Junior
+        - listitem [ref=e608]: Derek Reinhard
+        - listitem [ref=e609]: Ramon Schenk
+        - listitem [ref=e610]: Jim Van Dore
+  - generic [ref=e613]:
+    - generic [ref=e614]:
+      - link "contact us" [ref=e616] [cursor=pointer]:
+        - /url: "/contact/ "
+      - link "donate" [ref=e618] [cursor=pointer]:
+        - /url: /donate/
+      - generic [ref=e619]:
+        - text: If you believe any of this data to be incorrect, please
+        - link "let us know" [ref=e620] [cursor=pointer]:
+          - /url: https://errors.comics.org/enter_bug.cgi?product=GCD&bug_file_loc=https://www.comics.org/issue/125295/&short_desc=X-Men%20%281991%20series%29%20%23-1%20%5BDirect%20Edition%5D
+        - text: .
+    - generic [ref=e621]: Cover thumbnails are used for identification purposes only. All rights to cover images reserved by the respective copyright holders.
+    - generic [ref=e622]:
+      - link "Creative Commons License" [ref=e623] [cursor=pointer]:
+        - /url: https://creativecommons.org/licenses/by-sa/4.0/
+        - img "Creative Commons License" [ref=e624]
+      - generic [ref=e625]:
+        - text: All portions of
+        - link "the Grand Comics Database" [ref=e626] [cursor=pointer]:
+          - /url: http://www.comics.org/
+        - text: ™, except where noted otherwise, are copyrighted by the GCD and are licensed under a
+        - link "Creative Commons Attribution-ShareAlike 4.0 International License (CC BY-SA 4.0)" [ref=e627] [cursor=pointer]:
+          - /url: https://creativecommons.org/licenses/by-sa/4.0/
+        - text: . This includes but is not necessarily limited to our database schema and data distribution format.
+    - generic [ref=e628]:
+      - text: The GCD
+      - link "Privacy Policy" [ref=e629] [cursor=pointer]:
+        - /url: /privacy/
+      - text: . The
+      - link "GCD Web Site code" [ref=e630] [cursor=pointer]:
+        - /url: https://github.com/GrandComicsDatabase/gcd-django
+      - text: is licensed under the
+      - link "GNU General Public License" [ref=e631] [cursor=pointer]:
+        - /url: http://www.gnu.org/licenses/gpl.html
+      - text: .

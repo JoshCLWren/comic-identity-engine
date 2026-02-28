@@ -1,0 +1,853 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e924]:
+    - iframe [ref=e926]
+    - button "Close Ad" [ref=e927] [cursor=pointer]
+  - text:  
+  - generic [ref=e2]:
+    - navigation [ref=e3]:
+      - link "League of Comic Geeks - Home" [ref=e5] [cursor=pointer]:
+        - /url: /
+        - img "League of Comic Geeks - Home" [ref=e6]
+      - generic [ref=e7]:
+        - list [ref=e8]:
+          - listitem [ref=e9]:
+            - link "Search" [ref=e10] [cursor=pointer]:
+              - /url: "#"
+              - generic [ref=e11]: 
+              - text: Search
+          - listitem [ref=e12]:
+            - link " My Pull List" [ref=e13] [cursor=pointer]:
+              - /url: /login
+              - generic [ref=e14]: 
+              - text: My Pull List
+          - listitem [ref=e15]:
+            - link " My Comics" [ref=e16] [cursor=pointer]:
+              - /url: /login
+              - generic [ref=e17]: 
+              - text: My Comics
+        - list [ref=e18]:
+          - listitem [ref=e19]:
+            - link " Discover" [ref=e20] [cursor=pointer]:
+              - /url: /comics
+              - generic [ref=e21]: 
+              - text: Discover
+          - listitem [ref=e22]:
+            - link " New Comics" [ref=e23] [cursor=pointer]:
+              - /url: /comics/new-comics
+              - generic [ref=e24]: 
+              - text: New Comics
+          - listitem [ref=e25]:
+            - link " Stores" [ref=e26] [cursor=pointer]:
+              - /url: "#"
+              - generic [ref=e27]: 
+              - text: Stores
+          - listitem [ref=e28]:
+            - link " Community" [ref=e29] [cursor=pointer]:
+              - /url: "#"
+              - generic [ref=e30]: 
+              - text: Community
+        - generic [ref=e32]:
+          - link "Log in" [ref=e33] [cursor=pointer]:
+            - /url: /login
+          - link "Sign up" [ref=e34] [cursor=pointer]:
+            - /url: /join
+    - generic [ref=e36]:
+      - text:    
+      - banner [ref=e37]:
+        - generic [ref=e44]:
+          - generic [ref=e45]:
+            - link "Marvel Comics" [ref=e46] [cursor=pointer]:
+              - /url: /comics/marvel
+            - text: · Released
+            - link "May 21, 1997" [ref=e47] [cursor=pointer]:
+              - /url: /comics/new-comics/1997/05/21
+          - 'heading "X-Men #-1" [level=1] [ref=e48]'
+        - list [ref=e50]:
+          - listitem [ref=e51]:
+            - tab "Overview" [selected] [ref=e52] [cursor=pointer]
+          - listitem [ref=e53]:
+            - button "Contributions" [ref=e54] [cursor=pointer]:
+              - generic [ref=e55]: Contributions
+      - generic [ref=e58]:
+        - generic [ref=e59]:
+          - generic [ref=e60]:
+            - button "Add" [ref=e61] [cursor=pointer]
+            - link "" [ref=e62] [cursor=pointer]:
+              - /url: /login
+              - generic [ref=e63]: 
+          - generic [ref=e64]:
+            - generic [ref=e67]: "3.9"
+            - generic [ref=e68]:
+              - generic [ref=e69]: Mostly Positive
+              - generic [ref=e70]:
+                - strong [ref=e71]: "85"
+                - text: Ratings
+          - generic [ref=e72]:
+            - generic [ref=e73] [cursor=pointer]: 
+            - generic [ref=e74] [cursor=pointer]: 
+            - generic [ref=e75] [cursor=pointer]: 
+            - generic [ref=e76] [cursor=pointer]: 
+            - generic [ref=e77] [cursor=pointer]: 
+        - generic [ref=e80]:
+          - generic [ref=e82] [cursor=pointer]:
+            - generic [ref=e83]: 
+            - generic [ref=e84]: Pull It
+          - generic [ref=e86] [cursor=pointer]:
+            - generic [ref=e87]: 
+            - generic [ref=e88]: Have It
+          - generic [ref=e90] [cursor=pointer]:
+            - generic [ref=e91]: 
+            - generic [ref=e92]: Read It
+          - generic [ref=e94] [cursor=pointer]:
+            - generic [ref=e95]: 
+            - generic [ref=e96]: Want It
+      - tabpanel "Overview" [ref=e99]:
+        - generic [ref=e100]:
+          - generic [ref=e102]:
+            - paragraph [ref=e104]: Professor Xavier and Magneto's joint past retold! How did these onetime friends become ideological enemies?
+            - generic [ref=e105]:
+              - generic [ref=e107]: Comic · 32 pages · $1.95
+              - generic [ref=e108]:
+                - generic [ref=e109]:
+                  - generic [ref=e110]: Cover Date
+                  - generic [ref=e111]: Jul 1997
+                - generic [ref=e112]:
+                  - generic [ref=e113]: UPC
+                  - generic [ref=e114]: "75960601772099911"
+          - complementary [ref=e115]:
+            - generic [ref=e116]:
+              - generic [ref=e117]:
+                - 'link "X-Men #-1" [ref=e119] [cursor=pointer]':
+                  - /url: https://s3.amazonaws.com/comicgeeks/comics/covers/large-1169529.jpg?1772224418
+                  - 'img "X-Men #-1" [ref=e120]'
+                - generic [ref=e121]:
+                  - link " Prev" [ref=e122] [cursor=pointer]:
+                    - /url: /comic/2759307/x-men-65
+                    - generic [ref=e123]: 
+                    - text: Prev
+                  - link "Series " [ref=e124] [cursor=pointer]:
+                    - /url: /comics/series/111275/x-men
+                    - text: Series
+                    - generic [ref=e125]: 
+                  - link "Next " [ref=e126] [cursor=pointer]:
+                    - /url: /comic/3851551/x-men-66
+                    - text: Next
+                    - generic [ref=e127]: 
+              - generic [ref=e130]:
+                - generic [ref=e131]:
+                  - generic [ref=e132]: 
+                  - text: 1,346
+                - generic [ref=e133]:
+                  - generic [ref=e134]: 
+                  - text: "677"
+                - generic [ref=e135]:
+                  - generic [ref=e136]: 
+                  - text: "668"
+              - generic [ref=e137]:
+                - group [ref=e138]:
+                  - generic " Retailer Exclusives" [ref=e139] [cursor=pointer]
+                  - 'link "X-Men #-1 Carlos Pacheco Variant" [ref=e142] [cursor=pointer]':
+                    - /url: /comic/1169529/x-men-1?variant=6930677
+                    - 'img "X-Men #-1 Carlos Pacheco Variant" [ref=e143]'
+                - group [ref=e144]:
+                  - generic " Miscellaneous Covers" [ref=e145] [cursor=pointer]
+                  - 'link "X-Men #-1 Newsstand Edition" [ref=e148] [cursor=pointer]':
+                    - /url: /comic/1169529/x-men-1?variant=8963556
+                    - 'img "X-Men #-1 Newsstand Edition" [ref=e149]'
+              - iframe [ref=e929]
+          - iframe [ref=e931]
+          - group [ref=e155]:
+            - generic "I Had a Dream Story · 22 pages" [ref=e156] [cursor=pointer]:
+              - generic [ref=e158]:
+                - heading "I Had a Dream" [level=4] [ref=e159]
+                - generic [ref=e160]: Story · 22 pages
+            - generic [ref=e161]:
+              - generic [ref=e162]:
+                - heading "Creators" [level=3] [ref=e165]
+                - generic [ref=e166]:
+                  - generic [ref=e168]:
+                    - link "Scott Lobdell" [ref=e170] [cursor=pointer]:
+                      - /url: /people/253/scott-lobdell
+                      - img "Scott Lobdell" [ref=e171]
+                    - generic [ref=e172]:
+                      - generic [ref=e173]: Writer
+                      - link "Scott Lobdell" [ref=e175] [cursor=pointer]:
+                        - /url: /people/253/scott-lobdell
+                  - generic [ref=e177]:
+                    - link "Carlos Pacheco" [ref=e179] [cursor=pointer]:
+                      - /url: /people/492/carlos-pacheco
+                      - img "Carlos Pacheco" [ref=e180]
+                    - generic [ref=e181]:
+                      - generic [ref=e182]: Penciller
+                      - link "Carlos Pacheco" [ref=e184] [cursor=pointer]:
+                        - /url: /people/492/carlos-pacheco
+                  - generic [ref=e186]:
+                    - link "Art Thibert" [ref=e188] [cursor=pointer]:
+                      - /url: /people/301/art-thibert
+                      - img "Art Thibert" [ref=e189]
+                    - generic [ref=e190]:
+                      - generic [ref=e191]: Inker
+                      - link "Art Thibert" [ref=e193] [cursor=pointer]:
+                        - /url: /people/301/art-thibert
+                  - generic [ref=e195]:
+                    - link "Christian Lichtner" [ref=e197] [cursor=pointer]:
+                      - /url: /people/4148/christian-lichtner
+                      - img "Christian Lichtner" [ref=e198]
+                    - generic [ref=e199]:
+                      - generic [ref=e200]: Colorist
+                      - link "Christian Lichtner" [ref=e202] [cursor=pointer]:
+                        - /url: /people/4148/christian-lichtner
+                  - generic [ref=e204]:
+                    - link "Aron Lusen" [ref=e206] [cursor=pointer]:
+                      - /url: /people/7746/aron-lusen
+                      - img "Aron Lusen" [ref=e207]
+                    - generic [ref=e208]:
+                      - generic [ref=e209]: Colorist
+                      - link "Aron Lusen" [ref=e211] [cursor=pointer]:
+                        - /url: /people/7746/aron-lusen
+                  - generic [ref=e213]:
+                    - link "Richard Starkings" [ref=e215] [cursor=pointer]:
+                      - /url: /people/1208/richard-starkings
+                      - img "Richard Starkings" [ref=e216]
+                    - generic [ref=e217]:
+                      - generic [ref=e218]: Letterer
+                      - link "Richard Starkings" [ref=e220] [cursor=pointer]:
+                        - /url: /people/1208/richard-starkings
+                  - generic [ref=e222]:
+                    - link [ref=e224] [cursor=pointer]:
+                      - /url: /people/3177/kolja-fuchs
+                    - generic [ref=e225]:
+                      - generic [ref=e226]: Letterer
+                      - link "Kolja Fuchs" [ref=e228] [cursor=pointer]:
+                        - /url: /people/3177/kolja-fuchs
+                  - generic [ref=e230]:
+                    - link [ref=e232] [cursor=pointer]:
+                      - /url: /people/3683/jason-liebig
+                    - generic [ref=e233]:
+                      - generic [ref=e234]: Assistant Editor
+                      - link "Jason Liebig" [ref=e236] [cursor=pointer]:
+                        - /url: /people/3683/jason-liebig
+                  - generic [ref=e238]:
+                    - link "Mark Powers" [ref=e240] [cursor=pointer]:
+                      - /url: /people/2664/mark-powers
+                      - img "Mark Powers" [ref=e241]
+                    - generic [ref=e242]:
+                      - generic [ref=e243]: Associate Editor
+                      - link "Mark Powers" [ref=e245] [cursor=pointer]:
+                        - /url: /people/2664/mark-powers
+                  - generic [ref=e247]:
+                    - link "Bob Harras" [ref=e249] [cursor=pointer]:
+                      - /url: /people/1564/bob-harras
+                      - img "Bob Harras" [ref=e250]
+                    - generic [ref=e251]:
+                      - generic [ref=e252]: Editor
+                      - link "Bob Harras" [ref=e254] [cursor=pointer]:
+                        - /url: /people/1564/bob-harras
+              - generic [ref=e255]:
+                - generic [ref=e256]:
+                  - heading "Cover Artists" [level=3] [ref=e259]
+                  - generic [ref=e260]:
+                    - generic [ref=e262]:
+                      - link "Carlos Pacheco" [ref=e264] [cursor=pointer]:
+                        - /url: /people/492/carlos-pacheco
+                        - img "Carlos Pacheco" [ref=e265]
+                      - generic [ref=e266]:
+                        - generic [ref=e267]: Cover Penciller
+                        - link "Carlos Pacheco" [ref=e269] [cursor=pointer]:
+                          - /url: /people/492/carlos-pacheco
+                    - generic [ref=e271]:
+                      - link "Art Thibert" [ref=e273] [cursor=pointer]:
+                        - /url: /people/301/art-thibert
+                        - img "Art Thibert" [ref=e274]
+                      - generic [ref=e275]:
+                        - generic [ref=e276]: Cover Inker
+                        - link "Art Thibert" [ref=e278] [cursor=pointer]:
+                          - /url: /people/301/art-thibert
+                    - generic [ref=e280]:
+                      - link [ref=e282] [cursor=pointer]:
+                        - /url: /people/3008/liquid
+                      - generic [ref=e283]:
+                        - generic [ref=e284]: Cover Colorist
+                        - link "Liquid!" [ref=e286] [cursor=pointer]:
+                          - /url: /people/3008/liquid
+                - generic [ref=e287]:
+                  - heading "Production" [level=3] [ref=e290]
+                  - generic [ref=e293]:
+                    - link "Bob Harras" [ref=e295] [cursor=pointer]:
+                      - /url: /people/1564/bob-harras
+                      - img "Bob Harras" [ref=e296]
+                    - generic [ref=e297]:
+                      - generic [ref=e298]: Editor-in-Chief
+                      - link "Bob Harras" [ref=e300] [cursor=pointer]:
+                        - /url: /people/1564/bob-harras
+              - generic [ref=e301]:
+                - generic [ref=e302]:
+                  - heading "Characters" [level=3] [ref=e304]
+                  - link "Earth-616" [ref=e306] [cursor=pointer]:
+                    - /url: /universe/2/earth-616
+                - generic [ref=e307]:
+                  - generic [ref=e309]:
+                    - generic [ref=e310]: Main
+                    - link "Amelia Voght" [ref=e312] [cursor=pointer]:
+                      - /url: /character/8011/amelia-voght
+                      - img "Amelia Voght" [ref=e313]
+                    - link "Amelia Voght" [ref=e316] [cursor=pointer]:
+                      - /url: /character/8011/amelia-voght
+                  - generic [ref=e318]:
+                    - generic [ref=e319]: Main
+                    - link "Magneto" [ref=e321] [cursor=pointer]:
+                      - /url: /character/148/magneto
+                      - img "Magneto" [ref=e322]
+                    - generic [ref=e323]:
+                      - link "Magneto" [ref=e325] [cursor=pointer]:
+                        - /url: /character/148/magneto
+                      - generic [ref=e326]: Max Eisenhardt
+                  - generic [ref=e328]:
+                    - generic [ref=e329]: Main
+                    - link "Professor X" [ref=e331] [cursor=pointer]:
+                      - /url: /character/1576/professor-x
+                      - img "Professor X" [ref=e332]
+                    - generic [ref=e333]:
+                      - link "Professor X" [ref=e335] [cursor=pointer]:
+                        - /url: /character/1576/professor-x
+                      - generic [ref=e336]: Charles Xavier
+                  - generic [ref=e338]:
+                    - generic [ref=e339]: Supporting
+                    - link "Bastion" [ref=e341] [cursor=pointer]:
+                      - /url: /character/11861/bastion
+                      - img "Bastion" [ref=e342]
+                    - generic [ref=e343]:
+                      - link "Bastion" [ref=e345] [cursor=pointer]:
+                        - /url: /character/11861/bastion
+                      - generic [ref=e346]: Sebastion Gilberti
+                  - generic [ref=e348]:
+                    - generic [ref=e349]: Supporting
+                    - link "Pietro Maximoff" [ref=e351] [cursor=pointer]:
+                      - /url: /character/172/pietro-maximoff
+                      - img "Pietro Maximoff" [ref=e352]
+                    - link "Pietro Maximoff" [ref=e355] [cursor=pointer]:
+                      - /url: /character/172/pietro-maximoff
+                  - generic [ref=e357]:
+                    - generic [ref=e358]: Supporting
+                    - link "Wanda Maximoff" [ref=e360] [cursor=pointer]:
+                      - /url: /character/51/wanda-maximoff
+                      - img "Wanda Maximoff" [ref=e361]
+                    - link "Wanda Maximoff" [ref=e364] [cursor=pointer]:
+                      - /url: /character/51/wanda-maximoff
+                  - generic [ref=e366]:
+                    - generic [ref=e367]: Cameo
+                    - link "Angel" [ref=e369] [cursor=pointer]:
+                      - /url: /character/158/angel
+                      - img "Angel" [ref=e370]
+                    - generic [ref=e371]:
+                      - link "Angel" [ref=e373] [cursor=pointer]:
+                        - /url: /character/158/angel
+                      - generic [ref=e374]: Warren Worthington III
+                  - generic [ref=e376]:
+                    - generic [ref=e377]: Cameo
+                    - link "Artie Maddicks" [ref=e379] [cursor=pointer]:
+                      - /url: /character/2270/artie-maddicks
+                      - img "Artie Maddicks" [ref=e380]
+                    - link "Artie Maddicks" [ref=e383] [cursor=pointer]:
+                      - /url: /character/2270/artie-maddicks
+                  - generic [ref=e385]:
+                    - generic [ref=e386]: Cameo
+                    - link "Beast" [ref=e388] [cursor=pointer]:
+                      - /url: /character/1568/beast
+                      - img "Beast" [ref=e389]
+                    - generic [ref=e390]:
+                      - link "Beast" [ref=e392] [cursor=pointer]:
+                        - /url: /character/1568/beast
+                      - generic [ref=e393]: Henry McCoy
+                  - generic [ref=e395]:
+                    - generic [ref=e396]: Cameo
+                    - link "Cable" [ref=e398] [cursor=pointer]:
+                      - /url: /character/130/cable
+                      - img "Cable" [ref=e399]
+                    - generic [ref=e400]:
+                      - link "Cable" [ref=e402] [cursor=pointer]:
+                        - /url: /character/130/cable
+                      - generic [ref=e403]: Nathan Summers
+                  - generic [ref=e405]:
+                    - generic [ref=e406]: Cameo
+                    - link "Colossus" [ref=e408] [cursor=pointer]:
+                      - /url: /character/110/colossus
+                      - img "Colossus" [ref=e409]
+                    - generic [ref=e410]:
+                      - link "Colossus" [ref=e412] [cursor=pointer]:
+                        - /url: /character/110/colossus
+                      - generic [ref=e413]: Piotr Rasputin
+                  - generic [ref=e415]:
+                    - generic [ref=e416]: Cameo
+                    - link "Cyclops" [ref=e418] [cursor=pointer]:
+                      - /url: /character/279/cyclops
+                      - img "Cyclops" [ref=e419]
+                    - generic [ref=e420]:
+                      - link "Cyclops" [ref=e422] [cursor=pointer]:
+                        - /url: /character/279/cyclops
+                      - generic [ref=e423]: Scott Summers
+                  - generic [ref=e425]:
+                    - generic [ref=e426]: Cameo
+                    - link "Dazzler" [ref=e428] [cursor=pointer]:
+                      - /url: /character/568/dazzler
+                      - img "Dazzler" [ref=e429]
+                    - generic [ref=e430]:
+                      - link "Dazzler" [ref=e432] [cursor=pointer]:
+                        - /url: /character/568/dazzler
+                      - generic [ref=e433]: Alison Blaire
+                  - generic [ref=e435]:
+                    - generic [ref=e436]: Cameo
+                    - link "Gateway" [ref=e438] [cursor=pointer]:
+                      - /url: /character/2740/gateway
+                      - img "Gateway" [ref=e439]
+                    - link "Gateway" [ref=e442] [cursor=pointer]:
+                      - /url: /character/2740/gateway
+                  - generic [ref=e444]:
+                    - generic [ref=e445]: Cameo
+                    - link "Havok" [ref=e447] [cursor=pointer]:
+                      - /url: /character/175/havok
+                      - img "Havok" [ref=e448]
+                    - generic [ref=e449]:
+                      - link "Havok" [ref=e451] [cursor=pointer]:
+                        - /url: /character/175/havok
+                      - generic [ref=e452]: Alexander Summers
+                  - generic [ref=e454]:
+                    - generic [ref=e455]: Cameo
+                    - link "Iceman" [ref=e457] [cursor=pointer]:
+                      - /url: /character/1570/iceman
+                      - img "Iceman" [ref=e458]
+                    - generic [ref=e459]:
+                      - link "Iceman" [ref=e461] [cursor=pointer]:
+                        - /url: /character/1570/iceman
+                      - generic [ref=e462]: Bobby Drake
+                  - generic [ref=e464]:
+                    - generic [ref=e465]: Cameo
+                    - link "Leech" [ref=e467] [cursor=pointer]:
+                      - /url: /character/4427/leech
+                      - img "Leech" [ref=e468]
+                    - link "Leech" [ref=e471] [cursor=pointer]:
+                      - /url: /character/4427/leech
+                  - generic [ref=e473]:
+                    - generic [ref=e474]: Cameo
+                    - link "Lucas Bishop" [ref=e476] [cursor=pointer]:
+                      - /url: /character/2343/lucas-bishop
+                      - img "Lucas Bishop" [ref=e477]
+                    - generic [ref=e478]:
+                      - link "Lucas Bishop" [ref=e480] [cursor=pointer]:
+                        - /url: /character/2343/lucas-bishop
+                      - generic [ref=e481]: Earth-1191
+                  - generic [ref=e483]:
+                    - generic [ref=e484]: Cameo
+                    - link "Marvel Girl" [ref=e486] [cursor=pointer]:
+                      - /url: /character/106/marvel-girl
+                      - img "Marvel Girl" [ref=e487]
+                    - generic [ref=e488]:
+                      - link "Marvel Girl" [ref=e490] [cursor=pointer]:
+                        - /url: /character/106/marvel-girl
+                      - generic [ref=e491]: Jean Grey
+                  - generic [ref=e493]:
+                    - generic [ref=e494]: Cameo
+                    - link "Meltdown" [ref=e496] [cursor=pointer]:
+                      - /url: /character/2437/meltdown
+                      - img "Meltdown" [ref=e497]
+                    - generic [ref=e498]:
+                      - link "Meltdown" [ref=e500] [cursor=pointer]:
+                        - /url: /character/2437/meltdown
+                      - generic [ref=e501]: Tabitha Smith
+                  - generic [ref=e503]:
+                    - generic [ref=e504]: Cameo
+                    - link "Nightcrawler" [ref=e506] [cursor=pointer]:
+                      - /url: /character/569/nightcrawler
+                      - img "Nightcrawler" [ref=e507]
+                    - generic [ref=e508]:
+                      - link "Nightcrawler" [ref=e510] [cursor=pointer]:
+                        - /url: /character/569/nightcrawler
+                      - generic [ref=e511]: Kurt Wagner
+                  - generic [ref=e513]:
+                    - generic [ref=e514]: Cameo
+                    - link "Penance" [ref=e516] [cursor=pointer]:
+                      - /url: /character/1937/penance
+                      - img "Penance" [ref=e517]
+                    - generic [ref=e518]:
+                      - link "Penance" [ref=e520] [cursor=pointer]:
+                        - /url: /character/1937/penance
+                      - generic [ref=e521]: Monet St. Croix
+                  - generic [ref=e523]:
+                    - generic [ref=e524]: Cameo
+                    - link "Rogue" [ref=e526] [cursor=pointer]:
+                      - /url: /character/114/rogue
+                      - img "Rogue" [ref=e527]
+                    - generic [ref=e528]:
+                      - link "Rogue" [ref=e530] [cursor=pointer]:
+                        - /url: /character/114/rogue
+                      - generic [ref=e531]: Anna Marie LeBeau
+                  - generic [ref=e533]:
+                    - generic [ref=e534]: Cameo
+                    - link "Strong Guy" [ref=e536] [cursor=pointer]:
+                      - /url: /character/2571/strong-guy
+                      - img "Strong Guy" [ref=e537]
+                    - generic [ref=e538]:
+                      - link "Strong Guy" [ref=e540] [cursor=pointer]:
+                        - /url: /character/2571/strong-guy
+                      - generic [ref=e541]: Guido Carosella
+                  - generic [ref=e543]:
+                    - generic [ref=e544]: Cameo
+                    - link "Sunspot" [ref=e546] [cursor=pointer]:
+                      - /url: /character/2519/sunspot
+                      - img "Sunspot" [ref=e547]
+                    - generic [ref=e548]:
+                      - link "Sunspot" [ref=e550] [cursor=pointer]:
+                        - /url: /character/2519/sunspot
+                      - generic [ref=e551]: Roberto Da Costa
+                  - generic [ref=e553]:
+                    - generic [ref=e554]: Cameo
+                    - link "Wolverine" [ref=e556] [cursor=pointer]:
+                      - /url: /character/48/wolverine
+                      - img "Wolverine" [ref=e557]
+                    - generic [ref=e558]:
+                      - link "Wolverine" [ref=e560] [cursor=pointer]:
+                        - /url: /character/48/wolverine
+                      - generic [ref=e561]: Logan
+                  - generic [ref=e563]:
+                    - generic [ref=e564]: Cameo
+                    - generic: Image
+                    - link "Deadpool" [ref=e566] [cursor=pointer]:
+                      - /url: /character/121/deadpool
+                      - img "Deadpool" [ref=e567]
+                    - generic [ref=e568]:
+                      - link "Deadpool" [ref=e570] [cursor=pointer]:
+                        - /url: /character/121/deadpool
+                      - generic [ref=e571]: Wade Wilson
+                  - generic [ref=e573]:
+                    - generic [ref=e574]: Cameo
+                    - generic: Inanimate
+                    - link "Spider-Man" [ref=e576] [cursor=pointer]:
+                      - /url: /character/29/spider-man
+                      - img "Spider-Man" [ref=e577]
+                    - generic [ref=e578]:
+                      - link "Spider-Man" [ref=e580] [cursor=pointer]:
+                        - /url: /character/29/spider-man
+                      - generic [ref=e581]: Peter Parker
+          - generic [ref=e582]:
+            - heading "Collected In" [level=3] [ref=e585]
+            - list [ref=e586]:
+              - listitem [ref=e587]:
+                - 'link "X-Men: The Trial of Gambit TP" [ref=e589] [cursor=pointer]':
+                  - /url: /comic/8559626/x-men-the-trial-of-gambit-tp
+                  - 'img "X-Men: The Trial of Gambit TP" [ref=e590]'
+                - generic [ref=e591]:
+                  - 'link "X-Men: The Trial of Gambit TP" [ref=e593] [cursor=pointer]':
+                    - /url: /comic/8559626/x-men-the-trial-of-gambit-tp
+                  - link "Uncanny X-Men Vol. 1 (1980 - 2011)" [ref=e595] [cursor=pointer]:
+                    - /url: /comics/series/108806/uncanny-x-men
+          - generic [ref=e599]:
+            - generic [ref=e600]:
+              - heading "Ratings 85" [level=3] [ref=e602]
+              - generic [ref=e604]: Mostly Positive 3.9
+            - generic "A chart." [ref=e608]:
+              - img "A chart." [ref=e609]
+              - generic "A tabular representation of the data in the chart." [ref=e626]:
+                - table [ref=e627]:
+                  - rowgroup [ref=e628]:
+                    - row "Rating Users" [ref=e629]:
+                      - columnheader "Rating" [ref=e630]
+                      - columnheader "Users" [ref=e631]
+                  - rowgroup [ref=e632]:
+                    - row "1 0" [ref=e633]:
+                      - cell "1" [ref=e634]
+                      - cell "0" [ref=e635]
+                    - row "2 2" [ref=e636]:
+                      - cell "2" [ref=e637]
+                      - cell "2" [ref=e638]
+                    - row "3 0" [ref=e639]:
+                      - cell "3" [ref=e640]
+                      - cell "0" [ref=e641]
+                    - row "4 6" [ref=e642]:
+                      - cell "4" [ref=e643]
+                      - cell "6" [ref=e644]
+                    - row "5 3" [ref=e645]:
+                      - cell "5" [ref=e646]
+                      - cell "3" [ref=e647]
+                    - row "6 10" [ref=e648]:
+                      - cell "6" [ref=e649]
+                      - cell "10" [ref=e650]
+                    - row "7 13" [ref=e651]:
+                      - cell "7" [ref=e652]
+                      - cell "13" [ref=e653]
+                    - row "8 22" [ref=e654]:
+                      - cell "8" [ref=e655]
+                      - cell "22" [ref=e656]
+                    - row "9 5" [ref=e657]:
+                      - cell "9" [ref=e658]
+                      - cell "5" [ref=e659]
+                    - row "10 24" [ref=e660]:
+                      - cell "10" [ref=e661]
+                      - cell "24" [ref=e662]
+          - generic [ref=e672]:
+            - heading "Community Reviews" [level=3] [ref=e675]
+            - generic [ref=e677] [cursor=pointer]:
+              - img "Me" [ref=e679]
+              - generic [ref=e680]:
+                - generic [ref=e681]: 
+                - text: Write a Review
+            - list [ref=e683]:
+              - listitem [ref=e684] [cursor=pointer]:
+                - generic [ref=e685]:
+                  - generic [ref=e686]:
+                    - link "mademvs" [ref=e689]:
+                      - /url: /profile/mademvs
+                      - img "mademvs" [ref=e690]
+                    - generic [ref=e691]:
+                      - generic [ref=e692]:
+                        - link "Milagros ۶۟ৎ ̊˚⋆˚࿔ @mademvs" [ref=e693]:
+                          - /url: /profile/mademvs
+                        - generic [ref=e694]:
+                          - text: ·
+                          - link "Nov 26, 2025" [ref=e695]:
+                            - /url: /community/thread/42875648
+                      - paragraph [ref=e697]: "Can't believe how that bald man managed to pull a ginger baddie and instead of giving her attention he prefers his endless toxic situationship with Magneto instead. Truly delightful. #toxicyaoi or whatever the kids call it these days."
+                  - list [ref=e703]:
+                    - listitem [ref=e704]:
+                      - link "3" [ref=e705]:
+                        - /url: "#"
+                        - generic [ref=e706]: 
+                        - text: "3"
+                    - listitem [ref=e707]:
+                      - link "0" [ref=e708]:
+                        - /url: /profile/mademvs/reviews/14490451/x-men-1
+                        - generic [ref=e709]: 
+                        - text: "0"
+              - listitem [ref=e710] [cursor=pointer]:
+                - generic [ref=e711]:
+                  - generic [ref=e712]:
+                    - link "plutar" [ref=e715]:
+                      - /url: /profile/plutar
+                      - img "plutar" [ref=e716]
+                    - generic [ref=e717]:
+                      - generic [ref=e718]:
+                        - link "plutar @plutar" [ref=e719]:
+                          - /url: /profile/plutar
+                        - generic [ref=e720]:
+                          - text: ·
+                          - link "Sep 13, 2025" [ref=e721]:
+                            - /url: /community/thread/37673207
+                      - paragraph [ref=e723]: Kind of a week story with Amelia Voight injected into it.
+                  - list [ref=e729]:
+                    - listitem [ref=e730]:
+                      - link "0" [ref=e731]:
+                        - /url: "#"
+                        - generic [ref=e732]: 
+                        - text: "0"
+                    - listitem [ref=e733]:
+                      - link "0" [ref=e734]:
+                        - /url: /profile/plutar/reviews/12727543/x-men-1
+                        - generic [ref=e735]: 
+                        - text: "0"
+          - generic [ref=e736]:
+            - heading "Featured Discussion" [level=3] [ref=e739]
+            - generic [ref=e742] [cursor=pointer]:
+              - img "Me" [ref=e744]
+              - generic [ref=e745]:
+                - generic [ref=e746]: 
+                - text: Start a Discussion
+            - list [ref=e748]:
+              - listitem [ref=e749] [cursor=pointer]:
+                - generic [ref=e750]:
+                  - generic [ref=e751]:
+                    - link [ref=e754]:
+                      - /url: /profile/bdmiller24
+                    - generic [ref=e755]:
+                      - generic [ref=e756]:
+                        - link "bdmiller24 @bdmiller24" [ref=e757]:
+                          - /url: /profile/bdmiller24
+                        - generic [ref=e758]:
+                          - text: ·
+                          - link "May 10, 2023" [ref=e759]:
+                            - /url: /profile/bdmiller24/thread/17058842
+                      - paragraph [ref=e761]: I have been trying to add this to my collection on here for a while now, it is almost as if they wanted to bury this comic. Personally I think the database should include some mention of the word 'Flashback', but hey that's just my opinion.
+                  - list [ref=e763]:
+                    - listitem [ref=e764]:
+                      - link "1" [ref=e765]:
+                        - /url: "#"
+                        - generic [ref=e766]: 
+                        - text: "1"
+                    - listitem [ref=e767]:
+                      - link "1" [ref=e768]:
+                        - /url: /profile/bdmiller24/thread/17058842
+                        - generic [ref=e769]: 
+                        - text: "1"
+              - listitem [ref=e770] [cursor=pointer]:
+                - generic [ref=e771]:
+                  - generic [ref=e772]:
+                    - link [ref=e775]:
+                      - /url: /profile/spookysneakers
+                    - generic [ref=e776]:
+                      - generic [ref=e777]:
+                        - link "SpookySneakers @SpookySneakers" [ref=e778]:
+                          - /url: /profile/spookysneakers
+                        - generic [ref=e779]:
+                          - text: ·
+                          - link "May 20, 2024" [ref=e780]:
+                            - /url: /profile/spookysneakers/thread/21794724
+                      - paragraph [ref=e782]: Both of these covers are by Carlos Pacheco, not Chris Bachalo.
+                  - list [ref=e784]:
+                    - listitem [ref=e785]:
+                      - link "0" [ref=e786]:
+                        - /url: "#"
+                        - generic [ref=e787]: 
+                        - text: "0"
+                    - listitem [ref=e788]:
+                      - link "0" [ref=e789]:
+                        - /url: /profile/spookysneakers/thread/21794724
+                        - generic [ref=e790]: 
+                        - text: "0"
+      - generic [ref=e791]:
+        - heading "More From X-Men (1991 - 2001)" [level=3] [ref=e794]:
+          - text: More From
+          - link "X-Men (1991 - 2001)" [ref=e795] [cursor=pointer]:
+            - /url: /comics/series/111275/x-men
+        - generic [ref=e798]:
+          - generic [ref=e799]:
+            - generic [ref=e800]:
+              - link [ref=e802] [cursor=pointer]:
+                - /url: /comic/2988719/x-men-113
+              - generic [ref=e803]: Apr 25th, 2001
+              - 'link "X-Men #113" [ref=e805] [cursor=pointer]':
+                - /url: /comic/2988719/x-men-113
+            - generic [ref=e806]:
+              - link [ref=e808] [cursor=pointer]:
+                - /url: /comic/1895588/x-men-112
+              - generic [ref=e809]: Apr 11th, 2001
+              - 'link "X-Men #112" [ref=e811] [cursor=pointer]':
+                - /url: /comic/1895588/x-men-112
+            - generic [ref=e812]:
+              - link [ref=e814] [cursor=pointer]:
+                - /url: /comic/1373936/x-men-111
+              - generic [ref=e815]: Mar 14th, 2001
+              - 'link "X-Men #111" [ref=e817] [cursor=pointer]':
+                - /url: /comic/1373936/x-men-111
+            - generic [ref=e818]:
+              - link [ref=e820] [cursor=pointer]:
+                - /url: /comic/6830686/x-men-110
+              - generic [ref=e821]: Jan 31st, 2001
+              - 'link "X-Men #110" [ref=e823] [cursor=pointer]':
+                - /url: /comic/6830686/x-men-110
+            - generic [ref=e824]:
+              - link [ref=e826] [cursor=pointer]:
+                - /url: /comic/6898422/x-men-109
+              - generic [ref=e827]: Dec 28th, 2000
+              - 'link "X-Men #109" [ref=e829] [cursor=pointer]':
+                - /url: /comic/6898422/x-men-109
+            - generic [ref=e830]:
+              - link [ref=e832] [cursor=pointer]:
+                - /url: /comic/5863798/x-men-108
+              - generic [ref=e833]: Nov 15th, 2000
+              - 'link "X-Men #108" [ref=e835] [cursor=pointer]':
+                - /url: /comic/5863798/x-men-108
+            - generic [ref=e836]:
+              - link [ref=e838] [cursor=pointer]:
+                - /url: /comic/2522597/x-men-107
+              - generic [ref=e839]: Oct 18th, 2000
+              - 'link "X-Men #107" [ref=e841] [cursor=pointer]':
+                - /url: /comic/2522597/x-men-107
+            - generic [ref=e842]:
+              - link [ref=e844] [cursor=pointer]:
+                - /url: /comic/3527052/x-men-106
+              - generic [ref=e845]: Sep 27th, 2000
+              - 'link "X-Men #106" [ref=e847] [cursor=pointer]':
+                - /url: /comic/3527052/x-men-106
+            - generic [ref=e848]:
+              - link [ref=e850] [cursor=pointer]:
+                - /url: /comic/2662112/x-men-105
+              - generic [ref=e851]: Aug 16th, 2000
+              - 'link "X-Men #105" [ref=e853] [cursor=pointer]':
+                - /url: /comic/2662112/x-men-105
+            - generic [ref=e854]:
+              - link [ref=e856] [cursor=pointer]:
+                - /url: /comic/1966264/x-men-104
+              - generic [ref=e857]: Jul 19th, 2000
+              - 'link "X-Men #104" [ref=e859] [cursor=pointer]':
+                - /url: /comic/1966264/x-men-104
+            - generic [ref=e860]:
+              - link [ref=e862] [cursor=pointer]:
+                - /url: /comic/6932378/x-men-annual-2000
+              - generic [ref=e863]: Jul 5th, 2000
+              - link "X-Men Annual 2000" [ref=e865] [cursor=pointer]:
+                - /url: /comic/6932378/x-men-annual-2000
+            - generic [ref=e866]:
+              - link [ref=e868] [cursor=pointer]:
+                - /url: /comic/2893199/x-men-103
+              - generic [ref=e869]: Jun 21st, 2000
+              - 'link "X-Men #103" [ref=e871] [cursor=pointer]':
+                - /url: /comic/2893199/x-men-103
+            - generic [ref=e872]:
+              - link [ref=e874] [cursor=pointer]:
+                - /url: /comic/2809337/x-men-102
+              - generic [ref=e875]: May 24th, 2000
+              - 'link "X-Men #102" [ref=e877] [cursor=pointer]':
+                - /url: /comic/2809337/x-men-102
+            - generic [ref=e878]:
+              - link [ref=e880] [cursor=pointer]:
+                - /url: /comic/2520376/x-men-101
+              - generic [ref=e881]: Apr 19th, 2000
+              - 'link "X-Men #101" [ref=e883] [cursor=pointer]':
+                - /url: /comic/2520376/x-men-101
+            - generic [ref=e884]:
+              - link [ref=e886] [cursor=pointer]:
+                - /url: /comic/2235992/x-men-100
+              - generic [ref=e887]: Mar 15th, 2000
+              - 'link "X-Men #100" [ref=e889] [cursor=pointer]':
+                - /url: /comic/2235992/x-men-100
+            - generic [ref=e890]:
+              - link [ref=e892] [cursor=pointer]:
+                - /url: /comic/1277180/x-men-99
+              - generic [ref=e893]: Feb 16th, 2000
+              - 'link "X-Men #99" [ref=e895] [cursor=pointer]':
+                - /url: /comic/1277180/x-men-99
+            - generic [ref=e896]:
+              - link [ref=e898] [cursor=pointer]:
+                - /url: /comic/4387013/x-men-98
+              - generic [ref=e899]: Jan 26th, 2000
+              - 'link "X-Men #98" [ref=e901] [cursor=pointer]':
+                - /url: /comic/4387013/x-men-98
+            - generic [ref=e902]:
+              - link [ref=e904] [cursor=pointer]:
+                - /url: /comic/9688559/x-men-97
+              - generic [ref=e905]: Dec 15th, 1999
+              - 'link "X-Men #97" [ref=e907] [cursor=pointer]':
+                - /url: /comic/9688559/x-men-97
+            - generic [ref=e908]:
+              - link [ref=e910] [cursor=pointer]:
+                - /url: /comic/6437876/x-men-96
+              - generic [ref=e911]: Nov 17th, 1999
+              - 'link "X-Men #96" [ref=e913] [cursor=pointer]':
+                - /url: /comic/6437876/x-men-96
+            - generic [ref=e914]:
+              - link [ref=e916] [cursor=pointer]:
+                - /url: /comic/8045232/x-men-95
+              - generic [ref=e917]: Oct 20th, 1999
+              - 'link "X-Men #95" [ref=e919] [cursor=pointer]':
+                - /url: /comic/8045232/x-men-95
+          - button "Next" [ref=e920] [cursor=pointer]:
+            - generic [ref=e921]: 
+            - generic [ref=e922]: Next
+  - iframe [ref=e923]
+  - generic:
+    - generic:
+      - iframe [ref=e932]
+      - generic [ref=e936]:
+        - generic:
+          - generic:
+            - generic:
+              - img [ref=e944] [cursor=pointer]
+              - img [ref=e948] [cursor=pointer]
+              - img [ref=e952] [cursor=pointer]
+            - img [ref=e955]
+  - generic [ref=e962]:
+    - iframe [ref=e965]
+    - button "Close Ad" [ref=e966] [cursor=pointer]
+    - img "Freestar" [ref=e969]
+  - button "Open Intercom Messenger" [ref=e970] [cursor=pointer]:
+    - img [ref=e972]
+    - generic:
+      - img

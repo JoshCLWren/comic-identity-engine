@@ -1,0 +1,445 @@
+- generic [ref=e4]:
+  - banner [ref=e6]:
+    - generic [ref=e7]:
+      - link [ref=e9] [cursor=pointer]:
+        - /url: /default.aspx
+      - generic [ref=e10]:
+        - generic [ref=e11]:
+          - text: 
+          - list [ref=e12]:
+            - listitem [ref=e13]:
+              - link " Dashboard" [ref=e14] [cursor=pointer]:
+                - /url: /MyAccount/Dashboard.aspx
+                - generic [ref=e15]: 
+                - text: Dashboard
+            - listitem [ref=e16]:
+              - link " Search" [ref=e17] [cursor=pointer]:
+                - /url: /LiveData/CSearch.aspx
+                - generic [ref=e18]: 
+                - text: Search
+            - listitem [ref=e19]:
+              - link " Shops" [ref=e20] [cursor=pointer]:
+                - /url: /LiveData/StoreLocator.aspx
+                - generic [ref=e21]: 
+                - text: Shops
+            - listitem [ref=e22]:
+              - link " New" [ref=e23] [cursor=pointer]:
+                - /url: /LiveData/NewThisWeek.aspx
+                - generic [ref=e24]: 
+                - text: New
+            - listitem [ref=e25]:
+              - link " Reviews" [ref=e26] [cursor=pointer]:
+                - /url: /LiveData/Reviews.aspx
+                - generic [ref=e27]: 
+                - text: Reviews
+            - listitem [ref=e28]:
+              - list [ref=e29]:
+                - text: 
+                - listitem [ref=e30]:
+                  - generic [ref=e32] [cursor=pointer]: 
+        - list [ref=e34]:
+          - listitem [ref=e35]:
+            - link "Join" [ref=e36] [cursor=pointer]:
+              - /url: /JoinNow.aspx
+          - listitem [ref=e37]:
+            - link "Login" [ref=e38] [cursor=pointer]:
+              - /url: https://www.comiccollectorlive.com/Login.aspx?rtnurl=https://www.comiccollectorlive.com/issue/comic-books/X-Men-1991/-1-C-DF-Carlos-Pacheco-Cover-Signed-by-Lobdell-1500/e6fa653b-d05e-45db-98ee-de21965bedea
+          - listitem [ref=e39]:
+            - link "" [ref=e40] [cursor=pointer]:
+              - /url: javascript:__doPostBack('ctl00$cMarquee$lnkDarkLight','')
+              - text: 
+  - generic [ref=e42]:
+    - list [ref=e47]:
+      - listitem [ref=e48]: Navigation
+      - listitem [ref=e49]:
+        - link " Home" [ref=e50] [cursor=pointer]:
+          - /url: /Default.aspx
+          - generic [ref=e51]: 
+          - text: Home
+      - listitem [ref=e52]:
+        - link " Items For Sale " [ref=e53] [cursor=pointer]:
+          - /url: "#"
+          - generic [ref=e54]: 
+          - text: Items For Sale
+          - generic [ref=e55]: 
+      - listitem [ref=e56]:
+        - link " Search Library " [ref=e57] [cursor=pointer]:
+          - /url: "#"
+          - generic [ref=e58]: 
+          - text: Search Library
+          - generic [ref=e59]: 
+      - listitem [ref=e60]:
+        - link " News And Reviews " [ref=e61] [cursor=pointer]:
+          - /url: "#"
+          - generic [ref=e62]: 
+          - text: News And Reviews
+          - generic [ref=e63]: 
+      - listitem [ref=e64]:
+        - link " Our Services " [ref=e65] [cursor=pointer]:
+          - /url: "#"
+          - generic [ref=e66]: 
+          - text: Our Services
+          - generic [ref=e67]: 
+      - listitem [ref=e68]:
+        - link " Community " [ref=e69] [cursor=pointer]:
+          - /url: "#"
+          - generic [ref=e70]: 
+          - text: Community
+          - generic [ref=e71]: 
+      - listitem [ref=e72]:
+        - link " Change Manager" [ref=e73] [cursor=pointer]:
+          - /url: /Change/Manage.aspx
+          - generic [ref=e74]: 
+          - text: Change Manager
+      - listitem [ref=e75]:
+        - link [ref=e76] [cursor=pointer]:
+          - /url: /default.aspx
+          - img [ref=e77]
+    - generic [ref=e78]:
+      - generic [ref=e80]:
+        - generic [ref=e83]:
+          - generic [ref=e85]:
+            - list [ref=e86]:
+              - listitem [ref=e87]:
+                - link "Search" [ref=e88] [cursor=pointer]:
+                  - /url: https://www.comiccollectorlive.com/livedata/csearch.aspx
+              - listitem [ref=e89]:
+                - text: 
+                - link "Titles" [ref=e90] [cursor=pointer]:
+                  - /url: https://www.comiccollectorlive.com/titles/comic-books/page-1379
+              - listitem [ref=e91]:
+                - text: 
+                - link "Issues" [ref=e92] [cursor=pointer]:
+                  - /url: https://www.comiccollectorlive.com/issues/comic-books/X-Men-1991/page-1/84ac79ed-2a10-4a38-9b4c-6df3e0db37de
+            - heading "X-Men (1991) issue -1-C DF Carlos Pacheco Cover (Signed by Lobdell) 1/500" [level=1] [ref=e93]
+          - link " share" [ref=e96] [cursor=pointer]:
+            - /url: javascript:void(0);
+            - generic [ref=e97]: 
+            - text: share
+        - generic [ref=e100]:
+          - text:   
+          - generic [ref=e103]:
+            - generic [ref=e104]:
+              - table [ref=e105]:
+                - rowgroup [ref=e106]:
+                  - row " Titles" [ref=e107]:
+                    - cell " Titles" [ref=e108]:
+                      - link " Titles" [ref=e109] [cursor=pointer]:
+                        - /url: https://www.comiccollectorlive.com/titles/comic-books/page-1379
+                        - generic [ref=e110]: 
+                        - text: Titles
+              - table [ref=e112]:
+                - rowgroup [ref=e113]:
+                  - row " All  4 Sale" [ref=e114]:
+                    - cell " All" [ref=e115]:
+                      - link " All" [ref=e116] [cursor=pointer]:
+                        - /url: https://www.comiccollectorlive.com/issues/comic-books/X-Men-1991/page-1/84ac79ed-2a10-4a38-9b4c-6df3e0db37de
+                        - generic [ref=e117]: 
+                        - text: All
+                    - cell " 4 Sale" [ref=e118]:
+                      - link " 4 Sale" [ref=e119] [cursor=pointer]:
+                        - /url: https://www.comiccollectorlive.com/issues/comic-books/X-Men-1991/page-1/84ac79ed-2a10-4a38-9b4c-6df3e0db37de?find=-1&filter=forsale
+                        - generic [ref=e120]: 
+                        - text: 4 Sale
+              - table [ref=e122]:
+                - rowgroup [ref=e123]:
+                  - row " My Own  My Gaps  My Wish" [ref=e124]:
+                    - cell " My Own" [ref=e125]:
+                      - generic [ref=e126] [cursor=pointer]:
+                        - generic [ref=e127]: 
+                        - text: My Own
+                    - cell " My Gaps" [ref=e128]:
+                      - generic [ref=e129] [cursor=pointer]:
+                        - generic [ref=e130]: 
+                        - text: My Gaps
+                    - cell " My Wish" [ref=e131]:
+                      - generic [ref=e132] [cursor=pointer]:
+                        - generic [ref=e133]: 
+                        - text: My Wish
+            - generic [ref=e136]:
+              - generic [ref=e139]:
+                - textbox "Issue Jump" [ref=e140]
+                - button "Go" [ref=e142] [cursor=pointer]
+              - table [ref=e144]:
+                - rowgroup [ref=e145]:
+                  - row " " [ref=e146]:
+                    - cell "" [ref=e147]:
+                      - link "" [ref=e148] [cursor=pointer]:
+                        - /url: https://www.comiccollectorlive.com/issue/comic-books/X-Men-1991/-1-B-Chris-Bachalo-Cover/f352ec33-f77b-4fa6-9d47-7927c39c4a9b
+                        - generic [ref=e149]: 
+                    - cell [ref=e150]
+                    - cell "" [ref=e151]:
+                      - link "" [ref=e152] [cursor=pointer]:
+                        - /url: https://www.comiccollectorlive.com/issue/comic-books/X-Men-1991/-1-D-Carlos-Pacheco-Cover-Newsstand/d8bb220a-4330-4749-a219-dc889e59b65c
+                        - generic [ref=e153]: 
+              - generic [ref=e154]:
+                - generic:
+                  - generic:
+                    - generic: ON OFF
+                - text: Variants
+        - generic [ref=e155]:
+          - generic [ref=e156]:
+            - list [ref=e157]:
+              - listitem [ref=e158]:
+                - link "Details" [ref=e159]:
+                  - /url: https://www.comiccollectorlive.com/issue/comic-books/X-Men-1991/-1-C-DF-Carlos-Pacheco-Cover-Signed-by-Lobdell-1500/e6fa653b-d05e-45db-98ee-de21965bedea
+              - listitem [ref=e160]:
+                - link "Reviews" [ref=e161] [cursor=pointer]:
+                  - /url: https://www.comiccollectorlive.com/X-Men-1991-1-DF-Carlos-Pacheco-Cover-Signed-by-Lobdell-1500/reviews/0/f/c1e0f1p1x/id/e6fa653b-d05e-45db-98ee-de21965bedea/
+              - listitem [ref=e162]:
+                - link "Stats" [ref=e163] [cursor=pointer]:
+                  - /url: https://www.comiccollectorlive.com/X-Men-1991-1-DF-Carlos-Pacheco-Cover-Signed-by-Lobdell-1500/stats/0/f/c1e0f1p1x/id/e6fa653b-d05e-45db-98ee-de21965bedea/
+            - generic [ref=e166]:
+              - table [ref=e168]:
+                - rowgroup [ref=e169]:
+                  - 'row "X-Men (1991) issue -1-C DF Carlos Pacheco Cover (Signed by Lobdell) 1/500 X-Men (1991) -1-C By Marvel DF Carlos Pacheco Cover (Signed by Lobdell) 1/500 Number: -1 Variant: C Printing: 1st Cover Price: $1.95 Publish Date: JUL 01 1997 Sale Date: JUL 02 1997 Content: CCA Approved (0 posted)" [ref=e170]':
+                    - cell "X-Men (1991) issue -1-C DF Carlos Pacheco Cover (Signed by Lobdell) 1/500" [ref=e171]:
+                      - link "X-Men (1991) issue -1-C DF Carlos Pacheco Cover (Signed by Lobdell) 1/500" [ref=e172]:
+                        - /url: "#exampleModal"
+                        - img "X-Men (1991) issue -1-C DF Carlos Pacheco Cover (Signed by Lobdell) 1/500" [ref=e173]
+                    - 'cell "X-Men (1991) -1-C By Marvel DF Carlos Pacheco Cover (Signed by Lobdell) 1/500 Number: -1 Variant: C Printing: 1st Cover Price: $1.95 Publish Date: JUL 01 1997 Sale Date: JUL 02 1997 Content: CCA Approved (0 posted)" [ref=e174]':
+                      - generic [ref=e175]:
+                        - text: X-Men (1991) -1-C By Marvel
+                        - heading "DF Carlos Pacheco Cover (Signed by Lobdell) 1/500" [level=2] [ref=e176]
+                      - table [ref=e177]:
+                        - rowgroup [ref=e178]:
+                          - 'row "Number: -1" [ref=e179]':
+                            - cell "Number:" [ref=e180]
+                            - cell "-1" [ref=e181]
+                          - 'row "Variant: C" [ref=e182]':
+                            - cell "Variant:" [ref=e183]
+                            - cell "C" [ref=e184]
+                          - 'row "Printing: 1st" [ref=e185]':
+                            - cell "Printing:" [ref=e186]
+                            - cell "1st" [ref=e187]
+                          - 'row "Cover Price: $1.95" [ref=e188]':
+                            - cell "Cover Price:" [ref=e189]
+                            - cell "$1.95" [ref=e190]
+                          - 'row "Publish Date: JUL 01 1997" [ref=e191]':
+                            - cell "Publish Date:" [ref=e192]
+                            - cell "JUL 01 1997" [ref=e193]
+                          - 'row "Sale Date: JUL 02 1997" [ref=e194]':
+                            - cell "Sale Date:" [ref=e195]
+                            - cell "JUL 02 1997" [ref=e196]
+                          - 'row "Content: CCA Approved" [ref=e197]':
+                            - cell "Content:" [ref=e198]
+                            - cell "CCA Approved" [ref=e199]
+                      - table [ref=e200]:
+                        - rowgroup [ref=e201]:
+                          - row "(0 posted)" [ref=e202]:
+                            - cell [ref=e203]
+                            - cell "(0 posted)" [ref=e209]
+              - generic [ref=e212]:
+                - table [ref=e213]:
+                  - rowgroup [ref=e214]:
+                    - row "Wishlist " [ref=e215]:
+                      - cell "Wishlist " [ref=e216]:
+                        - link "Wishlist " [ref=e217] [cursor=pointer]:
+                          - /url: javascript:__doPostBack('ctl00$C$cMemberPanel$ibWishlist','')
+                          - text: Wishlist
+                          - generic [ref=e218]: 
+                - generic [ref=e219]:
+                  - generic [ref=e220]:
+                    - generic [ref=e221]: 
+                    - text: Ordered
+                  - generic [ref=e223]: "No"
+                - generic [ref=e224]:
+                  - generic [ref=e225]:
+                    - generic [ref=e226]: 
+                    - text: In Cart
+                  - generic [ref=e228]: "No"
+            - generic [ref=e230]:
+              - generic [ref=e232]: "Owned: 0"
+              - generic [ref=e233]:
+                - link " Own" [ref=e234] [cursor=pointer]:
+                  - /url: "#"
+                  - generic [ref=e235]: 
+                  - text: Own
+                - link " New Stack" [ref=e236] [cursor=pointer]:
+                  - /url: "#"
+                  - generic [ref=e237]: 
+                  - text: New Stack
+            - generic [ref=e241]: Details
+            - generic [ref=e242]:
+              - generic [ref=e243]:
+                - heading "Description" [level=4] [ref=e244]
+                - generic: 
+              - paragraph [ref=e247]: "\"I Had a Dream\""
+            - generic [ref=e248]:
+              - generic [ref=e249]:
+                - heading "Credits" [level=4] [ref=e250]
+                - generic: 
+              - generic [ref=e251]:
+                - generic [ref=e252]:
+                  - link "Comicraft" [ref=e253] [cursor=pointer]:
+                    - /url: /LiveData/Credit.aspx?id=10041891-baf5-466d-bdaf-728a7d3b0b9f
+                  - text: "- Artist"
+                - generic [ref=e254]:
+                  - link "Kolja Fuchs" [ref=e255] [cursor=pointer]:
+                    - /url: /LiveData/Credit.aspx?id=31a4267f-4453-4305-b18c-7855aa95b41b
+                  - text: "- Artist"
+                - generic [ref=e256]:
+                  - link "Christian \"Chris\" Lichtner" [ref=e257] [cursor=pointer]:
+                    - /url: /LiveData/Credit.aspx?id=2bf1e148-21bb-4eaf-9d51-a251b87adbe5
+                  - text: "- Artist"
+                - generic [ref=e258]:
+                  - link "Aron Lusen" [ref=e259] [cursor=pointer]:
+                    - /url: /LiveData/Credit.aspx?id=64276703-8900-4152-b712-496fd580d3de
+                  - text: "- Artist"
+                - generic [ref=e260]:
+                  - link "Carlos Pacheco" [ref=e261] [cursor=pointer]:
+                    - /url: /LiveData/Credit.aspx?id=dd299e4d-3dea-45bd-9fec-2dcd329ecd00
+                  - text: "- Artist"
+                - generic [ref=e262]:
+                  - link "Richard Starkings (aka Richard Alan)" [ref=e263] [cursor=pointer]:
+                    - /url: /LiveData/Credit.aspx?id=d24272e8-cc4e-44e5-a854-51ee7114a72c
+                  - text: "- Artist"
+                - generic [ref=e264]:
+                  - link "Art Thibert" [ref=e265] [cursor=pointer]:
+                    - /url: /LiveData/Credit.aspx?id=961f7b5e-d869-4b20-852a-0a5b0a59374c
+                  - text: "- Artist"
+                - generic [ref=e266]:
+                  - link "Bob Harras" [ref=e267] [cursor=pointer]:
+                    - /url: /LiveData/Credit.aspx?id=e8952e37-526d-4888-94b0-7cd82aebc36c
+                  - text: "- Editor"
+                - generic [ref=e268]:
+                  - link "Mark Powers" [ref=e269] [cursor=pointer]:
+                    - /url: /LiveData/Credit.aspx?id=83b33b89-7186-4095-9b5c-0ca427e25e13
+                  - text: "- Editor"
+                - generic [ref=e270]:
+                  - link "Scott Lobdell" [ref=e271] [cursor=pointer]:
+                    - /url: /LiveData/Credit.aspx?id=cc321498-f673-494b-af49-a0cc4d97e656
+                  - text: "- Writer"
+            - generic [ref=e272]:
+              - generic [ref=e273]:
+                - heading "Story Arcs" [level=4] [ref=e274]
+                - generic: 
+              - generic [ref=e275]:
+                - 'link "Tag: Dynamic Forces Signature Edition" [ref=e277] [cursor=pointer]':
+                  - /url: /LiveData/StoryArc.aspx?id=bcc3fa37-434b-4302-a2ce-b495544e3c08
+                - 'link "Tag: Flashback" [ref=e279] [cursor=pointer]':
+                  - /url: /LiveData/StoryArc.aspx?id=566c5414-c24d-45bf-8e0c-9867670f8b72
+            - generic [ref=e280]:
+              - generic [ref=e281]:
+                - heading "Publishers" [level=4] [ref=e282]
+                - generic: 
+              - link "Marvel" [ref=e285] [cursor=pointer]:
+                - /url: /LiveData/Publisher.aspx?id=b3d6f3d6-b060-4d83-af7c-563532554933
+            - generic [ref=e286]:
+              - generic [ref=e287]:
+                - heading "Characters" [level=4] [ref=e288]
+                - generic: 
+              - generic [ref=e289]:
+                - link "Amelia Voght" [ref=e291] [cursor=pointer]:
+                  - /url: /LiveData/Character.aspx?id=407920e8-4800-455c-98c5-d4b25b22158c
+                - link "Bastion" [ref=e293] [cursor=pointer]:
+                  - /url: /LiveData/Character.aspx?id=a732a635-fe7a-4db4-9471-019d9574dab8
+                - link "Charles Francis Xavier" [ref=e295] [cursor=pointer]:
+                  - /url: /LiveData/Character.aspx?id=d8b1a4df-a69e-447c-9e07-ad2a623089a6
+                - link "Erik Magnus Lehnsherr / Max Eisenhardt" [ref=e297] [cursor=pointer]:
+                  - /url: /LiveData/Character.aspx?id=9191270f-f080-466d-964b-303b252da58e
+                - link "Magneto" [ref=e299] [cursor=pointer]:
+                  - /url: /LiveData/Character.aspx?id=1425f2ae-3a29-4ab1-8885-ec42315dd64c
+                - link "Pietro Django Maximoff" [ref=e301] [cursor=pointer]:
+                  - /url: /LiveData/Character.aspx?id=fcccc31d-dd4c-44b6-bf97-bddab42e3c2b
+                - link "Quicksilver" [ref=e303] [cursor=pointer]:
+                  - /url: /LiveData/Character.aspx?id=56be03d5-0a6e-454e-b7d8-f5bebce1b2db
+                - link "Scarlet Witch" [ref=e305] [cursor=pointer]:
+                  - /url: /LiveData/Character.aspx?id=51cb903c-6204-460f-b15e-7063b7b1555c
+                - link "Sebastion Gilberti" [ref=e307] [cursor=pointer]:
+                  - /url: /LiveData/Character.aspx?id=97a44ab0-4db8-4e19-bdec-79bc963eb66e
+                - link "Stan Lee" [ref=e309] [cursor=pointer]:
+                  - /url: /LiveData/Character.aspx?id=92687043-8cd5-4195-9fcd-e5b961e5560c
+                - link "Wanda Maximoff" [ref=e311] [cursor=pointer]:
+                  - /url: /LiveData/Character.aspx?id=d018cb11-96b3-4644-a5f3-2e0ba14dd3bc
+                - link "X-Men" [ref=e313] [cursor=pointer]:
+                  - /url: /LiveData/Character.aspx?id=49f19e4e-7736-4b6a-bd73-d049261d4322
+            - text: 
+          - generic [ref=e315]:
+            - banner [ref=e317]:
+              - heading "For Sale" [level=2] [ref=e319]
+              - generic [ref=e320]:
+                - generic [ref=e321]: Sort
+                - combobox [ref=e322]:
+                  - option "by Price" [selected]
+                  - option "by Condition"
+                  - option "by Store"
+            - generic [ref=e324]:
+              - generic [ref=e325]:
+                - link:
+                  - /url: /LiveData/Seller.aspx?id=e1702524-87f5-4eec-a534-c38dc951ea91
+                  - img [ref=e326] [cursor=pointer]
+                - link "Titan Comics" [ref=e328] [cursor=pointer]:
+                  - /url: /LiveData/Seller.aspx?id=e1702524-87f5-4eec-a534-c38dc951ea91
+                - generic [ref=e329]: jeremyshorr
+                - table [ref=e330]:
+                  - rowgroup [ref=e331]:
+                    - row "Hero Mortal Villain" [ref=e332]:
+                      - cell "Hero" [ref=e333]
+                      - cell "Mortal" [ref=e334]
+                      - cell "Villain" [ref=e335]
+                    - row "1626 6 3" [ref=e336]:
+                      - cell "1626" [ref=e337]:
+                        - generic [ref=e338]: "1626"
+                      - cell "6" [ref=e339]:
+                        - generic [ref=e340]: "6"
+                      - cell "3" [ref=e341]:
+                        - generic [ref=e342]: "3"
+                - list [ref=e343]:
+                  - listitem [ref=e344]: "Satisfaction Rate: 100%"
+              - generic [ref=e345]:
+                - generic [ref=e346]:
+                  - generic [ref=e347]: "1"
+                  - text: for sale
+                - generic:
+                  - combobox [ref=e349]:
+                    - option "$14.99 - NM-" [selected]
+                  - button "Add To Cart" [ref=e351] [cursor=pointer]
+                  - button "Info" [ref=e353] [cursor=pointer]
+      - generic [ref=e355]:
+        - generic [ref=e357]:
+          - generic [ref=e358]: MEMBERS
+          - generic [ref=e359]:
+            - link "Search" [ref=e360] [cursor=pointer]:
+              - /url: /LiveData/CSearch.aspx
+            - link "Shop" [ref=e361] [cursor=pointer]:
+              - /url: /LiveData/Default.aspx
+            - link "Forums" [ref=e362] [cursor=pointer]:
+              - /url: /Forum/Default.aspx
+            - link "Reviews" [ref=e363] [cursor=pointer]:
+              - /url: /LiveData/Reviews.aspx
+            - link "My Account" [ref=e364] [cursor=pointer]:
+              - /url: /MyAccount/Profile.aspx
+        - generic [ref=e366]:
+          - generic [ref=e367]: SELLERS
+          - generic [ref=e368]:
+            - link "Selling" [ref=e369] [cursor=pointer]:
+              - /url: /SellComicBooks.aspx
+            - link "Why CCL" [ref=e370] [cursor=pointer]:
+              - /url: /WhyCCL.aspx
+            - link "Fees & Payments" [ref=e371] [cursor=pointer]:
+              - /url: /AccountInfo.aspx
+            - link "Store Locator" [ref=e372] [cursor=pointer]:
+              - /url: /LiveData/StoreLocator.aspx
+            - link "Advertise With Us" [ref=e373] [cursor=pointer]:
+              - /url: /Advertise.aspx
+        - generic [ref=e375]:
+          - generic [ref=e376]: TECHNICAL
+          - generic [ref=e377]:
+            - link "Version History" [ref=e378] [cursor=pointer]:
+              - /url: /Version.aspx
+            - link "Help Videos" [ref=e379] [cursor=pointer]:
+              - /url: https://www.youtube.com/@ComicCollectorLive
+            - link "Community" [ref=e380] [cursor=pointer]:
+              - /url: /Forum/Default.aspx
+        - generic [ref=e382]:
+          - generic [ref=e383]: ABOUT US
+          - generic [ref=e384]:
+            - link "Contact Us" [ref=e385] [cursor=pointer]:
+              - /url: /Contact.aspx
+            - link "Privacy" [ref=e386] [cursor=pointer]:
+              - /url: /Privacy.aspx
+            - link "Terms & Conditions" [ref=e387] [cursor=pointer]:
+              - /url: /TermsConditions.aspx
+      - contentinfo [ref=e390]:
+        - generic [ref=e391]: All images on comic collector live copyright of their respective publishers. © Copyright 2026, Panel Logic Media Inc. PL-CCL
