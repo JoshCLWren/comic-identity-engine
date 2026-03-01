@@ -1,7 +1,11 @@
 """Tests for GCD adapter implementation."""
 
-import pytest
+import json
+from pathlib import Path
 from datetime import date
+from unittest.mock import patch, Mock
+
+import pytest
 
 from comic_identity_engine.adapters import GCDAdapter, ValidationError
 
@@ -257,11 +261,12 @@ class TestGCDAdapterRealData:
 
     def test_xmen_negative1_real_payload(self):
         """Test with actual X-Men #-1 GCD API response."""
-        import json
-
         payload_path = (
-            "/mnt/extra/josh/code/comic-identity-engine/"
-            "examples/gcd/raw/xmen-negative1-api-response.json"
+            Path(__file__).parent.parent
+            / "examples"
+            / "gcd"
+            / "raw"
+            / "xmen-negative1-api-response.json"
         )
 
         with open(payload_path) as f:
@@ -279,3 +284,147 @@ class TestGCDAdapterRealData:
         assert result.price == 1.95
         assert result.cover_date == date(1997, 7, 1)
         assert result.publication_date == date(1997, 5, 21)
+
+
+class TestGCDAdapterEdgeCases:
+    """Edge case tests for GCD adapter to improve coverage."""
+
+    def test_series_with_missing_year_began(self):
+        """Series payload with year_began as None raises ValidationError."""
+        payload = {
+            "name": "X-Men",
+            "year_began": None,
+        }
+
+        adapter = GCDAdapter()
+        with pytest.raises(ValidationError, match="missing required field: year_began"):
+            adapter.fetch_series_from_payload("4254", payload)
+
+    def test_variant_extraction_empty_descriptor(self):
+        """Empty descriptor returns None variant suffix."""
+        adapter = GCDAdapter()
+        result = adapter._extract_variant_suffix_from_descriptor("")
+
+        assert result is None
+
+    def test_variant_with_multiple_parts(self):
+        """Variant with multiple parts returns VARIANT code."""
+        adapter = GCDAdapter()
+        result = adapter._extract_variant_suffix_from_descriptor(
+            "100 [Limited] [Signed]"
+        )
+
+        assert result == "VARIANT"
+
+    def test_descriptor_with_only_distribution_markers(self):
+        """Descriptor with only distribution markers returns None."""
+        adapter = GCDAdapter()
+        result = adapter._extract_variant_suffix_from_descriptor(
+            "100 [Direct] [Newsstand]"
+        )
+
+        assert result is None
+
+    def test_series_url_without_id(self):
+        """Series URL without ID returns empty string."""
+        adapter = GCDAdapter()
+        result = adapter._extract_series_id_from_payload({"series": "invalid_url"})
+
+        assert result == ""
+
+    def test_series_url_missing_from_payload(self):
+        """Missing series URL returns empty string."""
+        adapter = GCDAdapter()
+        result = adapter._extract_series_id_from_payload({})
+
+        assert result == ""
+
+    def test_parse_key_date_invalid_format(self):
+        """Invalid key_date format returns None."""
+        adapter = GCDAdapter()
+        result = adapter._parse_key_date("invalid-date")
+
+        assert result is None
+
+    def test_parse_key_date_short_date(self):
+        """key_date shorter than 7 characters returns None."""
+        adapter = GCDAdapter()
+        result = adapter._parse_key_date("1997")
+
+        assert result is None
+
+    def test_parse_on_sale_date_invalid_format(self):
+        """Invalid on_sale_date format returns None."""
+        adapter = GCDAdapter()
+        result = adapter._parse_on_sale_date("invalid-date")
+
+        assert result is None
+
+    def test_parse_price_with_non_numeric_usd(self):
+        """Price with non-numeric USD value returns None."""
+        adapter = GCDAdapter()
+        result = adapter._parse_price("abc USD")
+
+        assert result is None
+
+    def test_parse_price_with_no_usd(self):
+        """Price without USD returns None."""
+        adapter = GCDAdapter()
+        result = adapter._parse_price("2.75 CAD")
+
+        assert result is None
+
+    def test_parse_page_count_with_invalid_format(self):
+        """Invalid page_count format returns None."""
+        adapter = GCDAdapter()
+        result = adapter._parse_page_count("invalid")
+
+        assert result is None
+
+    def test_variant_extraction_distribution_marker_continue(self):
+        """Descriptor with distribution marker skips to next part (line 242)."""
+        adapter = GCDAdapter()
+        result = adapter._extract_variant_suffix_from_descriptor(
+            "100 [Direct] [Limited]"
+        )
+
+        assert result == "VARIANT"
+
+    def test_variant_extraction_cover_artist_single_letter(self):
+        """Cover artist descriptor with space returns VARIANT (lines 256-258 unreachable)."""
+        adapter = GCDAdapter()
+        # This test documents that lines 256-258 are unreachable with current implementation
+        # "Adams cover" gets split into ["Adams", "cover"], so the space check fails
+        result = adapter._extract_variant_suffix_from_descriptor("100 [Adams cover]")
+
+        assert result == "VARIANT"
+
+    def test_variant_extraction_distribution_only_returns_none(self):
+        """Descriptor with only distribution markers returns None (line 266)."""
+        adapter = GCDAdapter()
+        result = adapter._extract_variant_suffix_from_descriptor(
+            "100 [Direct] [Newsstand]"
+        )
+
+        assert result is None
+
+    def test_parse_key_date_none_returns_none(self):
+        """None key_date returns None (line 308)."""
+        adapter = GCDAdapter()
+        result = adapter._parse_key_date(None)
+
+        assert result is None
+
+    def test_parse_price_value_error_returns_none(self):
+        """Price with valid USD pattern but invalid float returns None (lines 349-350)."""
+        adapter = GCDAdapter()
+        # Mock re.search to return a match that will raise ValueError on float()
+        import re
+
+        mock_match = Mock()
+        mock_match.group.return_value = "not_a_number"
+
+        with patch.object(re, "search", return_value=mock_match):
+            result = adapter._parse_price("not_a_number USD")
+
+        assert result is None

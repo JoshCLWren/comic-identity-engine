@@ -38,7 +38,9 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest>=8.0.0",
+    "pytest-asyncio>=0.24",
     "pytest-cov>=6.0.0",
+    "ruff>=0.9.0",
 ]
 
 [build-system]
@@ -49,6 +51,8 @@ build-backend = "hatchling.build"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "-v"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 
 [tool.coverage.run]
 source = ["comic_identity_engine"]
@@ -60,6 +64,7 @@ exclude_lines = [
     "def __repr__",
     "raise NotImplementedError",
 ]
+fail_under = 98
 
 [project.scripts]
 cie-find = "comic_identity_engine.cli.main:cli_find"

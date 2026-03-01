@@ -22,6 +22,20 @@ uv sync
 source .venv/bin/activate
 ```
 
+### Docker-Based CI (Recommended)
+
+The project includes a Docker-based CI environment that works identically locally and in GitHub Actions.
+
+```bash
+# Build and run all tests locally using Docker
+docker compose build ci
+docker compose run --rm ci
+
+# Run individual commands in Docker
+docker compose run --rm ci bash scripts/test.sh
+docker compose run --rm ci bash scripts/lint.sh
+```
+
 ### Running Python and Tests
 
 **IMPORTANT**: Always use `uv run` to execute Python and pytest. This ensures dependencies are properly managed.

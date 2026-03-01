@@ -12,13 +12,11 @@ from datetime import date
 from typing import Any
 
 from comic_identity_engine.adapters import (
-    AdapterError,
-    NotFoundError,
     SourceAdapter,
     ValidationError,
 )
 from comic_identity_engine.models import IssueCandidate, SeriesCandidate
-from comic_identity_engine.parsing import ParseResult, parse_issue_candidate
+from comic_identity_engine.parsing import parse_issue_candidate
 
 
 class GCDAdapter(SourceAdapter):
