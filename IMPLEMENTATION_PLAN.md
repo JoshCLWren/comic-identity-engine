@@ -133,43 +133,43 @@ async def lookup_issue(ctx, operation_id: str, url: str) -> dict:
     6. Generate all platform URLs
     7. Update operation status
     """
-    logger = logger.bind(operation_id=operation_id, url=url)
+    log = logger.bind(operation_id=operation_id, url=url)
 
     # Step 1: Parse URL
-    logger.info("parsing_url")
+    log.info("parsing_url")
     parser = URLParser()
     parsed_url = parser.parse(url)
-    logger.debug("url_parsed", platform=parsed_url.platform, issue_id=parsed_url.issue_id)
+    log.debug("url_parsed", platform=parsed_url.platform, issue_id=parsed_url.issue_id)
 
     # Step 2: Check cache
     cached = await ctx['cache'].get(f"resolution:{parsed_url.platform}:{parsed_url.issue_id}")
     if cached:
-        logger.info("cache_hit", platform=parsed_url.platform)
+        log.info("cache_hit", platform=parsed_url.platform)
         result = json.loads(cached)
         await update_operation_status(operation_id, "completed", result=result)
         return result
 
     # Step 3: Fetch from platform (with retry via tenacity decorator)
-    logger.info("fetching_from_platform", platform=parsed_url.platform)
+    log.info("fetching_from_platform", platform=parsed_url.platform)
     adapter = get_adapter(parsed_url.platform, session_manager=ctx['session_manager'])
     issue_candidate = await adapter.fetch_issue(parsed_url.issue_id)
-    logger.debug("platform_fetch_success",
+    log.debug("platform_fetch_success",
                 platform=parsed_url.platform,
                 series=issue_candidate.series_title,
                 issue=issue_candidate.issue_number,
                 upc=issue_candidate.upc)
 
     # Step 4: Resolve identity
-    logger.info("resolving_identity")
+    log.info("resolving_identity")
     resolver = IdentityResolver(ctx['db'], ctx['cache'])
     resolution = await resolver.resolve(issue_candidate, parsed_url.platform)
-    logger.debug("identity_resolved",
+    log.debug("identity_resolved",
                 issue_id=str(resolution.issue_id),
                 confidence=resolution.confidence,
                 match_method=resolution.match_method)
 
     # Step 5: Store mappings
-    logger.info("storing_mappings")
+    log.info("storing_mappings")
     await ctx['db'].store_external_mapping(
         issue_id=resolution.issue_id,
         platform=parsed_url.platform,
@@ -178,11 +178,11 @@ async def lookup_issue(ctx, operation_id: str, url: str) -> dict:
     )
 
     # Step 6: Generate all URLs
-    logger.info("generating_urls")
+    log.info("generating_urls")
     from comic_identity_engine.services.url_builder import URLBuilder
     url_builder = URLBuilder(ctx['db'], ctx['cache'])
     all_urls = await url_builder.build_urls_for_issue(resolution.issue_id)
-    logger.debug("urls_generated", count=len(all_urls))
+    log.debug("urls_generated", count=len(all_urls))
 
     # Step 7: Cache result
     result = {
@@ -200,7 +200,7 @@ async def lookup_issue(ctx, operation_id: str, url: str) -> dict:
     # Step 8: Update operation status
     await update_operation_status(operation_id, "completed", result=result)
 
-    logger.info("lookup_complete",
+    log.info("lookup_complete",
                 issue_id=str(resolution.issue_id),
                 urls_count=len(all_urls))
 
@@ -212,28 +212,43 @@ async def lookup_batch(ctx, operation_id: str, urls: list[str]) -> dict:
     Worker function for batch issue lookup.
 
     Processes URLs in parallel with semaphore-controlled concurrency.
-    """
-    logger = logger.bind(operation_id=operation_id, url_count=len(urls))
 
-    # Enqueue individual jobs with concurrency limit
+    Note: Retry logic is inside process_one AFTER semaphore acquisition
+    to prevent holding semaphore slot during retries.
+    """
+    log = logger.bind(operation_id=operation_id, url_count=len(urls))
+
     semaphore = asyncio.Semaphore(10)  # Max 10 concurrent
     results = []
 
     async def process_one(url):
+        """
+        Process a single URL with timeout.
+
+        Acquires semaphore first, then retries with timeout.
+        This prevents holding semaphore during retry backoff.
+        """
         async with semaphore:
             sub_op_id = str(uuid.uuid4())
             try:
-                result = await lookup_issue(ctx, sub_op_id, url)
+                # Add timeout to prevent one slow URL from blocking batch
+                result = await asyncio.wait_for(
+                    lookup_issue(ctx, sub_op_id, url),
+                    timeout=60.0  # 60 second timeout per URL
+                )
                 return {"url": url, "success": True, "result": result}
+            except asyncio.TimeoutError:
+                log.error("batch_item_timeout", url=url, timeout_seconds=60)
+                return {"url": url, "success": False, "error": "Timeout after 60s"}
             except Exception as e:
-                logger.error("batch_item_failed", url=url, error=str(e), exc_info=True)
+                log.error("batch_item_failed", url=url, error=str(e), exc_info=True)
                 return {"url": url, "success": False, "error": str(e)}
 
-    logger.info("batch_processing_start", concurrent_limit=10)
+    log.info("batch_processing_start", concurrent_limit=10)
     results = await asyncio.gather(*[process_one(url) for url in urls])
 
     successful = len([r for r in results if r["success"]])
-    logger.info("batch_processing_complete", successful=successful, total=len(results))
+    log.info("batch_processing_complete", successful=successful, total=len(results))
 
     await update_operation_status(
         operation_id,
@@ -257,9 +272,12 @@ async def import_clz_csv(ctx, operation_id: str, csv_path: str) -> dict:
     Worker function for importing CLZ CSV inventory.
 
     Uses csv module (not pandas) for lighter weight parsing.
+
+    Note: CSV file I/O is blocking. For 5,700 rows this blocks for ~100-200ms.
+    This is acceptable for a one-time import operation.
     """
-    logger = logger.bind(operation_id=operation_id, csv_path=csv_path)
-    logger.info("clz_import_start")
+    log = logger.bind(operation_id=operation_id, csv_path=csv_path)
+    log.info("clz_import_start")
 
     from comic_identity_engine.adapters.clz import CLZCSVAdapter
 
@@ -267,26 +285,28 @@ async def import_clz_csv(ctx, operation_id: str, csv_path: str) -> dict:
     await adapter.load_csv()
     candidates = await adapter.import_inventory()
 
-    logger.info("clz_import_processing", total=len(candidates))
+    log.info("clz_import_processing", total=len(candidates))
 
+    # Move resolver out of loop to avoid re-instantiation
+    resolver = IdentityResolver(ctx['db'], ctx['cache'])
     imported = 0
+
     for candidate in candidates:
         try:
-            resolver = IdentityResolver(ctx['db'], ctx['cache'])
             resolution = await resolver.resolve(candidate, "clz")
             await ctx['db'].store_external_mapping(
                 issue_id=resolution.issue_id,
                 platform="clz",
-                external_id=candidate.source_issue_id,
-                url=None  # CLZ doesn't have URLs
-            )
-            imported += 1
-        except Exception as e:
-            logger.warning("clz_import_item_failed",
-                          clz_id=candidate.source_issue_id,
-                          error=str(e))
+                 external_id=candidate.source_issue_id,
+                 url=None  # CLZ doesn't have URLs
+             )
+             imported += 1
+         except Exception as e:
+             log.warning("clz_import_item_failed",
+                           clz_id=candidate.source_issue_id,
+                           error=str(e))
 
-    logger.info("clz_import_complete", imported=imported, total=len(candidates))
+    log.info("clz_import_complete", imported=imported, total=len(candidates))
 
     await update_operation_status(
         operation_id,
@@ -1039,7 +1059,7 @@ CREATE TABLE external_id_mappings (
 -- Long-running operations (AIP 151)
 CREATE TABLE operations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT NOT NULL,
+    name TEXT NOT NULL UNIQUE,
     operation_type TEXT NOT NULL,
     metadata JSONB NOT NULL,
     status TEXT NOT NULL,  -- 'pending', 'running', 'succeeded', 'failed', 'cancelled'
@@ -1194,6 +1214,9 @@ arq = "^0.26"   # Async job queue
 
 # HTTP Client (pick ONE)
 httpx = "^0.28"  # Modern async HTTP client
+
+# HTML Parsing
+selectolax = "^0.3"  # Fast HTML parser for LoCG scraping
 
 # Retry Logic
 tenacity = "^9.0"  # Retry decorators
