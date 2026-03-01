@@ -84,6 +84,36 @@ comic-identity-engine/
 └── README.md               # Project overview
 ```
 
+## Quick Setup
+
+### Environment Setup
+
+This project uses [`uv`](https://github.com/astral-sh/uv) for dependency management:
+
+```bash
+# One-time setup
+uv sync
+
+# Run tests
+uv run pytest
+```
+
+### Shell Aliases (Optional)
+
+For convenience, add shell aliases to run commands without `uv run`:
+
+**Zsh** - Add to `~/.zshrc`:
+```bash
+source /path/to/comic-identity-engine/.zshrc.local
+```
+
+**Bash** - Add to `~/.bashrc`:
+```bash
+source /path/to/comic-identity-engine/.bashrc.local
+```
+
+See [SHELL.md](SHELL.md) for details.
+
 ## Usage
 
 ### Parse Issue Numbers

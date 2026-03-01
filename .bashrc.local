@@ -1,0 +1,47 @@
+# Comic Identity Engine - Bash Configuration
+# Source this from your ~/.bashrc:
+#   source /path/to/comic-identity-engine/.bashrc.local
+
+# Project root
+export CIE_PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Add uv-managed binaries to PATH
+export PATH="$CIE_PROJECT_ROOT/.venv/bin:$PATH"
+
+# Direnv setup (eval once per shell session)
+if command -v direnv &> /dev/null; then
+    eval "$(direnv hook bash)"
+fi
+
+# Aliases for common operations
+alias cie='cd $CIE_PROJECT_ROOT'
+alias pytest='uv run pytest'
+alias py='uv run python'
+alias pip='uv pip'
+
+# Helper functions
+cie-test() {
+    cd $CIE_PROJECT_ROOT
+    uv run pytest "$@"
+}
+
+cie-run() {
+    cd $CIE_PROJECT_ROOT
+    uv run python "$@"
+}
+
+cie-repl() {
+    cd $CIE_PROJECT_ROOT
+    uv run python
+}
+
+# Show project status
+cie-status() {
+    cd $CIE_PROJECT_ROOT
+    echo "Comic Identity Engine - Project Status"
+    echo "======================================"
+    echo
+    echo "Environment: $(uv python version)"
+    echo "Tests: $(uv run pytest --collect-only -q 2>/dev/null | grep -o '\d* test' || echo 'N/A')"
+    echo "Git: $(git branch --show-current 2>/dev/null || echo 'Not a git repo')"
+}
