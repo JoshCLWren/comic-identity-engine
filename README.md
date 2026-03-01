@@ -15,6 +15,22 @@ Domain-specific entity resolution system for comic books.
    - Supports: negative numbers, decimals, fractions, variants, leading zeros
    - Error handling: EMPTY_INPUT, ONLY_SEPARATOR, INVALID_FORMAT, MULTI_ISSUE_RANGE
 
+2. **Candidate Models** ✅
+   - Location: `comic_identity_engine/models.py`
+   - Classes: `IssueCandidate`, `SeriesCandidate`
+   - Purpose: Intermediate representation for source ingestion
+
+3. **Adapter Architecture** ✅
+   - Location: `comic_identity_engine/adapters.py`
+   - Base: `SourceAdapter` abstract class
+   - Exceptions: `AdapterError`, `NotFoundError`, `ValidationError`, `SourceError`
+
+4. **GCD Adapter** ✅
+   - Location: `comic_identity_engine/gcd_adapter.py`
+   - Class: `GCDAdapter`
+   - Methods: `fetch_series_from_payload()`, `fetch_issue_from_payload()`
+   - Test coverage: 22 tests, all passing
+
 ### Research Data
 
 Platform research for X-Men #-1 across 7 platforms:
@@ -42,10 +58,18 @@ See `examples/` for raw data and cross-platform comparison.
 comic-identity-engine/
 ├── comic_identity_engine/
 │   ├── __init__.py
-│   └── parsing.py          # Issue number parsing logic
+│   ├── parsing.py          # Issue number parsing logic
+│   ├── models.py           # Candidate data models
+│   ├── adapters.py         # Source adapter base classes
+│   └── gcd_adapter.py      # Grand Comics Database adapter
 ├── tests/
 │   ├── __init__.py
-│   └── test_parsing.py     # Parsing test suite (32 tests)
+│   ├── test_parsing.py     # Parsing test suite (32 tests)
+│   └── test_gcd_adapter.py # GCD adapter test suite (22 tests)
+├── docs/
+│   ├── issue-id-format.md  # Internal issue identifier specification
+│   ├── series-id-format.md # Internal series identifier specification
+│   └── gcd-payload-ref.md  # GCD API payload reference
 ├── examples/
 │   ├── edge-cases/         # Edge case research and test cases
 │   ├── gcd/                # Grand Comics Database data
@@ -56,7 +80,7 @@ comic-identity-engine/
 │   ├── hipcomic/           # HIP Comic data
 │   ├── clz/                # CLZ data
 │   └── COMPARISON.md       # Cross-platform analysis
-├── AGENTS.md               # This file
+├── AGENTS.md               # Agent guidelines
 └── README.md               # Project overview
 ```
 
@@ -75,6 +99,25 @@ if result.success:
     print(f"Variant: {result.variant_suffix}")            # "A"
 else:
     print(f"Error: {result.error_code} - {result.error_message}")
+```
+
+### Ingest GCD Issue Data
+
+```python
+from comic_identity_engine.gcd_adapter import GCDAdapter
+import json
+
+# Load pre-fetched GCD API response
+with open('gcd-issue-125295.json') as f:
+    payload = json.load(f)
+
+adapter = GCDAdapter()
+issue = adapter.fetch_issue_from_payload("125295", payload)
+
+print(f"Issue: {issue.series_title} #{issue.issue_number}")
+print(f"Publisher: {issue.publisher}")
+print(f"Cover Date: {issue.cover_date}")
+print(f"UPC: {issue.upc}")
 ```
 
 ### Run Tests

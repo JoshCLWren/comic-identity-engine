@@ -7,39 +7,35 @@ Comic Identity Engine is a domain-specific entity resolution system for comic bo
 ## Build & Test Commands
 
 ### Current Status
-No build system configured yet. Project is in design phase.
+Test suite functional with pytest.
 
-### When Added
-Typical commands to expect:
+### Current Build Commands
 
 ```bash
+# Activate virtual environment
+source .venv/bin/activate
+
 # Run all tests
-make test
-pytest
+python -m pytest tests/
 
-# Run single test
-pytest tests/test_file.py::test_function_name -v
+# Run specific test file
+python -m pytest tests/test_parsing.py -v
 
-# Linting
-make lint
-ruff check .
-
-# Type checking
-make typecheck
-mypy src/
-
-# Format code
-make format
-black src/ tests/
-
-# Run all checks
-make check
+# Run with coverage (if pytest-cov installed)
+python -m pytest tests/ --cov=comic_identity_engine
 ```
+
+### When Added
+Future commands to configure:
+- `make test` / `pytest` - Run all tests
+- `make lint` / `ruff check .` - Linting
+- `make typecheck` / `mypy src/` - Type checking
+- `make format` / `black src/ tests/` - Format code
 
 ## Code Style Guidelines
 
 ### Language
-Primary language not yet determined. Likely Python (data processing) or Rust (performance).
+Primary language: **Python 3.13+** with type hints throughout.
 
 ### General Principles
 
@@ -115,7 +111,7 @@ SeriesRun
 
 ```
 comic-identity-engine/
-├── src/                    # Main source code
+├── comic_identity_engine/  # Main source code
 ├── tests/                  # Test files
 ├── examples/               # Usage examples
 ├── docs/                   # Documentation
@@ -127,7 +123,7 @@ comic-identity-engine/
 1. Design before coding - this is identity infrastructure
 2. Tests must pass before commit
 3. Update documentation for public API changes
-4. First milestone: X-Men #-1 reconciliation test
+4. Current milestone: Source adapter implementation (GCD complete, other platforms pending)
 
 ## External Platform Adapters
 
