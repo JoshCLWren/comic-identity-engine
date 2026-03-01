@@ -1,8 +1,11 @@
 """Tests for GCD adapter implementation."""
 
-import pytest
+import json
+from pathlib import Path
 from datetime import date
 from unittest.mock import patch, Mock
+
+import pytest
 
 from comic_identity_engine.adapters import GCDAdapter, ValidationError
 
@@ -258,11 +261,12 @@ class TestGCDAdapterRealData:
 
     def test_xmen_negative1_real_payload(self):
         """Test with actual X-Men #-1 GCD API response."""
-        import json
-
         payload_path = (
-            "/mnt/extra/josh/code/comic-identity-engine/"
-            "examples/gcd/raw/xmen-negative1-api-response.json"
+            Path(__file__).parent.parent
+            / "examples"
+            / "gcd"
+            / "raw"
+            / "xmen-negative1-api-response.json"
         )
 
         with open(payload_path) as f:
