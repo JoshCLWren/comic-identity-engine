@@ -27,3 +27,32 @@ __all__ = [
     # Concrete adapters
     "GCDAdapter",
 ]
+
+# Infrastructure exports
+from comic_identity_engine import config, database, errors
+from comic_identity_engine.core import CacheProvider, SessionManager
+from comic_identity_engine.core.cache import (
+    MemoryCache,
+    RedisSingleton,
+    TieredCache,
+    http_cached,
+    redis_cache,
+)
+
+__all__ += [
+    # Configuration
+    "config",
+    # Database
+    "database",
+    # Errors
+    "errors",
+    # Core interfaces
+    "CacheProvider",
+    "SessionManager",
+    # Cache implementations
+    "MemoryCache",
+    "RedisSingleton",
+    "TieredCache",
+    "http_cached",
+    "redis_cache",
+]
