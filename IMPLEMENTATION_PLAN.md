@@ -297,14 +297,14 @@ async def import_clz_csv(ctx, operation_id: str, csv_path: str) -> dict:
             await ctx['db'].store_external_mapping(
                 issue_id=resolution.issue_id,
                 platform="clz",
-                 external_id=candidate.source_issue_id,
-                 url=None  # CLZ doesn't have URLs
-             )
-             imported += 1
-         except Exception as e:
-             log.warning("clz_import_item_failed",
-                           clz_id=candidate.source_issue_id,
-                           error=str(e))
+                external_id=candidate.source_issue_id,
+                url=None  # CLZ doesn't have URLs
+            )
+            imported += 1
+        except Exception as e:
+            log.warning("clz_import_item_failed",
+                          clz_id=candidate.source_issue_id,
+                          error=str(e))
 
     log.info("clz_import_complete", imported=imported, total=len(candidates))
 
