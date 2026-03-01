@@ -90,18 +90,21 @@ class TestGetDb:
     async def test_get_db_closes_session_on_exception(self):
         """Test get_db closes session even if exception occurs."""
         mock_session = AsyncMock(spec=AsyncSession)
+        mock_session.close = AsyncMock()
 
         with patch(
             "comic_identity_engine.database.AsyncSessionLocal"
         ) as mock_session_local:
             mock_session_local.return_value.__aenter__.return_value = mock_session
+            mock_session_local.return_value.__aexit__.return_value = None
 
+            gen = get_db()
+            await gen.__anext__()
             with pytest.raises(ValueError):
-                async for _ in get_db():
-                    raise ValueError("Test error")
+                await gen.athrow(ValueError("Test error"))
+            await gen.aclose()
 
-            mock_session_local.return_value.__aenter__.assert_called_once()
-            mock_session_local.assert_called_once()
+            mock_session.close.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_get_db_context_manager_pattern(self):
