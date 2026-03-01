@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.cover
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local files
+.env
+.envrc
+.*.local
+bashrc.local
+zshrc.local
+
+# Git
+.git/
+.gitignore
+
+# Docker
+# Keep Dockerfile and docker-compose.yml as they may be needed for reference
+
+# Documentation
+*.md
+!README.md
+
+# Infrastructure
+IMPLEMENTATION_PLAN.md
+INFRASTRUCTURE_COPY_SUMMARY.md
+PROGRESS.md
+REUSABLE_CODE_MAPPING.md
+SHELL.md
+AGENTS.md

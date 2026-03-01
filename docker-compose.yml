@@ -1,6 +1,16 @@
-version: '3.8'
-
 services:
+  # CI service for running tests and linting
+  ci:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/app
+    environment:
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+    command: ["bash", "scripts/ci.sh"]
+
   # Application database
   postgres-app:
     image: postgres:16-alpine
