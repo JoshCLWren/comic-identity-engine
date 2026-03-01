@@ -33,7 +33,7 @@ class SessionManager(abc.ABC):
     """
 
     @abc.abstractmethod
-    async def get_session(self) -> Any:
+    async def get_session(self) -> Any:  # pragma: no cover
         """Get an HTTP session from pool or create new one.
 
         Returns:
@@ -46,7 +46,7 @@ class SessionManager(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def release_session(self, session: Any) -> None:
+    async def release_session(self, session: Any) -> None:  # pragma: no cover
         """Release a session back to the pool or close it.
 
         Args:
@@ -58,7 +58,7 @@ class SessionManager(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def cleanup(self) -> None:
+    async def cleanup(self) -> None:  # pragma: no cover
         """Clean up all sessions.
 
         This method should be called when the session manager is no longer needed
@@ -80,7 +80,7 @@ class CacheProvider(abc.ABC):
     """
 
     @abc.abstractmethod
-    async def get(self, key: str) -> Optional[Any]:
+    async def get(self, key: str) -> Optional[Any]:  # pragma: no cover
         """Get a value from the cache.
 
         Args:
@@ -92,7 +92,9 @@ class CacheProvider(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
+    async def set(
+        self, key: str, value: Any, ttl: Optional[int] = None
+    ) -> None:  # pragma: no cover
         """Set a value in the cache.
 
         Args:
@@ -103,7 +105,7 @@ class CacheProvider(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def delete(self, key: str) -> None:
+    async def delete(self, key: str) -> None:  # pragma: no cover
         """Delete a value from the cache.
 
         Args:
@@ -112,6 +114,6 @@ class CacheProvider(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def clear(self) -> None:
+    async def clear(self) -> None:  # pragma: no cover
         """Clear all values from the cache."""
         pass

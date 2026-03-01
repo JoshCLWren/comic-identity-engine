@@ -1,4 +1,3 @@
-import pytest
 from comic_identity_engine.parsing import parse_issue_candidate, ParseResult
 
 

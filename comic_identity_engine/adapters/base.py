@@ -25,7 +25,9 @@ class SourceAdapter(ABC):
     """
 
     @abstractmethod
-    def fetch_series(self, source_series_id: str) -> SeriesCandidate:
+    def fetch_series(
+        self, source_series_id: str
+    ) -> SeriesCandidate:  # pragma: no cover
         """Fetch series data from source platform.
 
         Args:
@@ -42,7 +44,7 @@ class SourceAdapter(ABC):
         pass
 
     @abstractmethod
-    def fetch_issue(self, source_issue_id: str) -> IssueCandidate:
+    def fetch_issue(self, source_issue_id: str) -> IssueCandidate:  # pragma: no cover
         """Fetch issue data from source platform.
 
         The issue_number field MUST be validated using parse_issue_candidate()

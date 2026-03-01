@@ -5,7 +5,7 @@ and the canonical entity model. They are intentionally flexible to
 accommodate variations across different comic platforms.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date
 from typing import Any, Optional
 
