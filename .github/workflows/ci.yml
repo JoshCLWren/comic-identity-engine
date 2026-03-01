@@ -16,10 +16,10 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build Docker image
-        run: docker-compose build ci
+        run: docker compose build ci
 
       - name: Run CI in Docker
-        run: docker-compose run --rm ci
+        run: docker compose run --rm ci
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
