@@ -41,9 +41,15 @@ cie-status() {
     echo "Comic Identity Engine - Project Status"
     echo "======================================"
     echo
-    echo "Environment: $(uv python version)"
-    echo "Tests: $(uv run pytest --collect-only -q 2>/dev/null | grep -o '\d* test' || echo 'N/A')"
+    echo "Project: $CIE_PROJECT_ROOT"
+    echo "Python: $(uv run python --version 2>&1)"
+    echo "Tests: $(uv run pytest --collect-only -q 2>/dev/null | tail -n 1 || echo 'N/A')"
     echo "Git: $(git branch --show-current 2>/dev/null || echo 'Not a git repo')"
+    echo
+    echo "Quick commands:"
+    echo "  pytest          - Run all tests"
+    echo "  py script.py    - Run a Python script"
+    echo "  cie-repl        - Start Python REPL"
 }
 
 # Auto-run when entering directory
