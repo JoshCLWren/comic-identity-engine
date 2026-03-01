@@ -9,21 +9,45 @@ Comic Identity Engine is a domain-specific entity resolution system for comic bo
 ### Current Status
 Test suite functional with pytest.
 
-### Current Build Commands
+### Environment Setup
+
+This project uses **uv** for dependency management and **direnv** for automatic environment loading.
 
 ```bash
-# Activate virtual environment
-source .venv/bin/activate
+# Initial setup (one-time)
+uv sync
 
+# After cd-ing into the project, direnv automatically loads .envrc
+# If direnv is not installed, manually activate:
+source .venv/bin/activate
+```
+
+### Running Python and Tests
+
+**IMPORTANT**: Always use `uv run` to execute Python and pytest. This ensures dependencies are properly managed.
+
+```bash
 # Run all tests
-python -m pytest tests/
+uv run pytest
 
 # Run specific test file
-python -m pytest tests/test_parsing.py -v
+uv run pytest tests/test_parsing.py -v
 
-# Run with coverage (if pytest-cov installed)
-python -m pytest tests/ --cov=comic_identity_engine
+# Run with coverage
+uv run pytest --cov=comic_identity_engine
+
+# Run a Python script
+uv run python script.py
+
+# Start a Python REPL with project dependencies available
+uv run python
 ```
+
+**For AI Agents:**
+- Use `uv run pytest` instead of `python -m pytest`
+- Use `uv run python` instead of `python`
+- The virtual environment is automatically managed by uv
+- Do not manually activate `.venv/bin/activate` - direnv handles this
 
 ### When Added
 Future commands to configure:
