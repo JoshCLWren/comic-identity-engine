@@ -57,6 +57,15 @@ def parse_issue_candidate(raw: str) -> ParseResult:
             error_message="Multiple issues detected, use single issue parsing",
         )
 
+    # Pattern: multiple hyphen-separated numbers (e.g., "1-2-3")
+    if re.search(r"\d+-\d+-\d+", working):
+        return ParseResult(
+            success=False,
+            raw=preserved_raw,
+            error_code="MULTI_ISSUE_RANGE",
+            error_message="Multiple issues detected, use single issue parsing",
+        )
+
     # Pattern: digits & digits (e.g., "5 & 6")
     if re.search(r"\d+\s*&\s*\d+", working):
         return ParseResult(
@@ -89,6 +98,15 @@ def parse_issue_candidate(raw: str) -> ParseResult:
     if working.startswith("#"):
         working = working[1:]
         working = working.lstrip()  # Remove any space after #
+
+    # Check for empty string after stripping hash (e.g., "#")
+    if not working:
+        return ParseResult(
+            success=False,
+            raw=preserved_raw,
+            error_code="ONLY_SEPARATOR",
+            error_message="Issue number must contain digits",
+        )
 
     # Check for only separator after stripping
     if working in ["-", ".", "/"]:

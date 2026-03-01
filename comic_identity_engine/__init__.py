@@ -4,12 +4,12 @@ from comic_identity_engine.parsing import ParseResult, parse_issue_candidate
 from comic_identity_engine.models import IssueCandidate, SeriesCandidate
 from comic_identity_engine.adapters import (
     AdapterError,
+    GCDAdapter,
     NotFoundError,
     SourceAdapter,
     SourceError,
     ValidationError,
 )
-from comic_identity_engine.gcd_adapter import GCDAdapter
 
 __all__ = [
     # Parsing

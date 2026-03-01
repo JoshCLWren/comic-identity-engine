@@ -3,8 +3,7 @@
 import pytest
 from datetime import date
 
-from comic_identity_engine.gcd_adapter import GCDAdapter
-from comic_identity_engine.adapters import ValidationError
+from comic_identity_engine.adapters import GCDAdapter, ValidationError
 
 
 class TestGCDAdapterSeriesMapping:

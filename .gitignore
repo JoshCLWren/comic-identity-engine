@@ -68,3 +68,17 @@ dmypy.json
 # OS files
 .DS_Store
 Thumbs.db
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Migrations
+migrations/*.py
+!migrations/.gitkeep
+!migrations/README
+
+# Logs
+*.log
+logs/

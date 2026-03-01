@@ -4,7 +4,36 @@ version = "0.1.0"
 description = "Domain-specific entity resolution system for comic books"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    # Core
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    # Database
+    "asyncpg>=0.30",
+    "alembic>=1.14",
+    "sqlalchemy>=2.0",
+    # Caching + Job Queue
+    "redis>=5.2",
+    "arq>=0.26",
+    # HTTP Client
+    "httpx>=0.28",
+    # HTML Parsing
+    "selectolax>=0.3",
+    # Retry Logic
+    "tenacity>=9.0",
+    # Fuzzy Matching
+    "jellyfish>=1.1",
+    # API
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    # CLI
+    "click>=8.1",
+    "rich>=13.9",
+    # Environment
+    "python-dotenv>=1.0",
+    # Logging
+    "structlog>=25.1",
+]
 
 [dependency-groups]
 dev = [
@@ -31,3 +60,10 @@ exclude_lines = [
     "def __repr__",
     "raise NotImplementedError",
 ]
+
+[project.scripts]
+cie-find = "comic_identity_engine.cli.main:cli_find"
+cie-import-clz = "comic_identity_engine.cli.commands.import_clz:cli_import_clz"
+cie-admin = "comic_identity_engine.cli.commands.admin:cli_admin"
+cie-api = "comic_identity_engine.api.app:main"
+cie-worker = "comic_identity_engine.jobs.worker:main"
