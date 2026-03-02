@@ -17,6 +17,10 @@ from comic_identity_engine.errors import ResolutionError
 FIXED_SERIES_RUN_ID = uuid.UUID("00000000-0000-4000-8000-000000000001")
 FIXED_ISSUE_ID = uuid.UUID("00000000-0000-4000-8000-000000000002")
 FIXED_MAPPING_ISSUE_ID = uuid.UUID("00000000-0000-4000-8000-000000000003")
+FIXED_SERIES2_ID = uuid.UUID("00000000-0000-4000-8000-000000000004")
+FIXED_SERIES3_ID = uuid.UUID("00000000-0000-4000-8000-000000000005")
+FIXED_ISSUE2_ID = uuid.UUID("00000000-0000-4000-8000-000000000006")
+FIXED_RESULT_ID = uuid.UUID("00000000-0000-4000-8000-000000000007")
 
 
 @pytest.fixture
@@ -286,15 +290,16 @@ class TestIdentityResolver:
         mock_series_repo = MagicMock()
         mock_series_repo.find_by_title = AsyncMock(return_value=None)
         mock_series_repo.create = AsyncMock()
+        mock_series_repo.create = AsyncMock()
         mock_series_repo_cls.return_value = mock_series_repo
 
         new_series = MagicMock()
-        new_series.id = uuid.uuid4()
+        new_series.id = FIXED_SERIES2_ID
 
         mock_series_repo.create = AsyncMock(return_value=new_series)
 
         new_issue = MagicMock()
-        new_issue.id = uuid.uuid4()
+        new_issue.id = FIXED_SERIES2_ID
         new_issue.issue_number = "1"
         mock_issue_repo.create = AsyncMock(return_value=new_issue)
 
@@ -323,8 +328,8 @@ class TestMatchCandidate:
     async def test_match_candidate_calculates_overall_confidence(self):
         """Test MatchCandidate calculates overall confidence."""
         candidate = MatchCandidate(
-            issue_id=uuid.uuid4(),
-            series_run_id=uuid.uuid4(),
+            issue_id=FIXED_ISSUE_ID,
+            series_run_id=FIXED_SERIES_RUN_ID,
             issue_number="-1",
             series_title="X-Men",
             series_start_year=1991,
@@ -338,8 +343,8 @@ class TestMatchCandidate:
     async def test_match_candidate_default_variant_confidence(self):
         """Test MatchCandidate defaults variant confidence to 1.0."""
         candidate = MatchCandidate(
-            issue_id=uuid.uuid4(),
-            series_run_id=uuid.uuid4(),
+            issue_id=FIXED_ISSUE2_ID,
+            series_run_id=FIXED_SERIES2_ID,
             issue_number="-1",
             series_title="X-Men",
             series_start_year=1991,
@@ -357,7 +362,7 @@ class TestResolutionResult:
 
     async def test_resolution_result_defaults(self):
         """Test ResolutionResult default values."""
-        result = ResolutionResult(issue_id=uuid.uuid4())
+        result = ResolutionResult(issue_id=FIXED_RESULT_ID)
 
         assert result.matches == []
         assert result.best_match is None
@@ -391,12 +396,12 @@ class TestFuzzyMatching:
         mock_issue_repo_cls.return_value = mock_issue_repo
 
         mock_series1 = MagicMock()
-        mock_series1.id = uuid.uuid4()
+        mock_series1.id = FIXED_SERIES2_ID
         mock_series1.title = "X-Men"
         mock_series1.start_year = 1991
 
         mock_series2 = MagicMock()
-        mock_series2.id = uuid.uuid4()
+        mock_series2.id = FIXED_SERIES2_ID
         mock_series2.title = "Xmen"
         mock_series2.start_year = 1992
 
@@ -409,12 +414,12 @@ class TestFuzzyMatching:
         mock_series_repo = MagicMock()
         mock_series_repo.find_by_title = AsyncMock(return_value=None)
         new_series = MagicMock()
-        new_series.id = uuid.uuid4()
+        new_series.id = FIXED_SERIES2_ID
         mock_series_repo.create = AsyncMock(return_value=new_series)
         mock_series_repo_cls.return_value = mock_series_repo
 
         new_issue = MagicMock()
-        new_issue.id = uuid.uuid4()
+        new_issue.id = FIXED_SERIES2_ID
         new_issue.issue_number = "1"
         mock_issue_repo.create = AsyncMock(return_value=new_issue)
 
@@ -450,17 +455,17 @@ class TestFuzzyMatching:
         mock_series_repo = MagicMock()
         mock_series_repo.find_by_title = AsyncMock(return_value=None)
         new_series = MagicMock()
-        new_series.id = uuid.uuid4()
+        new_series.id = FIXED_SERIES2_ID
         mock_series_repo.create = AsyncMock(return_value=new_series)
         mock_series_repo_cls.return_value = mock_series_repo
 
         new_issue = MagicMock()
-        new_issue.id = uuid.uuid4()
+        new_issue.id = FIXED_SERIES2_ID
         new_issue.issue_number = "1"
         mock_issue_repo.create = AsyncMock(return_value=new_issue)
 
         mock_series = MagicMock()
-        mock_series.id = uuid.uuid4()
+        mock_series.id = FIXED_SERIES2_ID
         mock_series.title = "Batman"
         mock_series.start_year = 1940
 
@@ -496,8 +501,8 @@ class TestFuzzyMatching:
         mock_mapping_repo_cls.return_value = mock_mapping_repo
 
         sample_issue = MagicMock()
-        sample_issue.id = uuid.uuid4()
-        sample_issue.series_run_id = uuid.uuid4()
+        sample_issue.id = FIXED_SERIES2_ID
+        sample_issue.series_run_id = FIXED_SERIES2_ID
         sample_issue.issue_number = "-1"
 
         mock_series = MagicMock()
@@ -553,8 +558,8 @@ class TestFuzzyMatching:
         mock_mapping_repo_cls.return_value = mock_mapping_repo
 
         sample_issue = MagicMock()
-        sample_issue.id = uuid.uuid4()
-        sample_issue.series_run_id = uuid.uuid4()
+        sample_issue.id = FIXED_SERIES2_ID
+        sample_issue.series_run_id = FIXED_SERIES2_ID
         sample_issue.issue_number = "-1"
 
         mock_series = MagicMock()
@@ -574,17 +579,17 @@ class TestFuzzyMatching:
         mock_series_repo_cls.return_value = mock_series_repo
 
         mock_series1 = MagicMock()
-        mock_series1.id = uuid.uuid4()
+        mock_series1.id = FIXED_SERIES2_ID
         mock_series1.title = "X-Men"
         mock_series1.start_year = 1991
 
         mock_series2 = MagicMock()
-        mock_series2.id = uuid.uuid4()
+        mock_series2.id = FIXED_SERIES2_ID
         mock_series2.title = "Xmen"
         mock_series2.start_year = 1992
 
         mock_series3 = MagicMock()
-        mock_series3.id = uuid.uuid4()
+        mock_series3.id = FIXED_SERIES2_ID
         mock_series3.title = "X-MEN"
         mock_series3.start_year = 1993
 
@@ -681,7 +686,7 @@ class TestFuzzyMatching:
         from unittest.mock import AsyncMock, MagicMock
 
         mock_series = MagicMock()
-        mock_series.id = uuid.uuid4()
+        mock_series.id = FIXED_SERIES2_ID
 
         mock_series_repo = MagicMock()
         mock_series_repo.find_by_title = AsyncMock(return_value=mock_series)
@@ -705,7 +710,7 @@ class TestFuzzyMatching:
         from unittest.mock import AsyncMock, MagicMock
 
         mock_series = MagicMock()
-        mock_series.id = uuid.uuid4()
+        mock_series.id = FIXED_SERIES2_ID
 
         mock_series_repo = MagicMock()
         mock_series_repo.find_by_title = AsyncMock(return_value=mock_series)
