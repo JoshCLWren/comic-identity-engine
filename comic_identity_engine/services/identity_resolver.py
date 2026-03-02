@@ -1,0 +1,443 @@
+"""Identity resolution service for cross-platform comic matching.
+
+This module provides the core identity resolution logic that matches comic
+issues across different platforms using a deterministic algorithm with
+confidence scoring.
+
+USAGE:
+    from comic_identity_engine.services import IdentityResolver
+
+    resolver = IdentityResolver(session)
+    result = await resolver.resolve_issue(parsed_url)
+
+ALGORITHM PRIORITY:
+1. UPC exact match → 1.00 confidence
+2. Series + issue + year → 0.95 confidence
+3. Series + issue (no year) → 0.85 confidence
+4. Fuzzy title similarity (Jaro-Winkler) → 0.70 confidence
+5. No match → create new → 1.00 confidence
+"""
+
+import uuid
+from dataclasses import dataclass, field
+from datetime import date
+from typing import TYPE_CHECKING, Optional
+
+import jellyfish
+import structlog
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from comic_identity_engine.database.repositories import (
+    ExternalMappingRepository,
+    IssueRepository,
+    SeriesRunRepository,
+    VariantRepository,
+)
+from comic_identity_engine.errors import ResolutionError
+
+if TYPE_CHECKING:
+    from comic_identity_engine.database.models import Issue
+    from comic_identity_engine.services.url_parser import ParsedUrl
+
+
+logger = structlog.get_logger(__name__)
+
+
+@dataclass
+class MatchCandidate:
+    """Potential match candidate with scoring.
+
+    Attributes:
+        issue_id: Canonical issue UUID (None for fuzzy matches without issue number)
+        series_run_id: Parent series run UUID
+        issue_number: Issue number
+        series_title: Series title
+        series_start_year: Series start year
+        match_reason: Why this candidate matched
+        issue_confidence: Confidence score for issue match (0.0-1.0)
+        variant_confidence: Confidence score for variant match (0.0-1.0)
+        overall_confidence: Combined confidence score (0.0-1.0)
+    """
+
+    issue_id: Optional[uuid.UUID]
+    series_run_id: uuid.UUID
+    issue_number: str
+    series_title: str
+    series_start_year: int
+    match_reason: str
+    issue_confidence: float
+    variant_confidence: float = 1.0
+    overall_confidence: float = field(init=False)
+
+    def __post_init__(self):
+        """Calculate overall confidence from issue and variant confidence."""
+        self.overall_confidence = self.issue_confidence * self.variant_confidence
+
+
+@dataclass
+class ResolutionResult:
+    """Result of identity resolution.
+
+    Attributes:
+        issue_id: Resolved canonical issue UUID
+        matches: List of all match candidates considered
+        best_match: Best match candidate (if any)
+        created_new: True if a new issue was created
+        explanation: Human-readable explanation of resolution
+    """
+
+    issue_id: Optional[uuid.UUID]
+    matches: list[MatchCandidate] = field(default_factory=list)
+    best_match: Optional[MatchCandidate] = None
+    created_new: bool = False
+    explanation: str = ""
+
+
+class IdentityResolver:
+    """Cross-platform identity resolution for comic issues.
+
+    This service implements deterministic matching algorithms with
+    confidence scoring to resolve comic identities across platforms.
+
+    Attributes:
+        session: Async database session
+        issue_repo: Issue repository
+        series_repo: Series run repository
+        mapping_repo: External mapping repository
+        variant_repo: Variant repository
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        """Initialize identity resolver.
+
+        Args:
+            session: Async database session
+        """
+        self.session = session
+        self.issue_repo = IssueRepository(session)
+        self.series_repo = SeriesRunRepository(session)
+        self.mapping_repo = ExternalMappingRepository(session)
+        self.variant_repo = VariantRepository(session)
+
+    async def resolve_issue(
+        self,
+        parsed_url: "ParsedUrl",
+        upc: Optional[str] = None,
+        series_title: Optional[str] = None,
+        series_start_year: Optional[int] = None,
+        issue_number: Optional[str] = None,
+        cover_date: Optional[date] = None,
+    ) -> ResolutionResult:
+        """Resolve comic issue identity from parsed URL and metadata.
+
+        Args:
+            parsed_url: Parsed URL data
+            upc: Optional UPC for exact matching
+            series_title: Optional series title for fuzzy matching
+            series_start_year: Optional series start year
+            issue_number: Optional issue number
+            cover_date: Optional cover date
+
+        Returns:
+            ResolutionResult with match details
+
+        Raises:
+            ResolutionError: If resolution fails
+        """
+        logger.info(
+            "Starting identity resolution",
+            platform=parsed_url.platform,
+            source_issue_id=parsed_url.source_issue_id,
+        )
+
+        candidates: list[MatchCandidate] = []
+
+        try:
+            existing = await self.mapping_repo.find_by_source(
+                parsed_url.platform,
+                parsed_url.source_issue_id,
+            )
+            if existing:
+                logger.info(
+                    "Found existing mapping",
+                    issue_id=str(existing.issue_id),
+                    platform=parsed_url.platform,
+                    source_issue_id=parsed_url.source_issue_id,
+                )
+                issue = await self.issue_repo.find_by_id(existing.issue_id)
+                if issue:
+                    return ResolutionResult(
+                        issue_id=issue.id,
+                        best_match=MatchCandidate(
+                            issue_id=issue.id,
+                            series_run_id=issue.series_run_id,
+                            issue_number=issue.issue_number,
+                            series_title=issue.series_run.title,
+                            series_start_year=issue.series_run.start_year,
+                            match_reason="Existing external mapping",
+                            issue_confidence=1.0,
+                            variant_confidence=1.0,
+                        ),
+                        explanation=f"Found existing external mapping for {parsed_url.platform}:{parsed_url.source_issue_id}",
+                    )
+
+            if upc:
+                upc_match = await self._match_by_upc(upc)
+                if upc_match:
+                    candidates.append(upc_match)
+
+            if series_title and issue_number:
+                if series_start_year:
+                    exact_match = await self._match_by_series_issue_year(
+                        series_title,
+                        issue_number,
+                        series_start_year,
+                    )
+                    if exact_match:
+                        candidates.append(exact_match)
+                else:
+                    series_match = await self._match_by_series_issue(
+                        series_title,
+                        issue_number,
+                    )
+                    if series_match:
+                        candidates.append(series_match)
+
+            if series_title and not candidates:
+                fuzzy_matches = await self._match_by_fuzzy_title(
+                    series_title,
+                    issue_number,
+                )
+                candidates.extend(fuzzy_matches)
+
+            if candidates:
+                best = max(candidates, key=lambda c: c.overall_confidence)
+                logger.info(
+                    "Found match candidates",
+                    num_candidates=len(candidates),
+                    best_confidence=best.overall_confidence,
+                    best_reason=best.match_reason,
+                )
+
+                return ResolutionResult(
+                    issue_id=best.issue_id,
+                    matches=candidates,
+                    best_match=best,
+                    explanation=f"Matched by {best.match_reason} (confidence: {best.overall_confidence:.2f})",
+                )
+
+            logger.info("No matches found, creating new issue")
+            created = await self._create_new_issue(
+                series_title or "Unknown Series",
+                series_start_year or 2000,
+                issue_number or "1",
+                cover_date,
+                upc,
+            )
+
+            return ResolutionResult(
+                issue_id=created.id,
+                created_new=True,
+                explanation=f"Created new issue for {parsed_url.platform}:{parsed_url.source_issue_id}",
+            )
+
+        except Exception as e:
+            logger.error("Identity resolution failed", error=str(e))
+            raise ResolutionError(
+                f"Failed to resolve issue: {e}",
+                original_error=e,
+            ) from e
+
+    async def _match_by_upc(self, upc: str) -> Optional[MatchCandidate]:
+        """Match issue by exact UPC.
+
+        Args:
+            upc: Universal Product Code
+
+        Returns:
+            MatchCandidate with 1.00 confidence if found, None otherwise
+        """
+        issue = await self.issue_repo.find_by_upc(upc)
+        if not issue:
+            return None
+
+        return MatchCandidate(
+            issue_id=issue.id,
+            series_run_id=issue.series_run_id,
+            issue_number=issue.issue_number,
+            series_title=issue.series_run.title,
+            series_start_year=issue.series_run.start_year,
+            match_reason=f"UPC exact match: {upc}",
+            issue_confidence=1.0,
+            variant_confidence=1.0,
+        )
+
+    async def _match_by_series_issue_year(
+        self,
+        series_title: str,
+        issue_number: str,
+        series_start_year: int,
+    ) -> Optional[MatchCandidate]:
+        """Match issue by series title, issue number, and year.
+
+        Args:
+            series_title: Series title
+            issue_number: Issue number
+            series_start_year: Series start year
+
+        Returns:
+            MatchCandidate with 0.95 confidence if found, None otherwise
+        """
+        series = await self.series_repo.find_by_title(series_title, series_start_year)
+        if not series:
+            return None
+
+        issue = await self.issue_repo.find_by_number(series.id, issue_number)
+        if not issue:
+            return None
+
+        return MatchCandidate(
+            issue_id=issue.id,
+            series_run_id=issue.series_run_id,
+            issue_number=issue.issue_number,
+            series_title=issue.series_run.title,
+            series_start_year=issue.series_run.start_year,
+            match_reason=f"Series + issue + year match: {series_title} ({series_start_year}) #{issue_number}",
+            issue_confidence=0.95,
+            variant_confidence=1.0,
+        )
+
+    async def _match_by_series_issue(
+        self,
+        series_title: str,
+        issue_number: str,
+    ) -> Optional[MatchCandidate]:
+        """Match issue by series title and issue number (no year).
+
+        Args:
+            series_title: Series title
+            issue_number: Issue number
+
+        Returns:
+            MatchCandidate with 0.85 confidence if found, None otherwise
+        """
+        series = await self.series_repo.find_by_title(series_title)
+        if not series:
+            return None
+
+        issue = await self.issue_repo.find_by_number(series.id, issue_number)
+        if not issue:
+            return None
+
+        return MatchCandidate(
+            issue_id=issue.id,
+            series_run_id=issue.series_run_id,
+            issue_number=issue.issue_number,
+            series_title=issue.series_run.title,
+            series_start_year=issue.series_run.start_year,
+            match_reason=f"Series + issue match: {series_title} #{issue_number}",
+            issue_confidence=0.85,
+            variant_confidence=1.0,
+        )
+
+    async def _match_by_fuzzy_title(
+        self,
+        series_title: str,
+        issue_number: Optional[str] = None,
+    ) -> list[MatchCandidate]:
+        """Match issue by fuzzy title similarity using Jaro-Winkler.
+
+        Args:
+            series_title: Series title
+            issue_number: Optional issue number for additional filtering
+
+        Returns:
+            List of MatchCandidate with 0.70 confidence (best matches first)
+        """
+        from sqlalchemy import select
+
+        from comic_identity_engine.database.models import SeriesRun
+
+        stmt = select(SeriesRun).limit(100)
+        result = await self.session.execute(stmt)
+        all_series = result.scalars().all()
+
+        matches = []
+        for series in all_series:
+            similarity = jellyfish.jaro_winkler_similarity(
+                series_title.lower(),
+                series.title.lower(),
+            )
+            if similarity >= 0.85:
+                if issue_number:
+                    issue = await self.issue_repo.find_by_number(
+                        series.id, issue_number
+                    )
+                    if issue:
+                        matches.append(
+                            MatchCandidate(
+                                issue_id=issue.id,
+                                series_run_id=issue.series_run_id,
+                                issue_number=issue.issue_number,
+                                series_title=issue.series_run.title,
+                                series_start_year=issue.series_run.start_year,
+                                match_reason=f"Fuzzy title match: {series.title} (similarity: {similarity:.2f})",
+                                issue_confidence=0.70 * similarity,
+                                variant_confidence=1.0,
+                            )
+                        )
+                else:
+                    matches.append(
+                        MatchCandidate(
+                            issue_id=None,
+                            series_run_id=series.id,
+                            issue_number="",
+                            series_title=series.title,
+                            series_start_year=series.start_year,
+                            match_reason=f"Fuzzy title match: {series.title} (similarity: {similarity:.2f})",
+                            issue_confidence=0.70 * similarity,
+                            variant_confidence=1.0,
+                        )
+                    )
+
+        return sorted(matches, key=lambda m: m.issue_confidence, reverse=True)[:5]
+
+    async def _create_new_issue(
+        self,
+        series_title: str,
+        series_start_year: int,
+        issue_number: str,
+        cover_date: Optional[date] = None,
+        upc: Optional[str] = None,
+    ) -> "Issue":
+        """Create a new issue when no match is found.
+
+        Args:
+            series_title: Series title
+            series_start_year: Series start year
+            issue_number: Issue number
+            cover_date: Optional cover date
+            upc: Optional UPC
+
+        Returns:
+            Created Issue entity
+        """
+        series = await self.series_repo.find_by_title(series_title, series_start_year)
+        if not series:
+            series = await self.series_repo.create(series_title, series_start_year)
+
+        issue = await self.issue_repo.create(
+            series_run_id=series.id,
+            issue_number=issue_number,
+            cover_date=cover_date,
+            upc=upc,
+        )
+
+        logger.info(
+            "Created new issue",
+            issue_id=str(issue.id),
+            series_title=series_title,
+            issue_number=issue_number,
+        )
+
+        return issue
