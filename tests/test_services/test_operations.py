@@ -44,6 +44,19 @@ def sample_pending_operation():
     return operation
 
 
+@pytest.fixture
+def sample_running_operation():
+    """Create sample running operation."""
+    operation = MagicMock()
+    operation.id = uuid.uuid4()
+    operation.operation_type = "resolve"
+    operation.status = "running"
+    operation.input_hash = "abc123"
+    operation.result = None
+    operation.error_message = None
+    return operation
+
+
 @pytest.mark.asyncio
 class TestOperationsManager:
     """Tests for OperationsManager class."""
@@ -93,20 +106,18 @@ class TestOperationsManager:
 
     @patch("comic_identity_engine.services.operations.OperationRepository")
     async def test_update_operation(
-        self, mock_repo_cls, mock_session, sample_operation
+        self, mock_repo_cls, mock_session, sample_pending_operation
     ):
         """Test updating operation status."""
         mock_repo = MagicMock()
-        mock_repo.get_operation = AsyncMock(return_value=sample_operation)
-        mock_repo.update_status = AsyncMock(return_value=sample_operation)
+        mock_repo.get_operation = AsyncMock(return_value=sample_pending_operation)
+        mock_repo.update_status = AsyncMock(return_value=sample_pending_operation)
         mock_repo_cls.return_value = mock_repo
 
         manager = OperationsManager(mock_session)
-        result = await manager.update_operation(
-            sample_operation.id, "completed", result={"issue_id": str(uuid.uuid4())}
-        )
+        result = await manager.update_operation(sample_pending_operation.id, "running")
 
-        assert result == sample_operation
+        assert result == sample_pending_operation
 
     @patch("comic_identity_engine.services.operations.OperationRepository")
     async def test_update_operation_invalid_status(self, mock_repo_cls, mock_session):
@@ -222,19 +233,21 @@ class TestOperationsManager:
         assert result == sample_pending_operation
 
     @patch("comic_identity_engine.services.operations.OperationRepository")
-    async def test_mark_completed(self, mock_repo_cls, mock_session, sample_operation):
+    async def test_mark_completed(
+        self, mock_repo_cls, mock_session, sample_running_operation
+    ):
         """Test marking operation as completed."""
         mock_repo = MagicMock()
-        mock_repo.get_operation = AsyncMock(return_value=sample_operation)
-        mock_repo.update_status = AsyncMock(return_value=sample_operation)
+        mock_repo.get_operation = AsyncMock(return_value=sample_running_operation)
+        mock_repo.update_status = AsyncMock(return_value=sample_running_operation)
         mock_repo_cls.return_value = mock_repo
 
         manager = OperationsManager(mock_session)
         result = await manager.mark_completed(
-            sample_operation.id, {"status": "success"}
+            sample_running_operation.id, {"status": "success"}
         )
 
-        assert result == sample_operation
+        assert result == sample_running_operation
 
     @patch("comic_identity_engine.services.operations.OperationRepository")
     async def test_mark_failed(self, mock_repo_cls, mock_session, sample_operation):

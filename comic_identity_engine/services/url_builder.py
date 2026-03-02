@@ -76,8 +76,8 @@ async def build_urls(
     issue = await issue_repo.find_by_id(issue_id)
 
     if not issue:
-        logger.error("Issue not found", issue_id=str(issue_id))
-        raise ValueError(f"Issue not found: {issue_id}")
+        logger.info("Issue not found", issue_id=str(issue_id))
+        return {}
 
     mapping_repo = ExternalMappingRepository(session)
     mappings = await mapping_repo.find_by_issue(issue_id)

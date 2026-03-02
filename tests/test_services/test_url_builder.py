@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from comic_identity_engine.services.url_builder import (
+    _validate_template_fields,
     build_urls,
     build_url_for_platform,
     get_all_platform_urls,
@@ -177,6 +178,42 @@ class TestBuildUrls:
         with pytest.raises(ValueError, match="issue_id is required"):
             await build_urls(None, ["gcd"], mock_session)
 
+    @patch("comic_identity_engine.services.url_builder.IssueRepository")
+    @patch("comic_identity_engine.services.url_builder.ExternalMappingRepository")
+    async def test_build_urls_key_error_handling(
+        self, mock_mapping_repo_cls, mock_issue_repo_cls, mock_session, sample_issue
+    ):
+        """Test that KeyError during template formatting is handled gracefully."""
+        mock_mapping_repo = MagicMock()
+        mock_mapping_repo.find_by_issue = AsyncMock(return_value=[])
+        mock_mapping_repo_cls.return_value = mock_mapping_repo
+
+        mock_issue_repo = MagicMock()
+        mock_issue_repo.find_by_id = AsyncMock(return_value=sample_issue)
+        mock_issue_repo_cls.return_value = mock_issue_repo
+
+        result = await build_urls(uuid.uuid4(), ["gcd"], mock_session)
+
+        assert "gcd" in result
+        assert result["gcd"] == ""
+
+
+def test_validate_template_fields_missing_fields():
+    """Test that _validate_template_fields raises ValueError for missing fields."""
+    template = "https://example.com/{missing_field}/"
+    fields = {"other_field": "value"}
+
+    with pytest.raises(ValueError, match="Missing required template fields"):
+        _validate_template_fields(template, fields)
+
+
+def test_validate_template_fields_all_present():
+    """Test that _validate_template_fields passes when all fields are present."""
+    template = "https://example.com/{field1}/{field2}/"
+    fields = {"field1": "value1", "field2": "value2"}
+
+    _validate_template_fields(template, fields)
+
 
 @pytest.mark.asyncio
 class TestBuildUrlForPlatform:
@@ -208,12 +245,12 @@ class TestBuildUrlForPlatform:
     @patch("comic_identity_engine.services.url_builder.IssueRepository")
     @patch("comic_identity_engine.services.url_builder.ExternalMappingRepository")
     async def test_build_url_for_platform_not_found(
-        self, mock_issue_repo_cls, mock_repo_cls, mock_session
+        self, mock_mapping_repo_cls, mock_issue_repo_cls, mock_session
     ):
         """Test building single platform URL when not found."""
-        mock_repo = MagicMock()
-        mock_repo.find_by_issue = AsyncMock(return_value=[])
-        mock_repo_cls.return_value = mock_repo
+        mock_mapping_repo = MagicMock()
+        mock_mapping_repo.find_by_issue = AsyncMock(return_value=[])
+        mock_mapping_repo_cls.return_value = mock_mapping_repo
 
         mock_issue_repo = MagicMock()
         mock_issue_repo.find_by_id = AsyncMock(return_value=None)

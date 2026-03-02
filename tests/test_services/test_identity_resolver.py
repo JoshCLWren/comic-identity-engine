@@ -108,6 +108,45 @@ class TestIdentityResolver:
     @patch("comic_identity_engine.services.identity_resolver.ExternalMappingRepository")
     @patch("comic_identity_engine.services.identity_resolver.IssueRepository")
     @patch("comic_identity_engine.services.identity_resolver.SeriesRunRepository")
+    async def test_resolve_by_upc_not_found_falls_back_to_series_match(
+        self,
+        mock_series_repo_cls,
+        mock_issue_repo_cls,
+        mock_mapping_repo_cls,
+        mock_session,
+        sample_issue,
+    ):
+        """Test that when UPC is not found, it falls back to series matching."""
+        mock_mapping_repo = MagicMock()
+        mock_mapping_repo.find_by_source = AsyncMock(return_value=None)
+        mock_mapping_repo_cls.return_value = mock_mapping_repo
+
+        mock_issue_repo = MagicMock()
+        mock_issue_repo.find_by_upc = AsyncMock(return_value=None)
+        mock_issue_repo.find_by_number = AsyncMock(return_value=sample_issue)
+        mock_issue_repo_cls.return_value = mock_issue_repo
+
+        mock_series_repo = MagicMock()
+        mock_series_repo.find_by_title = AsyncMock(return_value=sample_issue.series_run)
+        mock_series_repo_cls.return_value = mock_series_repo
+
+        resolver = IdentityResolver(mock_session)
+        parsed_url = ParsedUrl(platform="gcd", source_issue_id="125295")
+
+        result = await resolver.resolve_issue(
+            parsed_url,
+            upc="75960601772099911",
+            series_title="X-Men",
+            issue_number="-1",
+            series_start_year=1991,
+        )
+
+        assert result.issue_id == sample_issue.id
+        assert result.best_match.issue_confidence == 0.95
+
+    @patch("comic_identity_engine.services.identity_resolver.ExternalMappingRepository")
+    @patch("comic_identity_engine.services.identity_resolver.IssueRepository")
+    @patch("comic_identity_engine.services.identity_resolver.SeriesRunRepository")
     async def test_resolve_by_series_issue_year(
         self,
         mock_series_repo_cls,
@@ -139,6 +178,49 @@ class TestIdentityResolver:
 
         assert result.issue_id == sample_issue.id
         assert result.best_match.issue_confidence == 0.95
+
+    @patch("comic_identity_engine.services.identity_resolver.ExternalMappingRepository")
+    @patch("comic_identity_engine.services.identity_resolver.IssueRepository")
+    @patch("comic_identity_engine.services.identity_resolver.SeriesRunRepository")
+    async def test_resolve_by_series_issue_year_falls_back_to_series_issue(
+        self,
+        mock_series_repo_cls,
+        mock_issue_repo_cls,
+        mock_mapping_repo_cls,
+        mock_session,
+        sample_issue,
+    ):
+        """Test that series+issue+year falls back to series+issue when year match fails."""
+        mock_mapping_repo = MagicMock()
+        mock_mapping_repo.find_by_source = AsyncMock(return_value=None)
+        mock_mapping_repo_cls.return_value = mock_mapping_repo
+
+        mock_issue_repo = MagicMock()
+        mock_issue_repo.find_by_upc = AsyncMock(return_value=None)
+        mock_issue_repo.find_by_number = AsyncMock(return_value=sample_issue)
+        mock_issue_repo_cls.return_value = mock_issue_repo
+
+        def find_by_title_side_effect(title, year=None):
+            if year == 1999:
+                return None
+            return sample_issue.series_run
+
+        mock_series_repo = MagicMock()
+        mock_series_repo.find_by_title = AsyncMock(
+            side_effect=find_by_title_side_effect
+        )
+        mock_series_repo_cls.return_value = mock_series_repo
+
+        resolver = IdentityResolver(mock_session)
+        parsed_url = ParsedUrl(platform="gcd", source_issue_id="125295")
+
+        result = await resolver.resolve_issue(
+            parsed_url, series_title="X-Men", issue_number="-1", series_start_year=1999
+        )
+
+        assert result.issue_id == sample_issue.id
+        assert result.best_match.issue_confidence == 0.85
+        assert "series + issue" in result.best_match.match_reason.lower()
 
     @patch("comic_identity_engine.services.identity_resolver.ExternalMappingRepository")
     @patch("comic_identity_engine.services.identity_resolver.IssueRepository")
