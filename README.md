@@ -134,7 +134,7 @@ else:
 ### Ingest GCD Issue Data
 
 ```python
-from comic_identity_engine.gcd_adapter import GCDAdapter
+from comic_identity_engine.adapters import GCDAdapter
 import json
 
 # Load pre-fetched GCD API response

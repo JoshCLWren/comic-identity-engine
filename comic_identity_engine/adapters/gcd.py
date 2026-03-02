@@ -28,7 +28,7 @@ class GCDAdapter(SourceAdapter):
 
     SOURCE = "gcd"
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize GCD adapter."""
         pass
 

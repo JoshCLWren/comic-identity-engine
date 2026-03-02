@@ -376,16 +376,19 @@ class TestUrlParserEdgeCases:
 
     def test_parse_platform_detection_with_similar_domains(self):
         """Test platform detection with similar domain pattern."""
-        # fakecomics.org contains 'comics.org' as substring, so it matches domain check
-        # But the path format doesn't match the GCD patterns
-        with pytest.raises(ParseError, match="Failed to parse GCD URL"):
+        # fakecomics.org is not in the domain list, so it should not match
+        # The urlparse-based implementation prevents domain spoofing
+        with pytest.raises(ParseError, match="Unsupported or unrecognized URL format"):
             parse_url("https://fakecomics.org/not-an-issue-path")
 
     def test_parse_url_with_port(self):
-        """Test parsing URL with port number doesn't match regex."""
-        # Port numbers break the regex patterns
-        with pytest.raises(ParseError, match="Invalid GCD URL format"):
-            parse_url("https://www.comics.org:443/issue/125295/")
+        """Test parsing URL with port number works correctly with urlparse."""
+        # urlparse correctly extracts the domain without the port
+        url = "https://www.comics.org:443/issue/125295/"
+        result = parse_url(url)
+
+        assert result.platform == "gcd"
+        assert result.source_issue_id == "125295"
 
     def test_parse_url_with_auth(self):
         """Test parsing URL with authentication (unusual but valid)."""

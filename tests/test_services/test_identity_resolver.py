@@ -284,13 +284,15 @@ class TestFuzzyMatching:
 
     @patch("comic_identity_engine.services.identity_resolver.ExternalMappingRepository")
     @patch("comic_identity_engine.services.identity_resolver.IssueRepository")
-    async def test_fuzzy_match_without_issue_number(
+    @patch("comic_identity_engine.services.identity_resolver.SeriesRunRepository")
+    async def test_fuzzy_match_without_issue_number_creates_new_issue(
         self,
+        mock_series_repo_cls,
         mock_issue_repo_cls,
         mock_mapping_repo_cls,
         mock_session,
     ):
-        """Test fuzzy matching without issue number returns candidates with None issue_id."""
+        """Test fuzzy matching without issue number creates new issue (series-only matches are invalid)."""
         from unittest.mock import AsyncMock, MagicMock
 
         mock_mapping_repo = MagicMock()
@@ -317,16 +319,25 @@ class TestFuzzyMatching:
         mock_result.scalars = MagicMock(return_value=mock_scalars)
         mock_session.execute = AsyncMock(return_value=mock_result)
 
+        mock_series_repo = MagicMock()
+        mock_series_repo.find_by_title = AsyncMock(return_value=None)
+        new_series = MagicMock()
+        new_series.id = uuid.uuid4()
+        mock_series_repo.create = AsyncMock(return_value=new_series)
+        mock_series_repo_cls.return_value = mock_series_repo
+
+        new_issue = MagicMock()
+        new_issue.id = uuid.uuid4()
+        new_issue.issue_number = "1"
+        mock_issue_repo.create = AsyncMock(return_value=new_issue)
+
         resolver = IdentityResolver(mock_session)
         parsed_url = ParsedUrl(platform="gcd", source_issue_id="999999")
 
         result = await resolver.resolve_issue(parsed_url, series_title="X-Men")
 
-        assert len(result.matches) > 0
-        assert result.best_match is not None
-        assert result.best_match.issue_id is None
-        assert result.best_match.series_title in ["X-Men", "Xmen"]
-        assert "fuzzy title match" in result.best_match.match_reason.lower()
+        assert result.created_new is True
+        assert result.issue_id == new_issue.id
 
     @patch("comic_identity_engine.services.identity_resolver.ExternalMappingRepository")
     @patch("comic_identity_engine.services.identity_resolver.IssueRepository")
@@ -439,22 +450,41 @@ class TestFuzzyMatching:
 
     @patch("comic_identity_engine.services.identity_resolver.ExternalMappingRepository")
     @patch("comic_identity_engine.services.identity_resolver.IssueRepository")
+    @patch("comic_identity_engine.services.identity_resolver.SeriesRunRepository")
     async def test_fuzzy_match_multiple_candidates_with_different_confidence(
         self,
+        mock_series_repo_cls,
         mock_issue_repo_cls,
         mock_mapping_repo_cls,
         mock_session,
     ):
-        """Test fuzzy matching returns multiple candidates sorted by confidence."""
+        """Test fuzzy matching with issue number returns multiple candidates sorted by confidence."""
         from unittest.mock import AsyncMock, MagicMock
 
         mock_mapping_repo = MagicMock()
         mock_mapping_repo.find_by_source = AsyncMock(return_value=None)
         mock_mapping_repo_cls.return_value = mock_mapping_repo
 
+        sample_issue = MagicMock()
+        sample_issue.id = uuid.uuid4()
+        sample_issue.series_run_id = uuid.uuid4()
+        sample_issue.issue_number = "-1"
+
+        mock_series = MagicMock()
+        mock_series.id = sample_issue.series_run_id
+        mock_series.title = "X-Men"
+        mock_series.start_year = 1991
+
+        sample_issue.series_run = mock_series
+
         mock_issue_repo = MagicMock()
         mock_issue_repo.find_by_upc = AsyncMock(return_value=None)
+        mock_issue_repo.find_by_number = AsyncMock(return_value=sample_issue)
         mock_issue_repo_cls.return_value = mock_issue_repo
+
+        mock_series_repo = MagicMock()
+        mock_series_repo.find_by_title = AsyncMock(return_value=None)
+        mock_series_repo_cls.return_value = mock_series_repo
 
         mock_series1 = MagicMock()
         mock_series1.id = uuid.uuid4()
@@ -482,10 +512,13 @@ class TestFuzzyMatching:
         resolver = IdentityResolver(mock_session)
         parsed_url = ParsedUrl(platform="gcd", source_issue_id="999999")
 
-        result = await resolver.resolve_issue(parsed_url, series_title="X-Men")
+        result = await resolver.resolve_issue(
+            parsed_url, series_title="X-Men", issue_number="-1"
+        )
 
         assert len(result.matches) > 0
         assert result.best_match is not None
+        assert result.best_match.issue_id is not None
 
         candidates_sorted = sorted(
             result.matches, key=lambda m: m.issue_confidence, reverse=True
@@ -503,10 +536,11 @@ class TestFuzzyMatching:
     ):
         """Test resolve_issue raises ResolutionError when an exception occurs."""
         from unittest.mock import AsyncMock, MagicMock
+        from sqlalchemy.exc import SQLAlchemyError
 
         mock_mapping_repo = MagicMock()
         mock_mapping_repo.find_by_source = AsyncMock(
-            side_effect=Exception("Database error")
+            side_effect=SQLAlchemyError("Database error")
         )
         mock_mapping_repo_cls.return_value = mock_mapping_repo
 

@@ -20,6 +20,7 @@ USAGE:
 import re
 from dataclasses import dataclass
 from typing import Optional
+from urllib.parse import urlparse
 
 from comic_identity_engine.errors import ParseError
 
@@ -72,6 +73,16 @@ def parse_url(url: str) -> ParsedUrl:
     if not url.startswith(("http://", "https://")):
         raise ParseError(f"URL must start with http:// or https://: {url}")
 
+    # Strip port number if present to normalize URL
+    parsed = urlparse(url)
+    if parsed.port:
+        # Reconstruct URL without port
+        url = f"{parsed.scheme}://{parsed.netloc.split(':')[0]}{parsed.path}"
+        if parsed.query:
+            url += f"?{parsed.query}"
+        if parsed.fragment:
+            url += f"#{parsed.fragment}"
+
     if _is_clz_url(url):
         raise NotImplementedError(
             "CLZ (ComicBookDB) does not support URL parsing. Use CSV import instead."
@@ -101,7 +112,7 @@ def parse_url(url: str) -> ParsedUrl:
 
 
 def _matches_platform(url: str, platform: str) -> bool:
-    """Check if URL matches platform domain.
+    """Check if URL matches platform domain using urlparse.
 
     Args:
         url: URL to check
@@ -120,8 +131,22 @@ def _matches_platform(url: str, platform: str) -> bool:
         "CLZ": ["comicbookdb.com"],
     }
 
-    url_lower = url.lower()
-    return any(domain in url_lower for domain in domain_patterns.get(platform, []))
+    try:
+        parsed = urlparse(url)
+        domain = parsed.netloc.lower()
+
+        if "@" in domain:
+            domain = domain.split("@")[1]
+
+        if ":" in domain:
+            domain = domain.split(":")[0]
+
+        if domain.startswith("www."):
+            domain = domain[4:]
+
+        return domain in domain_patterns.get(platform, [])
+    except Exception:
+        return False
 
 
 def _is_clz_url(url: str) -> bool:
@@ -366,17 +391,17 @@ def _parse_hip_url(url: str) -> ParsedUrl:
     Raises:
         ParseError: If URL cannot be parsed
     """
-    issue_match = re.search(r"/comic/([^/]+)/([^/]+)/", url)
+    issue_match = re.search(r"/comic/([^/]+)/([^/]+)", url)
     if issue_match:
         series_slug = issue_match.group(1)
         issue_encoded = issue_match.group(2)
 
         variant_suffix = None
-        variant_match = re.search(r"/([^/]+)/?$", url)
-        if variant_match:
-            variant_slug = variant_match.group(1)
-            if variant_slug not in ["", "keywords"]:
-                variant_suffix = variant_slug.replace("-", "").replace("_", "")
+        path_parts = url.rstrip("/").split("/")
+        if len(path_parts) > 1:
+            last_part = path_parts[-1]
+            if last_part != issue_encoded and last_part not in ["", "keywords"]:
+                variant_suffix = last_part.replace("-", "").replace("_", "")
 
         return ParsedUrl(
             platform="hip",

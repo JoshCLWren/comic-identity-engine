@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Optional
 
 import jellyfish
 import structlog
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from comic_identity_engine.database.repositories import (
@@ -159,10 +160,12 @@ class IdentityResolver:
             )
             if existing:
                 logger.info(
-                    "Found existing mapping",
+                    "Reconciliation attempt: existing mapping",
                     issue_id=str(existing.issue_id),
                     platform=parsed_url.platform,
                     source_issue_id=parsed_url.source_issue_id,
+                    confidence=1.0,
+                    attempt="existing_mapping",
                 )
                 issue = await self.issue_repo.find_by_id(existing.issue_id)
                 if issue:
@@ -182,49 +185,123 @@ class IdentityResolver:
                     )
 
             if upc:
+                logger.info(
+                    "Reconciliation attempt: UPC match",
+                    upc=upc,
+                    attempt="upc_match",
+                )
                 upc_match = await self._match_by_upc(upc)
                 if upc_match:
+                    logger.info(
+                        "UPC match successful",
+                        confidence=upc_match.overall_confidence,
+                    )
                     candidates.append(upc_match)
+                else:
+                    logger.info("UPC match failed, no match found")
 
             if series_title and issue_number:
                 if series_start_year:
+                    logger.info(
+                        "Reconciliation attempt: series + issue + year",
+                        series_title=series_title,
+                        issue_number=issue_number,
+                        series_start_year=series_start_year,
+                        attempt="series_issue_year",
+                    )
                     exact_match = await self._match_by_series_issue_year(
                         series_title,
                         issue_number,
                         series_start_year,
                     )
                     if exact_match:
+                        logger.info(
+                            "Series + issue + year match successful",
+                            confidence=exact_match.overall_confidence,
+                        )
                         candidates.append(exact_match)
+                    else:
+                        logger.info(
+                            "Series + issue + year match failed, falling back to series + issue"
+                        )
+                        series_match = await self._match_by_series_issue(
+                            series_title,
+                            issue_number,
+                        )
+                        if series_match:
+                            logger.info(
+                                "Fallback series + issue match successful",
+                                confidence=series_match.overall_confidence,
+                            )
+                            candidates.append(series_match)
+                        else:
+                            logger.info("Fallback series + issue match failed")
                 else:
+                    logger.info(
+                        "Reconciliation attempt: series + issue (no year)",
+                        series_title=series_title,
+                        issue_number=issue_number,
+                        attempt="series_issue",
+                    )
                     series_match = await self._match_by_series_issue(
                         series_title,
                         issue_number,
                     )
                     if series_match:
+                        logger.info(
+                            "Series + issue match successful",
+                            confidence=series_match.overall_confidence,
+                        )
                         candidates.append(series_match)
+                    else:
+                        logger.info("Series + issue match failed")
 
             if series_title and not candidates:
+                logger.info(
+                    "Reconciliation attempt: fuzzy title match",
+                    series_title=series_title,
+                    has_issue_number=issue_number is not None,
+                    attempt="fuzzy_title",
+                )
                 fuzzy_matches = await self._match_by_fuzzy_title(
                     series_title,
                     issue_number,
                 )
-                candidates.extend(fuzzy_matches)
+                if fuzzy_matches:
+                    logger.info(
+                        "Fuzzy title match successful",
+                        num_candidates=len(fuzzy_matches),
+                        confidences=[m.overall_confidence for m in fuzzy_matches],
+                    )
+                    candidates.extend(fuzzy_matches)
+                else:
+                    logger.info(
+                        "Fuzzy title match failed, no candidates above threshold"
+                    )
 
             if candidates:
-                best = max(candidates, key=lambda c: c.overall_confidence)
-                logger.info(
-                    "Found match candidates",
-                    num_candidates=len(candidates),
-                    best_confidence=best.overall_confidence,
-                    best_reason=best.match_reason,
-                )
+                valid_issue_matches = [c for c in candidates if c.issue_id is not None]
+                if valid_issue_matches:
+                    best = max(valid_issue_matches, key=lambda c: c.overall_confidence)
+                    logger.info(
+                        "Found valid issue match",
+                        num_candidates=len(candidates),
+                        num_valid_matches=len(valid_issue_matches),
+                        best_confidence=best.overall_confidence,
+                        best_reason=best.match_reason,
+                    )
 
-                return ResolutionResult(
-                    issue_id=best.issue_id,
-                    matches=candidates,
-                    best_match=best,
-                    explanation=f"Matched by {best.match_reason} (confidence: {best.overall_confidence:.2f})",
-                )
+                    return ResolutionResult(
+                        issue_id=best.issue_id,
+                        matches=candidates,
+                        best_match=best,
+                        explanation=f"Matched by {best.match_reason} (confidence: {best.overall_confidence:.2f})",
+                    )
+                else:
+                    logger.info(
+                        "No valid issue matches found (only series-only fuzzy candidates)",
+                        num_series_only=len(candidates),
+                    )
 
             logger.info("No matches found, creating new issue")
             created = await self._create_new_issue(
@@ -241,8 +318,12 @@ class IdentityResolver:
                 explanation=f"Created new issue for {parsed_url.platform}:{parsed_url.source_issue_id}",
             )
 
-        except Exception as e:
-            logger.error("Identity resolution failed", error=str(e))
+        except (SQLAlchemyError, ResolutionError) as e:
+            logger.error(
+                "Identity resolution failed",
+                error=str(e),
+                error_type=type(e).__name__,
+            )
             raise ResolutionError(
                 f"Failed to resolve issue: {e}",
                 original_error=e,

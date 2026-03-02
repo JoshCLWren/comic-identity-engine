@@ -93,13 +93,17 @@ class OperationsManager:
                 f"Must be one of: {', '.join(VALID_OPERATION_TYPES)}"
             )
 
-        input_hash = self._compute_input_hash(input_data) if input_data else None
+        idempotency_key = (
+            self._compute_idempotency_key(operation_type, input_data)
+            if input_data
+            else None
+        )
 
-        if input_hash:
-            existing = await self.operation_repo.find_by_input_hash(input_hash)
+        if idempotency_key:
+            existing = await self.operation_repo.find_by_input_hash(idempotency_key)
             if existing:
                 logger.info(
-                    "Found existing operation for input hash",
+                    "Found existing operation for idempotency key",
                     operation_id=str(existing.id),
                     operation_type=existing.operation_type,
                     status=existing.status,
@@ -108,14 +112,14 @@ class OperationsManager:
 
         operation = await self.operation_repo.create_operation(
             operation_type=operation_type,
-            input_hash=input_hash,
+            input_hash=idempotency_key,
         )
 
         logger.info(
             "Created operation",
             operation_id=str(operation.id),
             operation_type=operation.operation_type,
-            input_hash=input_hash,
+            idempotency_key=idempotency_key,
         )
 
         return operation
@@ -140,7 +144,7 @@ class OperationsManager:
 
         Raises:
             RepositoryError: If database operation fails
-            ValueError: If status is invalid or operation not found
+            ValueError: If status is invalid or operation not found or transition invalid
 
         Examples:
             >>> await manager.update_operation(
@@ -158,6 +162,8 @@ class OperationsManager:
         if not operation:
             raise ValueError(f"Operation not found: {operation_id}")
 
+        self._validate_status_transition(operation.status, status)
+
         updated = await self.operation_repo.update_status(
             operation,
             status=status,
@@ -173,6 +179,30 @@ class OperationsManager:
         )
 
         return updated
+
+    def _validate_status_transition(self, current_status: str, new_status: str) -> None:
+        """Validate that status transition is allowed.
+
+        Args:
+            current_status: Current operation status
+            new_status: Desired new status
+
+        Raises:
+            ValueError: If transition is not allowed
+        """
+        valid_transitions = {
+            "pending": ["running", "failed"],
+            "running": ["completed", "failed"],
+            "completed": [],
+            "failed": [],
+        }
+
+        allowed_transitions = valid_transitions.get(current_status, [])
+        if new_status not in allowed_transitions:
+            raise ValueError(
+                f"Invalid status transition: {current_status} -> {new_status}. "
+                f"Allowed transitions: {', '.join(allowed_transitions) or 'none'}"
+            )
 
     async def get_operation(self, operation_id: uuid.UUID) -> Optional[Operation]:
         """Get operation by ID.
@@ -253,8 +283,30 @@ class OperationsManager:
         """
         return await self.operation_repo.find_by_status("failed", limit)
 
+    def _compute_idempotency_key(
+        self, operation_type: str, input_data: dict[str, Any]
+    ) -> str:
+        """Compute idempotency key including operation type and input data.
+
+        Args:
+            operation_type: Type of operation
+            input_data: Input data dictionary
+
+        Returns:
+            SHA256 hash as hexadecimal string
+
+        Examples:
+            >>> key = manager._compute_idempotency_key("resolve", {"url": "https://..."})
+            >>> print(key)
+            'abc123...'
+        """
+        normalized = json.dumps(
+            {"operation_type": operation_type, "input": input_data}, sort_keys=True
+        )
+        return hashlib.sha256(normalized.encode()).hexdigest()
+
     def _compute_input_hash(self, input_data: dict[str, Any]) -> str:
-        """Compute hash of input data for idempotency.
+        """Compute hash of input data for idempotency (deprecated, use _compute_idempotency_key).
 
         Args:
             input_data: Input data dictionary

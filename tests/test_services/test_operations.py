@@ -31,6 +31,19 @@ def sample_operation():
     return operation
 
 
+@pytest.fixture
+def sample_pending_operation():
+    """Create sample pending operation."""
+    operation = MagicMock()
+    operation.id = uuid.uuid4()
+    operation.operation_type = "resolve"
+    operation.status = "pending"
+    operation.input_hash = "abc123"
+    operation.result = None
+    operation.error_message = None
+    return operation
+
+
 @pytest.mark.asyncio
 class TestOperationsManager:
     """Tests for OperationsManager class."""
@@ -194,17 +207,19 @@ class TestOperationsManager:
         assert isinstance(result, list)
 
     @patch("comic_identity_engine.services.operations.OperationRepository")
-    async def test_mark_running(self, mock_repo_cls, mock_session, sample_operation):
+    async def test_mark_running(
+        self, mock_repo_cls, mock_session, sample_pending_operation
+    ):
         """Test marking operation as running."""
         mock_repo = MagicMock()
-        mock_repo.get_operation = AsyncMock(return_value=sample_operation)
-        mock_repo.update_status = AsyncMock(return_value=sample_operation)
+        mock_repo.get_operation = AsyncMock(return_value=sample_pending_operation)
+        mock_repo.update_status = AsyncMock(return_value=sample_pending_operation)
         mock_repo_cls.return_value = mock_repo
 
         manager = OperationsManager(mock_session)
-        result = await manager.mark_running(sample_operation.id)
+        result = await manager.mark_running(sample_pending_operation.id)
 
-        assert result == sample_operation
+        assert result == sample_pending_operation
 
     @patch("comic_identity_engine.services.operations.OperationRepository")
     async def test_mark_completed(self, mock_repo_cls, mock_session, sample_operation):
