@@ -101,7 +101,7 @@ def parse_url(url: str) -> ParsedUrl:
         if _matches_platform(url, platform_name):
             try:
                 return parser_func(url)
-            except Exception as e:
+            except ParseError as e:
                 raise ParseError(
                     f"Failed to parse {platform_name} URL: {e}",
                     source=platform_name.lower(),
@@ -133,18 +133,15 @@ def _matches_platform(url: str, platform: str) -> bool:
 
     try:
         parsed = urlparse(url)
-        domain = parsed.netloc.lower()
+        hostname = (parsed.hostname or "").lower()
 
-        if "@" in domain:
-            domain = domain.split("@")[1]
+        if not hostname:
+            return False
 
-        if ":" in domain:
-            domain = domain.split(":")[0]
-
-        if domain.startswith("www."):
-            domain = domain[4:]
-
-        return domain in domain_patterns.get(platform, [])
+        domains = domain_patterns.get(platform, [])
+        return any(
+            hostname == domain or hostname.endswith(f".{domain}") for domain in domains
+        )
     except Exception:
         return False
 

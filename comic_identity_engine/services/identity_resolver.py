@@ -70,7 +70,7 @@ class MatchCandidate:
     variant_confidence: float = 1.0
     overall_confidence: float = field(init=False)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Calculate overall confidence from issue and variant confidence."""
         self.overall_confidence = self.issue_confidence * self.variant_confidence
 

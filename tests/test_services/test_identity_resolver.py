@@ -13,6 +13,11 @@ from comic_identity_engine.services.identity_resolver import (
 from comic_identity_engine.services.url_parser import ParsedUrl
 from comic_identity_engine.errors import ResolutionError
 
+# Fixed UUIDs for deterministic tests
+FIXED_SERIES_RUN_ID = uuid.UUID("00000000-0000-4000-8000-000000000001")
+FIXED_ISSUE_ID = uuid.UUID("00000000-0000-4000-8000-000000000002")
+FIXED_MAPPING_ISSUE_ID = uuid.UUID("00000000-0000-4000-8000-000000000003")
+
 
 @pytest.fixture
 def mock_session():
@@ -24,13 +29,13 @@ def mock_session():
 def sample_issue():
     """Create sample issue entity."""
     issue = MagicMock()
-    issue.id = uuid.uuid4()
+    issue.id = FIXED_ISSUE_ID
     issue.issue_number = "-1"
     issue.upc = "75960601772099911"
-    issue.series_run_id = uuid.uuid4()
+    issue.series_run_id = FIXED_SERIES_RUN_ID
 
     series = MagicMock()
-    series.id = issue.series_run_id
+    series.id = FIXED_SERIES_RUN_ID
     series.title = "X-Men"
     series.start_year = 1991
 
@@ -42,7 +47,7 @@ def sample_issue():
 def sample_mapping():
     """Create sample external mapping."""
     mapping = MagicMock()
-    mapping.issue_id = uuid.uuid4()
+    mapping.issue_id = FIXED_MAPPING_ISSUE_ID
     mapping.source = "gcd"
     mapping.source_issue_id = "125295"
     mapping.source_series_id = "4254"
