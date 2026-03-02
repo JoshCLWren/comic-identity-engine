@@ -19,7 +19,7 @@ def set_database_url():
         os.environ.pop("DATABASE_URL", None)
 
 
-from comic_identity_engine.database import (  # noqa: E402 - Import after env var set
+from comic_identity_engine.database.connection import (  # noqa: E402 - Import after env var set
     ASYNC_DATABASE_URL,
     DATABASE_URL,
     AsyncSessionLocal,
@@ -62,7 +62,7 @@ class TestGetDb:
         mock_session.close = AsyncMock()
 
         with patch(
-            "comic_identity_engine.database.AsyncSessionLocal"
+            "comic_identity_engine.database.connection.AsyncSessionLocal"
         ) as mock_session_local:
             mock_session_local.return_value.__aenter__.return_value = mock_session
 
@@ -77,7 +77,7 @@ class TestGetDb:
         mock_session.close = AsyncMock()
 
         with patch(
-            "comic_identity_engine.database.AsyncSessionLocal"
+            "comic_identity_engine.database.connection.AsyncSessionLocal"
         ) as mock_session_local:
             mock_session_local.return_value.__aenter__.return_value = mock_session
 
@@ -93,7 +93,7 @@ class TestGetDb:
         mock_session.close = AsyncMock()
 
         with patch(
-            "comic_identity_engine.database.AsyncSessionLocal"
+            "comic_identity_engine.database.connection.AsyncSessionLocal"
         ) as mock_session_local:
             mock_session_local.return_value.__aenter__.return_value = mock_session
             mock_session_local.return_value.__aexit__.return_value = None
@@ -113,7 +113,7 @@ class TestGetDb:
         mock_session.close = AsyncMock()
 
         with patch(
-            "comic_identity_engine.database.AsyncSessionLocal"
+            "comic_identity_engine.database.connection.AsyncSessionLocal"
         ) as mock_session_local:
             mock_session_local.return_value.__aenter__.return_value = mock_session
 
@@ -136,7 +136,7 @@ class TestDatabaseConnection:
         mock_session.execute.return_value = mock_result
 
         with patch(
-            "comic_identity_engine.database.AsyncSessionLocal"
+            "comic_identity_engine.database.connection.AsyncSessionLocal"
         ) as mock_session_local:
             mock_session_local.return_value.__aenter__.return_value = mock_session
 
@@ -150,7 +150,7 @@ class TestDatabaseConnection:
     async def test_test_database_connection_failure(self):
         """Test test_database_connection returns False on failure."""
         with patch(
-            "comic_identity_engine.database.AsyncSessionLocal"
+            "comic_identity_engine.database.connection.AsyncSessionLocal"
         ) as mock_session_local:
             mock_session_local.return_value.__aenter__.side_effect = Exception(
                 "Connection failed"
@@ -166,7 +166,7 @@ class TestDatabaseConnection:
         mock_session.execute.side_effect = Exception("Query failed")
 
         with patch(
-            "comic_identity_engine.database.AsyncSessionLocal"
+            "comic_identity_engine.database.connection.AsyncSessionLocal"
         ) as mock_session_local:
             mock_session_local.return_value.__aenter__.return_value = mock_session
 
@@ -182,7 +182,7 @@ class TestDatabaseConnection:
         mock_session.execute.return_value = mock_result
 
         with patch(
-            "comic_identity_engine.database.AsyncSessionLocal"
+            "comic_identity_engine.database.connection.AsyncSessionLocal"
         ) as mock_session_local:
             context_manager = MagicMock()
             context_manager.__aenter__.return_value = mock_session
@@ -242,7 +242,7 @@ class TestDatabaseIntegration:
         mock_session.execute.return_value = mock_result
 
         with patch(
-            "comic_identity_engine.database.AsyncSessionLocal"
+            "comic_identity_engine.database.connection.AsyncSessionLocal"
         ) as mock_session_local:
             mock_session_local.return_value.__aenter__.return_value = mock_session
 

@@ -150,3 +150,68 @@ class ResolutionError(AdapterError):
             f" ({len(self.candidates)} candidates)" if self.candidates else ""
         )
         return f"{super().__str__()}{confidence_str}{candidates_str}"
+
+
+class RepositoryError(AdapterError):
+    """Error for repository-related issues.
+
+    This error is raised when database operations fail at the repository layer.
+    """
+
+    pass
+
+
+class DuplicateEntityError(RepositoryError):
+    """Error for duplicate entity creation attempts.
+
+    This error is raised when attempting to create an entity that violates
+    a unique constraint (e.g., duplicate external mapping, duplicate variant).
+    """
+
+    def __init__(
+        self, message, entity_type=None, existing_id=None, original_error=None
+    ):
+        """Initialize a duplicate entity error.
+
+        Args:
+            message (str): Error message
+            entity_type (str, optional): Type of entity (e.g., 'ExternalMapping', 'Variant')
+            existing_id (str, optional): ID of the existing entity
+            original_error (Exception, optional): Original exception that caused this error
+        """
+        self.entity_type = entity_type
+        self.existing_id = existing_id
+        super().__init__(message, source="repository", original_error=original_error)
+
+    def __str__(self):
+        """Return a string representation of the error."""
+        type_str = f" [{self.entity_type}]" if self.entity_type else ""
+        id_str = f" (existing: {self.existing_id})" if self.existing_id else ""
+        return f"{super().__str__()}{type_str}{id_str}"
+
+
+class EntityNotFoundError(RepositoryError):
+    """Error for entity not found.
+
+    This error is raised when attempting to update or delete an entity
+    that does not exist in the database.
+    """
+
+    def __init__(self, message, entity_type=None, entity_id=None, original_error=None):
+        """Initialize an entity not found error.
+
+        Args:
+            message (str): Error message
+            entity_type (str, optional): Type of entity (e.g., 'Issue', 'SeriesRun')
+            entity_id (str, optional): ID of the entity that was not found
+            original_error (Exception, optional): Original exception that caused this error
+        """
+        self.entity_type = entity_type
+        self.entity_id = entity_id
+        super().__init__(message, source="repository", original_error=original_error)
+
+    def __str__(self):
+        """Return a string representation of the error."""
+        type_str = f" [{self.entity_type}]" if self.entity_type else ""
+        id_str = f" (id: {self.entity_id})" if self.entity_id else ""
+        return f"{super().__str__()}{type_str}{id_str}"
