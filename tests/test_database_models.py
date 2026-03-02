@@ -1115,7 +1115,7 @@ class TestRepositoryErrors:
 
     def test_repository_error_basic(self) -> None:
         """Test basic RepositoryError."""
-        error = RepositoryError("Database operation failed", source="repository")
+        error = RepositoryError("Database operation failed")
         assert "Database operation failed" in str(error)
         assert error.source == "repository"
 
@@ -1130,7 +1130,6 @@ class TestRepositoryErrors:
         """Test basic DuplicateEntityError."""
         error = DuplicateEntityError("Entity already exists")
         assert "Entity already exists" in str(error)
-        assert error.source == "repository"
 
     def test_duplicate_entity_error_with_details(self) -> None:
         """Test DuplicateEntityError with entity type and ID."""

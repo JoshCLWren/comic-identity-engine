@@ -138,6 +138,8 @@ class Issue(Base):
     )
 
     def __str__(self) -> str:
+        if self.series_run is None:
+            return f"Issue #{self.issue_number}"
         return f"{self.series_run.title} #{self.issue_number}"
 
     def __repr__(self) -> str:
@@ -201,6 +203,8 @@ class Variant(Base):
     )
 
     def __str__(self) -> str:
+        if self.issue is None:
+            return f"Variant .{self.variant_suffix}"
         return f"{self.issue}.{self.variant_suffix}"
 
     def __repr__(self) -> str:

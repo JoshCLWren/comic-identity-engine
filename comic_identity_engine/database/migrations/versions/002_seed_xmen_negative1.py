@@ -71,6 +71,7 @@ def upgrade() -> None:
 
     series_id = uuid.uuid4()
     issue_id = uuid.uuid4()
+    variant_a_id = uuid.uuid4()
     variant_b_id = uuid.uuid4()
     variant_ns_id = uuid.uuid4()
     gcd_mapping_id = uuid.uuid4()
@@ -114,6 +115,14 @@ def upgrade() -> None:
         op.bulk_insert(
             variants_table,
             [
+                {
+                    "id": variant_a_id,
+                    "issue_id": issue_id,
+                    "variant_suffix": "A",
+                    "variant_name": "Direct Edition",
+                    "created_at": now,
+                    "updated_at": now,
+                },
                 {
                     "id": variant_b_id,
                     "issue_id": issue_id,
@@ -201,8 +210,7 @@ def upgrade() -> None:
                 },
             ],
         )
-    except Exception as e:
-        op.execute(f"ROLLBACK; ERROR: {str(e)}")
+    except Exception:
         raise
 
 
@@ -216,8 +224,7 @@ def downgrade() -> None:
 
     external_mappings_table = table(
         "external_mappings",
-        column("source", sa.String),
-        column("source_issue_id", sa.String),
+        column("issue_id", postgresql.UUID(as_uuid=True)),
     )
 
     variants_table = table(
@@ -229,56 +236,6 @@ def downgrade() -> None:
         "issues",
         column("issue_number", sa.String),
         column("upc", sa.String),
-    )
-
-    series_runs_table = table(
-        "series_runs",
-        column("title", sa.String),
-        column("start_year", sa.Integer),
-    )
-
-    issue_id = (
-        op.get_bind()
-        .execute(
-            sa.text("""
-            SELECT id FROM issues
-            WHERE issue_number = '-1' AND upc = '75960601772099911'
-            LIMIT 1
-        """)
-        )
-        .scalar()
-    )
-
-    if issue_id:
-        op.execute(
-            external_mappings_table.delete().where(
-                external_mappings_table.c.issue_id == issue_id
-            )
-        )
-
-        op.execute(variants_table.delete().where(variants_table.c.issue_id == issue_id))
-
-    op.execute(
-        issues_table.delete()
-        .where(issues_table.c.issue_number == "-1")
-        .where(issues_table.c.upc == "75960601772099911")
-    )
-
-    op.execute(
-        series_runs_table.delete()
-        .where(series_runs_table.c.title == "X-Men")
-        .where(series_runs_table.c.start_year == 1991)
-    )
-
-    issues_table = table(
-        "issues",
-        column("issue_number", sa.String),
-        column("upc", sa.String),
-    )
-
-    variants_table = table(
-        "variants",
-        column("variant_suffix", sa.String),
     )
 
     series_runs_table = table(

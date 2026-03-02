@@ -16,7 +16,6 @@ USED BY:
 """
 
 import logging
-import os
 from collections.abc import AsyncIterator
 
 from sqlalchemy import text
@@ -37,13 +36,6 @@ _redacted_database_url = make_url(DATABASE_URL).render_as_string(hide_password=T
 _redacted_async_url = make_url(ASYNC_DATABASE_URL).render_as_string(hide_password=True)
 logger.info(f"Database URL configured: {_redacted_database_url}")
 logger.info(f"Async database URL: {_redacted_async_url}")
-
-logger.info(
-    f"DATABASE_URL env var: {os.getenv('DATABASE_URL', 'NOT SET')[:50] if os.getenv('DATABASE_URL') else 'NOT SET'}..."
-)
-logger.info(
-    f"TEST_DATABASE_URL env var: {os.getenv('TEST_DATABASE_URL', 'NOT SET')[:50] if os.getenv('TEST_DATABASE_URL') else 'NOT SET'}..."
-)
 
 async_engine = create_async_engine(
     ASYNC_DATABASE_URL,

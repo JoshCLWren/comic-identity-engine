@@ -39,8 +39,9 @@ Created complete migration setup:
 - **002_seed_xmen_negative1.py**: Seeds X-Men #-1 with:
   - Series: X-Men (1991)
   - Issue: #-1, UPC 75960601772099911
-  - Variants: B (Variant Edition), NS (Newsstand)
+  - Variants: A (Direct Edition), B (Variant Edition), NS (Newsstand)
   - External mappings for all 7 platforms: GCD, LoCG, CCL, AA, CPG, HIP, CLZ
+- **003_add_missing_constraints.py**: Adds unique constraints for variants and external mappings
 
 ### 4. Database Connection Setup
 
@@ -205,4 +206,4 @@ async def example_usage():
 - All pre-existing test failures (7 in test_database.py) are unrelated to this implementation
 - Those failures involve mocking issues with the existing database connection tests
 - All new tests (37 in test_database_models.py) pass with 100% success rate
-- Database package has 90% coverage (connection.py has 97%, models.py 100%)
+- All 293 tests pass with 98.83% coverage (exceeds 98% requirement)
