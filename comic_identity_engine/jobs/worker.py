@@ -88,10 +88,8 @@ class WorkerSettings:
                 reconcile_task,
             ]
         except ImportError:
-            logger.warning(
-                "Task functions not yet implemented, starting with empty function list"
-            )
-            return []
+            logger.exception("Failed to import task functions")
+            raise
 
 
 def create_worker(settings: WorkerSettings | None = None) -> Worker:
@@ -147,7 +145,7 @@ def main() -> None:
         asyncio.run(run_worker())
     except KeyboardInterrupt:
         logger.info("Worker stopped by user")
-    except Exception as e:
+    except (RuntimeError, asyncio.CancelledError) as e:
         logger.error("Worker failed", error=str(e))
         raise
 

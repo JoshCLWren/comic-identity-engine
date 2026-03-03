@@ -12,6 +12,7 @@ USAGE:
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from typing import Any
 
@@ -39,6 +40,7 @@ class JobQueue:
     def __init__(self) -> None:
         """Initialize the job queue manager."""
         self._redis_pool: Any | None = None
+        self._redis_init_lock = asyncio.Lock()
         settings = get_settings()
         self._redis_settings = ArqRedisSettings.from_dsn(settings.arq.queue_url)
 
@@ -52,12 +54,14 @@ class JobQueue:
             ConnectionError: If unable to connect to Redis.
         """
         if self._redis_pool is None:
-            try:
-                self._redis_pool = await create_pool(self._redis_settings)
-                logger.debug("Created Redis connection pool for job queue")
-            except Exception as e:
-                logger.error("Failed to connect to Redis", error=str(e))
-                raise ConnectionError(f"Failed to connect to Redis: {e}") from e
+            async with self._redis_init_lock:
+                if self._redis_pool is None:
+                    try:
+                        self._redis_pool = await create_pool(self._redis_settings)
+                        logger.debug("Created Redis connection pool for job queue")
+                    except (ConnectionError, TimeoutError, OSError) as e:
+                        logger.error("Failed to connect to Redis", error=str(e))
+                        raise ConnectionError(f"Failed to connect to Redis: {e}") from e
         return self._redis_pool
 
     async def enqueue_resolve(

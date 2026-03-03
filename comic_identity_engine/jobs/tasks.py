@@ -21,6 +21,7 @@ USAGE:
 
 import csv
 import json
+import tempfile
 import uuid
 from pathlib import Path
 from typing import Any
@@ -84,10 +85,9 @@ async def resolve_identity_task(
         >>> print(result["confidence"])
         0.95
     """
-    operation_uuid = uuid.UUID(operation_id)
-
     async with AsyncSessionLocal() as session:
         try:
+            operation_uuid = uuid.UUID(operation_id)
             operations_manager = OperationsManager(session)
 
             await operations_manager.mark_running(operation_uuid)
@@ -212,10 +212,9 @@ async def bulk_resolve_task(
         >>> print(result["completed"])
         2
     """
-    operation_uuid = uuid.UUID(operation_id)
-
     async with AsyncSessionLocal() as session:
         try:
+            operation_uuid = uuid.UUID(operation_id)
             operations_manager = OperationsManager(session)
 
             await operations_manager.mark_running(operation_uuid)
@@ -377,10 +376,9 @@ async def import_clz_task(
         >>> print(result["series_created"])
         5
     """
-    operation_uuid = uuid.UUID(operation_id)
-
     async with AsyncSessionLocal() as session:
         try:
+            operation_uuid = uuid.UUID(operation_id)
             operations_manager = OperationsManager(session)
 
             await operations_manager.mark_running(operation_uuid)
@@ -576,10 +574,9 @@ async def export_task(
         >>> print(result["file_path"])
         '/tmp/export_550e8400.json'
     """
-    operation_uuid = uuid.UUID(operation_id)
-
     async with AsyncSessionLocal() as session:
         try:
+            operation_uuid = uuid.UUID(operation_id)
             operations_manager = OperationsManager(session)
 
             await operations_manager.mark_running(operation_uuid)
@@ -618,8 +615,8 @@ async def export_task(
                     }
                     records.append(record)
 
-            export_dir = Path("/tmp/comic_exports")
-            export_dir.mkdir(parents=True, exist_ok=True)
+            export_dir = Path(tempfile.gettempdir()) / f"cie_exports_{operation_id}"
+            export_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
 
             file_path = export_dir / f"export_{operation_id}.{format}"
 
@@ -721,11 +718,10 @@ async def reconcile_task(
         >>> print(result["mappings_created"])
         2
     """
-    operation_uuid = uuid.UUID(operation_id)
-    issue_uuid = uuid.UUID(issue_id)
-
     async with AsyncSessionLocal() as session:
         try:
+            operation_uuid = uuid.UUID(operation_id)
+            issue_uuid = uuid.UUID(issue_id)
             operations_manager = OperationsManager(session)
 
             await operations_manager.mark_running(operation_uuid)
