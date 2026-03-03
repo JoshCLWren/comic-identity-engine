@@ -135,7 +135,7 @@ class TestJobQueueGetPool:
                 with patch(
                     "comic_identity_engine.jobs.queue.create_pool"
                 ) as mock_create_pool:
-                    mock_create_pool.side_effect = Exception("Connection refused")
+                    mock_create_pool.side_effect = ConnectionError("Connection refused")
 
                     queue = JobQueue()
 
