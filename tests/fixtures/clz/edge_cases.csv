@@ -1,0 +1,3 @@
+Series,Issue,Publisher,Year,Cover Date,Release Date,Price,Pages,Barcode,UPC
+"Test Series","","Test Publisher","2020","","","","",""
+"Malformed Series","1-3","Test Publisher","2020","","","","",""
