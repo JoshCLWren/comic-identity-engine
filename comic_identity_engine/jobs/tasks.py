@@ -22,7 +22,6 @@ USAGE:
 import csv
 import json
 import uuid
-from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -406,7 +405,7 @@ async def import_clz_task(
 
             for idx, row in enumerate(rows):
                 try:
-                    source_series_id = adapter._extract_series_id(row)
+                    _ = adapter._extract_series_id(row)  # Validate series extraction
                     source_issue_id = str(idx)
 
                     issue_candidate = adapter.fetch_issue_from_csv_row(

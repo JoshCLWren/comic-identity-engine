@@ -1,9 +1,7 @@
 """Tests for ARQ job tasks."""
 
-import csv
-import json
 import uuid
-from datetime import date
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -151,15 +149,14 @@ class TestResolveIdentityTask:
                 with patch(
                     "comic_identity_engine.jobs.tasks._mark_failed_safe",
                     new_callable=AsyncMock,
-                ) as mock_mark_failed:
+                ):
                     result = await resolve_identity_task(
                         {},
-                        "invalid-url",
+                        "https://test.com",
                         str(TEST_OPERATION_ID),
                     )
 
-        assert "error" in result
-        assert result["error_type"] == "parse_error"
+            assert result["error_type"] == "parse_error"
         assert "URL parsing failed" in result["error"]
         mock_ops_manager.mark_running.assert_called_once()
 
@@ -190,7 +187,7 @@ class TestResolveIdentityTask:
                     with patch(
                         "comic_identity_engine.jobs.tasks._mark_failed_safe",
                         new_callable=AsyncMock,
-                    ) as mock_mark_failed:
+                    ):
                         result = await resolve_identity_task(
                             {},
                             "https://www.comics.org/issue/999999/",
@@ -218,7 +215,7 @@ class TestResolveIdentityTask:
             with patch(
                 "comic_identity_engine.jobs.tasks._mark_failed_safe",
                 new_callable=AsyncMock,
-            ) as mock_mark_failed:
+            ):
                 result = await resolve_identity_task(
                     {},
                     "https://www.comics.org/issue/123/",
@@ -244,7 +241,7 @@ class TestResolveIdentityTask:
             with patch(
                 "comic_identity_engine.jobs.tasks._mark_failed_safe",
                 new_callable=AsyncMock,
-            ) as mock_mark_failed:
+            ):
                 result = await resolve_identity_task(
                     {},
                     "https://www.comics.org/issue/123/",
@@ -454,7 +451,7 @@ class TestBulkResolveTask:
             with patch(
                 "comic_identity_engine.jobs.tasks._mark_failed_safe",
                 new_callable=AsyncMock,
-            ) as mock_mark_failed:
+            ):
                 result = await bulk_resolve_task(
                     {},
                     urls,
@@ -594,7 +591,7 @@ X-Men,2,Marvel,1991"""
                 with patch(
                     "comic_identity_engine.jobs.tasks._mark_failed_safe",
                     new_callable=AsyncMock,
-                ) as mock_mark_failed:
+                ):
                     result = await import_clz_task(
                         {},
                         "/nonexistent/file.csv",
@@ -632,7 +629,7 @@ X-Men,2,Marvel,1991"""
                 with patch(
                     "comic_identity_engine.jobs.tasks._mark_failed_safe",
                     new_callable=AsyncMock,
-                ) as mock_mark_failed:
+                ):
                     result = await import_clz_task(
                         {},
                         str(csv_file),
@@ -662,7 +659,7 @@ X-Men,2,Marvel,1991"""
             with patch(
                 "comic_identity_engine.jobs.tasks._mark_failed_safe",
                 new_callable=AsyncMock,
-            ) as mock_mark_failed:
+            ):
                 result = await import_clz_task(
                     {},
                     str(csv_file),
@@ -696,7 +693,7 @@ class TestExportTask:
                 mock_issue = Mock()
                 mock_issue.id = TEST_ISSUE_ID
                 mock_issue.issue_number = "1"
-                mock_issue.cover_date = date(1991, 10, 1)
+                mock_issue.cover_date = datetime(1991, 10, 1)
                 mock_issue.upc = "123456789012"
                 mock_issue.series_run_id = TEST_SERIES_ID
                 mock_issue_repo.find_by_id = AsyncMock(return_value=mock_issue)
@@ -768,7 +765,7 @@ class TestExportTask:
                 mock_issue = Mock()
                 mock_issue.id = TEST_ISSUE_ID
                 mock_issue.issue_number = "1"
-                mock_issue.cover_date = date(1991, 10, 1)
+                mock_issue.cover_date = datetime(1991, 10, 1)
                 mock_issue.upc = "123456789012"
                 mock_issue.series_run_id = TEST_SERIES_ID
                 mock_issue_repo.find_by_id = AsyncMock(return_value=mock_issue)
@@ -811,7 +808,7 @@ class TestExportTask:
             with patch(
                 "comic_identity_engine.jobs.tasks._mark_failed_safe",
                 new_callable=AsyncMock,
-            ) as mock_mark_failed:
+            ):
                 result = await export_task(
                     {},
                     [str(TEST_ISSUE_ID)],
@@ -869,7 +866,7 @@ class TestExportTask:
             with patch(
                 "comic_identity_engine.jobs.tasks._mark_failed_safe",
                 new_callable=AsyncMock,
-            ) as mock_mark_failed:
+            ):
                 result = await export_task(
                     {},
                     [str(TEST_ISSUE_ID)],
@@ -948,7 +945,7 @@ class TestReconcileTask:
                 with patch(
                     "comic_identity_engine.jobs.tasks._mark_failed_safe",
                     new_callable=AsyncMock,
-                ) as mock_mark_failed:
+                ):
                     result = await reconcile_task(
                         {},
                         str(TEST_ISSUE_ID),
@@ -976,7 +973,7 @@ class TestReconcileTask:
             with patch(
                 "comic_identity_engine.jobs.tasks._mark_failed_safe",
                 new_callable=AsyncMock,
-            ) as mock_mark_failed:
+            ):
                 result = await reconcile_task(
                     {},
                     str(TEST_ISSUE_ID),
@@ -1507,7 +1504,7 @@ X-Men,1A,Marvel,1991"""
         # Create 12 rows to trigger progress update
         csv_content = "Series,Issue,Publisher,Year\n"
         for i in range(12):
-            csv_content += f"X-Men,{i+1},Marvel,1991\n"
+            csv_content += f"X-Men,{i + 1},Marvel,1991\n"
         csv_file.write_text(csv_content)
 
         with patch(
@@ -1524,7 +1521,12 @@ X-Men,1A,Marvel,1991"""
             ) as mock_adapter_class:
                 mock_adapter = Mock()
                 rows = [
-                    {"Series": "X-Men", "Issue": str(i+1), "Publisher": "Marvel", "Year": "1991"}
+                    {
+                        "Series": "X-Men",
+                        "Issue": str(i + 1),
+                        "Publisher": "Marvel",
+                        "Year": "1991",
+                    }
                     for i in range(12)
                 ]
                 mock_adapter.load_csv_from_file.return_value = rows
@@ -1601,8 +1603,18 @@ X-Men,2,Marvel,1991"""
             ) as mock_adapter_class:
                 mock_adapter = Mock()
                 mock_adapter.load_csv_from_file.return_value = [
-                    {"Series": "X-Men", "Issue": "1", "Publisher": "Marvel", "Year": "1991"},
-                    {"Series": "X-Men", "Issue": "2", "Publisher": "Marvel", "Year": "1991"},
+                    {
+                        "Series": "X-Men",
+                        "Issue": "1",
+                        "Publisher": "Marvel",
+                        "Year": "1991",
+                    },
+                    {
+                        "Series": "X-Men",
+                        "Issue": "2",
+                        "Publisher": "Marvel",
+                        "Year": "1991",
+                    },
                 ]
 
                 call_count = [0]  # Use list to make it mutable in closure
