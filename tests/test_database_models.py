@@ -1231,3 +1231,13 @@ class TestBackwardCompatibility:
         with open(compat_file) as f:
             content = f.read()
             assert "from comic_identity_engine.database.connection import" in content
+
+    def test_database_backward_compatibility_import(self) -> None:
+        """Test that the backward compatibility import works."""
+        # This import triggers coverage of the backward compatibility module
+        from comic_identity_engine import database
+
+        # Verify it exports the expected symbols
+        assert hasattr(database, "get_db")
+        assert hasattr(database, "AsyncSessionLocal")
+        assert hasattr(database, "Base")
