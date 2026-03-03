@@ -1196,3 +1196,38 @@ class TestRepositoryErrors:
         assert isinstance(not_found_error, AdapterError)
         assert isinstance(dup_error, RepositoryError)
         assert isinstance(not_found_error, RepositoryError)
+
+
+class TestIssueStr:
+    """Tests for Issue.__str__ method."""
+
+    def test_issue_str_without_series_run(self) -> None:
+        """Test Issue.__str__ when series_run is None."""
+        issue = Issue(issue_number="1")
+        assert str(issue) == "Issue #1"
+
+    def test_issue_str_with_series_run(self) -> None:
+        """Test Issue.__str__ when series_run is set."""
+        series = SeriesRun(title="X-Men")
+        issue = Issue(issue_number="1", series_run=series)
+        assert str(issue) == "X-Men #1"
+
+
+class TestBackwardCompatibility:
+    """Tests for backward compatibility imports."""
+
+    def test_database_backward_compatibility_file_exists(self) -> None:
+        """Test that the backward compatibility database.py file exists."""
+        # This tests that the backward compatibility shim exists
+        import os
+
+        root_dir = os.path.dirname(os.path.dirname(__file__))
+        compat_file = os.path.join(root_dir, "comic_identity_engine", "database.py")
+        assert os.path.exists(compat_file), (
+            f"Backward compat file not found: {compat_file}"
+        )
+
+        # Check the file contains expected import
+        with open(compat_file) as f:
+            content = f.read()
+            assert "from comic_identity_engine.database.connection import" in content
