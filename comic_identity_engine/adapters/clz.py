@@ -47,10 +47,10 @@ class CLZAdapter(SourceAdapter):
             SeriesCandidate with validated metadata
 
         Raises:
-            NotImplementedError: Use fetch_series_from_csv() instead
+            NotImplementedError: Use fetch_series_from_csv_row() instead
         """
         raise NotImplementedError(
-            "Use fetch_series_from_csv() instead - this adapter "
+            "Use fetch_series_from_csv_row() instead - this adapter "
             "does not fetch data from remote sources"
         )
 

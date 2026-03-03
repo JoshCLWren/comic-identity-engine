@@ -510,7 +510,7 @@ class TestCLZAdapterEdgeCases:
         assert result == 0.50
 
     def test_parse_page_count_zero(self):
-        """Zero page count returns None (invalid)."""
+        """Zero page count is parsed as 0."""
         adapter = CLZAdapter()
 
         result = adapter._parse_page_count("0")

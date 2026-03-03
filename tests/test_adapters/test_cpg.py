@@ -517,6 +517,13 @@ class TestCPGAdapterHelpers:
 
         assert result == 3.0
 
+    def test_parse_price_zero(self):
+        """Price parsing from zero preserves 0.0."""
+        adapter = CPGAdapter()
+        result = adapter._parse_price(0)
+
+        assert result == 0.0
+
     def test_parse_price_string(self):
         """Price parsing from string."""
         adapter = CPGAdapter()

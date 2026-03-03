@@ -3,12 +3,12 @@
 This package contains adapters for various comic platforms:
 - base: Abstract base classes and exceptions
 - gcd: Grand Comics Database adapter
-- locg: League of Comic Geeks adapter (TODO)
-- ccl: Comic Collector Live adapter (TODO)
-- aa: Atomic Avenue adapter (TODO)
-- cpg: Comics Price Guide adapter (TODO)
-- hip: HIP Comic adapter (TODO)
-- clz: CLZ CSV import adapter (TODO)
+- locg: League of Comic Geeks adapter
+- ccl: Comic Collector Live adapter
+- aa: Atomic Avenue adapter
+- cpg: Comics Price Guide adapter
+- hip: HIP Comic adapter
+- clz: CLZ CSV import adapter
 """
 
 from comic_identity_engine.adapters.base import (

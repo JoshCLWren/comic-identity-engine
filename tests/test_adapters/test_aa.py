@@ -177,6 +177,58 @@ class TestAAAdapterIssueMapping:
         assert result.issue_number == "37"
         assert result.variant_suffix == "A"
 
+    def test_issue_with_dotted_variant(self):
+        """AA issue HTML with dotted variant suffix."""
+        html = """
+        <html>
+        <body>
+            <h2 class="dropLeftMargin">
+                <a href="https://atomicavenue.com/atomic/series/20384/1/Alpha-Flight-1st-Series">
+                    Alpha Flight (1st Series)
+                </a>
+            </h2>
+            <div class="dropLeftMargin">
+                Marvel, 1983-1994
+            </div>
+            <div class="issueInfo">
+                <span class="issueSearchIssueNum"><b>37.B</b></span>
+            </div>
+        </body>
+        </html>
+        """
+
+        adapter = AAAdapter()
+        result = adapter.fetch_issue_from_html("209583", html)
+
+        assert result.issue_number == "37"
+        assert result.variant_suffix == "B"
+
+    def test_issue_with_multi_letter_variant(self):
+        """AA issue HTML with multi-letter variant suffix."""
+        html = """
+        <html>
+        <body>
+            <h2 class="dropLeftMargin">
+                <a href="https://atomicavenue.com/atomic/series/20384/1/Alpha-Flight-1st-Series">
+                    Alpha Flight (1st Series)
+                </a>
+            </h2>
+            <div class="dropLeftMargin">
+                Marvel, 1983-1994
+            </div>
+            <div class="issueInfo">
+                <span class="issueSearchIssueNum"><b>37DE</b></span>
+            </div>
+        </body>
+        </html>
+        """
+
+        adapter = AAAdapter()
+        result = adapter.fetch_issue_from_html("209583", html)
+
+        assert result.issue_number == "37"
+        assert result.variant_suffix == "DE"
+
     def test_missing_series_title_in_issue(self):
         """Issue HTML without series title raises ValidationError."""
         html = """

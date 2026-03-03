@@ -228,8 +228,8 @@ class AAAdapter(SourceAdapter):
             if re.search(r"\d+\s*-\s*\d+", text):
                 return None
             # Extract issue number (including negative, decimal, and variant letter)
-            # Pattern matches: -1, 0.5, 37, 37A, 37.B, etc.
-            issue_match = re.search(r"(-?\d+(?:\.\d+)?(?:[A-Za-z]\b)?)", text)
+            # Pattern matches: -1, 0.5, 37, 37A, 37.B, 37DE, etc.
+            issue_match = re.search(r"(-?\d+(?:\.\d+)?(?:\.?[A-Za-z]+)?)", text)
             if issue_match:
                 return issue_match.group(1)
         return None

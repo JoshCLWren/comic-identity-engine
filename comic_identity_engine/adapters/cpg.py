@@ -321,7 +321,7 @@ class CPGAdapter(SourceAdapter):
         Returns:
             Price as float or None
         """
-        if not price_val:
+        if price_val is None:
             return None
 
         if isinstance(price_val, (int, float)):

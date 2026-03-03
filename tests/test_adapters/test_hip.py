@@ -688,8 +688,8 @@ class TestHIPAdapterEdgeCases:
 
         assert result.upc is None
 
-    def test_publication_date_extraction(self):
-        """Publication date can be extracted from different elements."""
+    def test_publication_date_not_extracted_from_pub_date_text(self):
+        """Current parser leaves publication_date unset for this pub-date format."""
         html = """
         <html>
         <body>
