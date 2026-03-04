@@ -95,123 +95,66 @@ class TestCreateRedisPool:
 class TestWorkerSettings:
     """Tests for WorkerSettings class."""
 
-    def test_worker_settings_initialization(self, mock_settings):
-        """Test WorkerSettings initialization with mocked settings."""
+    def test_worker_settings_class_attributes(
+        self, mock_settings, mock_arq_redis_settings
+    ):
+        """Test WorkerSettings class-level attributes."""
         with patch(
             "comic_identity_engine.jobs.worker.get_settings"
         ) as mock_get_settings:
             mock_get_settings.return_value = mock_settings
-
             with patch(
                 "comic_identity_engine.jobs.worker.ArqRedisSettings.from_dsn"
             ) as mock_from_dsn:
                 mock_from_dsn.return_value = mock_arq_redis_settings
 
-                # Patch task imports to avoid circular dependency issues
-                with patch.object(
-                    WorkerSettings, "_get_task_functions", return_value=[]
-                ):
-                    settings = WorkerSettings()
+                # Access class attributes (will trigger get_settings via class definition)
+                # Note: WorkerSettings now uses class-level attributes
+                assert WorkerSettings.max_jobs == TEST_MAX_JOBS
+                assert WorkerSettings.job_timeout == TEST_JOB_TIMEOUT
+                assert WorkerSettings.keep_result == TEST_KEEP_RESULT
+                assert isinstance(WorkerSettings.functions, list)
+                assert len(WorkerSettings.functions) == 5
 
-                    assert settings.redis_settings == mock_arq_redis_settings
-                    assert settings.max_jobs == TEST_MAX_JOBS
-                    assert settings.job_timeout == TEST_JOB_TIMEOUT
-                    assert settings.keep_result == TEST_KEEP_RESULT
-                    assert settings.functions == []
+    def test_worker_settings_functions_list(self):
+        """Test WorkerSettings has correct task functions."""
+        # Verify the functions list contains the expected tasks
+        from comic_identity_engine.jobs.tasks import (
+            bulk_resolve_task,
+            export_task,
+            import_clz_task,
+            reconcile_task,
+            resolve_identity_task,
+        )
 
-    def test_worker_settings_default_functions(self, mock_settings):
-        """Test WorkerSettings with actual task function imports."""
-        with patch(
-            "comic_identity_engine.jobs.worker.get_settings"
-        ) as mock_get_settings:
-            mock_get_settings.return_value = mock_settings
-
-            with patch(
-                "comic_identity_engine.jobs.worker.ArqRedisSettings.from_dsn"
-            ) as mock_from_dsn:
-                mock_from_dsn.return_value = mock_arq_redis_settings
-
-                # Patch in the tasks module where the imports actually happen
-                with patch(
-                    "comic_identity_engine.jobs.tasks.resolve_identity_task"
-                ) as mock_resolve:
-                    with patch(
-                        "comic_identity_engine.jobs.tasks.bulk_resolve_task"
-                    ) as mock_bulk:
-                        with patch(
-                            "comic_identity_engine.jobs.tasks.import_clz_task"
-                        ) as mock_import:
-                            with patch(
-                                "comic_identity_engine.jobs.tasks.export_task"
-                            ) as mock_export:
-                                with patch(
-                                    "comic_identity_engine.jobs.tasks.reconcile_task"
-                                ) as mock_reconcile:
-                                    settings = WorkerSettings()
-
-                                    expected_functions = [
-                                        mock_resolve,
-                                        mock_bulk,
-                                        mock_import,
-                                        mock_export,
-                                        mock_reconcile,
-                                    ]
-                                    assert settings.functions == expected_functions
+        expected_functions = [
+            resolve_identity_task,
+            bulk_resolve_task,
+            import_clz_task,
+            export_task,
+            reconcile_task,
+        ]
+        assert WorkerSettings.functions == expected_functions
 
 
 class TestCreateWorker:
     """Tests for create_worker function."""
 
-    def test_create_worker_with_default_settings(self):
-        """Test worker creation with default settings."""
-        mock_settings_obj = Mock(spec=WorkerSettings)
-        mock_settings_obj.redis_settings = mock_arq_redis_settings
-        mock_settings_obj.max_jobs = TEST_MAX_JOBS
-        mock_settings_obj.job_timeout = TEST_JOB_TIMEOUT
-        mock_settings_obj.keep_result = TEST_KEEP_RESULT
-        mock_settings_obj.functions = []
-
-        with patch(
-            "comic_identity_engine.jobs.worker.WorkerSettings",
-            return_value=mock_settings_obj,
-        ):
-            with patch("comic_identity_engine.jobs.worker.Worker") as mock_worker_class:
-                mock_worker = Mock(spec=Worker)
-                mock_worker_class.return_value = mock_worker
-
-                worker = create_worker()
-
-                assert worker == mock_worker
-                mock_worker_class.assert_called_once_with(
-                    redis_settings=mock_arq_redis_settings,
-                    max_jobs=TEST_MAX_JOBS,
-                    job_timeout=TEST_JOB_TIMEOUT,
-                    keep_result=TEST_KEEP_RESULT,
-                    functions=[],
-                )
-
-    def test_create_worker_with_custom_settings(self):
-        """Test worker creation with custom settings."""
-        custom_settings = Mock(spec=WorkerSettings)
-        custom_settings.redis_settings = mock_arq_redis_settings
-        custom_settings.max_jobs = 20
-        custom_settings.job_timeout = 600
-        custom_settings.keep_result = 7200
-        custom_settings.functions = [Mock()]
-
+    def test_create_worker_uses_class_settings(self, mock_arq_redis_settings):
+        """Test worker creation uses WorkerSettings class attributes."""
         with patch("comic_identity_engine.jobs.worker.Worker") as mock_worker_class:
             mock_worker = Mock(spec=Worker)
             mock_worker_class.return_value = mock_worker
 
-            worker = create_worker(custom_settings)
+            worker = create_worker()
 
             assert worker == mock_worker
             mock_worker_class.assert_called_once_with(
-                redis_settings=mock_arq_redis_settings,
-                max_jobs=20,
-                job_timeout=600,
-                keep_result=7200,
-                functions=custom_settings.functions,
+                redis_settings=WorkerSettings.redis_settings,
+                max_jobs=WorkerSettings.max_jobs,
+                job_timeout=WorkerSettings.job_timeout,
+                keep_result=WorkerSettings.keep_result,
+                functions=WorkerSettings.functions,
             )
 
 
@@ -221,52 +164,32 @@ class TestRunWorker:
     @pytest.mark.asyncio
     async def test_run_worker_success(self, mock_arq_redis_settings):
         """Test successful worker execution."""
-        mock_settings_obj = Mock(spec=WorkerSettings)
-        mock_settings_obj.redis_settings = mock_arq_redis_settings
-        mock_settings_obj.max_jobs = TEST_MAX_JOBS
-        mock_settings_obj.job_timeout = TEST_JOB_TIMEOUT
-        mock_settings_obj.functions = []
-
         mock_worker = Mock(spec=Worker)
         mock_worker.async_run = AsyncMock()
 
         with patch(
-            "comic_identity_engine.jobs.worker.WorkerSettings",
-            return_value=mock_settings_obj,
+            "comic_identity_engine.jobs.worker.create_worker",
+            return_value=mock_worker,
         ):
-            with patch(
-                "comic_identity_engine.jobs.worker.create_worker",
-                return_value=mock_worker,
-            ):
-                with patch("comic_identity_engine.jobs.worker.logger") as mock_logger:
-                    await run_worker()
+            with patch("comic_identity_engine.jobs.worker.logger") as mock_logger:
+                await run_worker()
 
-                    mock_worker.async_run.assert_called_once()
-                    mock_logger.info.assert_called_once()
+                mock_worker.async_run.assert_called_once()
+                mock_logger.info.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_run_worker_keyboard_interrupt(self, mock_arq_redis_settings):
         """Test worker handles keyboard interrupt."""
-        mock_settings_obj = Mock(spec=WorkerSettings)
-        mock_settings_obj.redis_settings = mock_arq_redis_settings
-        mock_settings_obj.max_jobs = TEST_MAX_JOBS
-        mock_settings_obj.job_timeout = TEST_JOB_TIMEOUT
-        mock_settings_obj.functions = []
-
         mock_worker = Mock(spec=Worker)
         mock_worker.async_run = AsyncMock(side_effect=KeyboardInterrupt())
 
         with patch(
-            "comic_identity_engine.jobs.worker.WorkerSettings",
-            return_value=mock_settings_obj,
+            "comic_identity_engine.jobs.worker.create_worker",
+            return_value=mock_worker,
         ):
-            with patch(
-                "comic_identity_engine.jobs.worker.create_worker",
-                return_value=mock_worker,
-            ):
-                # KeyboardInterrupt should propagate from async_run
-                with pytest.raises(KeyboardInterrupt):
-                    await run_worker()
+            # KeyboardInterrupt should propagate from async_run
+            with pytest.raises(KeyboardInterrupt):
+                await run_worker()
 
 
 class TestMain:
@@ -305,26 +228,3 @@ class TestMain:
                     main()
 
                 mock_logger.error.assert_called_once()
-
-
-class TestWorkerSettingsGetTaskFunctions:
-    """Tests for WorkerSettings._get_task_functions method."""
-
-    def test_get_task_functions_success(self, mock_settings):
-        """Test successful retrieval of task functions."""
-        with patch(
-            "comic_identity_engine.jobs.worker.get_settings"
-        ) as mock_get_settings:
-            mock_get_settings.return_value = mock_settings
-
-            with patch(
-                "comic_identity_engine.jobs.worker.ArqRedisSettings.from_dsn"
-            ) as mock_from_dsn:
-                mock_from_dsn.return_value = mock_arq_redis_settings
-
-                settings = WorkerSettings()
-                functions = settings._get_task_functions()
-
-                # Should return list of 5 task functions
-                assert isinstance(functions, list)
-                assert len(functions) == 5

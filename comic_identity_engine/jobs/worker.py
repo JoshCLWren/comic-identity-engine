@@ -22,6 +22,13 @@ from arq.connections import RedisSettings as ArqRedisSettings
 from arq.worker import Worker
 
 from comic_identity_engine.config import get_settings
+from comic_identity_engine.jobs.tasks import (
+    bulk_resolve_task,
+    export_task,
+    import_clz_task,
+    reconcile_task,
+    resolve_identity_task,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -56,47 +63,25 @@ class WorkerSettings:
         functions: List of registered task functions
     """
 
-    def __init__(self) -> None:
-        """Initialize worker settings from configuration."""
-        settings = get_settings()
-        self.redis_settings = ArqRedisSettings.from_dsn(settings.arq.queue_url)
-        self.max_jobs = settings.arq.arq_max_jobs
-        self.job_timeout = settings.arq.arq_job_timeout
-        self.keep_result = settings.arq.arq_keep_result
-        self.functions: list[Any] = self._get_task_functions()
-
-    def _get_task_functions(self) -> list[Any]:
-        """Get the list of task functions to register with the worker.
-
-        Returns:
-            List of task function coroutines.
-        """
-        try:
-            from comic_identity_engine.jobs.tasks import (
-                resolve_identity_task,
-                bulk_resolve_task,
-                import_clz_task,
-                export_task,
-                reconcile_task,
-            )
-
-            return [
-                resolve_identity_task,
-                bulk_resolve_task,
-                import_clz_task,
-                export_task,
-                reconcile_task,
-            ]
-        except ImportError:
-            logger.exception("Failed to import task functions")
-            raise
+    # Class-level attributes required by arq CLI
+    redis_settings = ArqRedisSettings.from_dsn(get_settings().arq.queue_url)
+    max_jobs = get_settings().arq.arq_max_jobs
+    job_timeout = get_settings().arq.arq_job_timeout
+    keep_result = get_settings().arq.arq_keep_result
+    functions = [
+        resolve_identity_task,
+        bulk_resolve_task,
+        import_clz_task,
+        export_task,
+        reconcile_task,
+    ]
 
 
-def create_worker(settings: WorkerSettings | None = None) -> Worker:
+def create_worker(settings_cls: type[WorkerSettings] = WorkerSettings) -> Worker:
     """Create an arq worker instance.
 
     Args:
-        settings: Optional WorkerSettings instance (uses defaults if not provided)
+        settings_cls: WorkerSettings class to use (uses default if not provided)
 
     Returns:
         Configured arq Worker instance.
@@ -105,15 +90,12 @@ def create_worker(settings: WorkerSettings | None = None) -> Worker:
         >>> worker = create_worker()
         >>> # Run the worker
     """
-    if settings is None:
-        settings = WorkerSettings()
-
     return Worker(
-        redis_settings=settings.redis_settings,
-        max_jobs=settings.max_jobs,
-        job_timeout=settings.job_timeout,
-        keep_result=settings.keep_result,
-        functions=settings.functions,
+        redis_settings=settings_cls.redis_settings,
+        max_jobs=settings_cls.max_jobs,
+        job_timeout=settings_cls.job_timeout,
+        keep_result=settings_cls.keep_result,
+        functions=settings_cls.functions,
     )
 
 
@@ -122,15 +104,14 @@ async def run_worker() -> None:
 
     This function starts the worker and runs until interrupted.
     """
-    settings = WorkerSettings()
-    worker = create_worker(settings)
+    worker = create_worker()
 
     logger.info(
         "Starting arq worker",
-        redis_url=settings.redis_settings.host,
-        max_jobs=settings.max_jobs,
-        job_timeout=settings.job_timeout,
-        functions_count=len(settings.functions),
+        redis_url=WorkerSettings.redis_settings.host,
+        max_jobs=WorkerSettings.max_jobs,
+        job_timeout=WorkerSettings.job_timeout,
+        functions_count=len(WorkerSettings.functions),
     )
 
     await worker.async_run()

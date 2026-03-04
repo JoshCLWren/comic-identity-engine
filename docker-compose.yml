@@ -19,7 +19,7 @@ services:
       POSTGRES_USER: comic_user
       POSTGRES_PASSWORD: comic_pass
     ports:
-      - "5432:5432"
+      - "5434:5432"
     volumes:
       - postgres_app_data:/var/lib/postgresql/data
     healthcheck:
@@ -31,7 +31,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "6381:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -39,9 +39,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    command: >
-      redis-server
-      --databases 2  # DB 0 for arq queue, DB 1 for app cache
+    # DB 0 for arq queue, DB 1 for app cache
+    command: redis-server --databases 2
 
 volumes:
   postgres_app_data:

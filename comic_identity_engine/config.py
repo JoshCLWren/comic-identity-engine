@@ -115,8 +115,11 @@ class ArqSettings(BaseSettings):
 
     @property
     def queue_url(self) -> str:
-        """Get arq queue URL (defaults to main Redis URL)."""
-        return self.arq_queue_url or "redis://localhost:6379/0"
+        """Get arq queue URL (defaults to REDIS_URL environment variable or main Redis URL)."""
+        if self.arq_queue_url:
+            return self.arq_queue_url
+        # Use the redis_url from RedisSettings to ensure consistency
+        return get_redis_settings().redis_url
 
 
 class AppSettings(BaseSettings):

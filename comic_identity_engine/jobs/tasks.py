@@ -91,6 +91,7 @@ async def resolve_identity_task(
             operations_manager = OperationsManager(session)
 
             await operations_manager.mark_running(operation_uuid)
+            await session.commit()
 
             logger.info(
                 "Starting identity resolution task",
@@ -122,6 +123,7 @@ async def resolve_identity_task(
             }
 
             await operations_manager.mark_completed(operation_uuid, result_dict)
+            await session.commit()
 
             logger.info(
                 "Identity resolution task completed",
