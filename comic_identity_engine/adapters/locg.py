@@ -22,6 +22,7 @@ from comic_identity_engine.adapters import (
     SourceError,
     ValidationError,
 )
+from comic_identity_engine.core.http_client import HttpClient
 from comic_identity_engine.models import IssueCandidate, SeriesCandidate
 from comic_identity_engine.parsing import parse_issue_candidate
 
@@ -36,12 +37,18 @@ class LoCGAdapter(SourceAdapter):
     SOURCE = "locg"
     BASE_URL = "https://leagueofcomicgeeks.com"
 
-    def __init__(self, timeout: float = 30.0) -> None:
+    def __init__(
+        self,
+        http_client: HttpClient | None = None,
+        timeout: float = 30.0,
+    ) -> None:
         """Initialize LoCG adapter.
 
         Args:
-            timeout: HTTP request timeout in seconds
+            http_client: Optional HTTP client for making requests
+            timeout: HTTP request timeout in seconds (used if http_client not provided)
         """
+        super().__init__(http_client)
         self.timeout = timeout
         self.headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -49,7 +56,7 @@ class LoCGAdapter(SourceAdapter):
             "Accept-Language": "en-US,en;q=0.5",
         }
 
-    def fetch_series(self, source_series_id: str) -> SeriesCandidate:
+    async def fetch_series(self, source_series_id: str) -> SeriesCandidate:
         """Fetch series from LoCG.
 
         Args:
@@ -65,10 +72,11 @@ class LoCGAdapter(SourceAdapter):
         """
         url = f"{self.BASE_URL}/comic/{source_series_id}"
 
+        if self.http_client is None:
+            raise SourceError("HTTP client not initialized")
+
         try:
-            response = httpx.get(
-                url, timeout=self.timeout, follow_redirects=True, headers=self.headers
-            )
+            response = await self.http_client.get(url, headers=self.headers)
             response.raise_for_status()
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
@@ -81,7 +89,7 @@ class LoCGAdapter(SourceAdapter):
 
         return self._parse_series_from_html(source_series_id, response.text)
 
-    def fetch_issue(self, source_issue_id: str) -> IssueCandidate:
+    async def fetch_issue(self, source_issue_id: str) -> IssueCandidate:
         """Fetch issue from LoCG.
 
         Args:
@@ -97,10 +105,11 @@ class LoCGAdapter(SourceAdapter):
         """
         url = f"{self.BASE_URL}/comic/{source_issue_id}"
 
+        if self.http_client is None:
+            raise SourceError("HTTP client not initialized")
+
         try:
-            response = httpx.get(
-                url, timeout=self.timeout, follow_redirects=True, headers=self.headers
-            )
+            response = await self.http_client.get(url, headers=self.headers)
             response.raise_for_status()
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:

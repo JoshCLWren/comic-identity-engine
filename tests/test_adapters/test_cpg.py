@@ -1,7 +1,7 @@
 """Tests for CPG adapter implementation."""
 
 from datetime import date
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import httpx
 import pytest
@@ -564,132 +564,167 @@ class TestCPGAdapterHelpers:
 class TestCPGAdapterFetchMethods:
     """Tests for CPG adapter HTTP fetch methods."""
 
-    def test_fetch_series_successful_request(self):
+    @pytest.mark.asyncio
+    async def test_fetch_series_successful_request(self, mock_http_client):
         """fetch_series makes HTTP request and parses response."""
-        import json
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import AsyncMock, Mock
 
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "title": "X-Men",
-            "publisher": "Marvel",
-            "year": 1991,
-        }
+        mock_response = Mock()
+        mock_response.json = Mock(
+            return_value={
+                "title": "X-Men",
+                "publisher": "Marvel",
+                "year": 1991,
+            }
+        )
+        mock_response.raise_for_status = Mock()
 
-        with patch("httpx.get", return_value=mock_response):
-            adapter = CPGAdapter()
-            result = adapter.fetch_series("x-men")
+        mock_http_client.get = AsyncMock(return_value=mock_response)
 
-            assert result.source == "cpg"
-            assert result.source_series_id == "x-men"
-            assert result.series_title == "X-Men"
+        adapter = CPGAdapter(http_client=mock_http_client)
+        result = await adapter.fetch_series("x-men")
 
-    def test_fetch_issue_successful_request(self):
+        assert result.source == "cpg"
+        assert result.source_series_id == "x-men"
+        assert result.series_title == "X-Men"
+
+    @pytest.mark.asyncio
+    async def test_fetch_issue_successful_request(self, mock_http_client):
         """fetch_issue makes HTTP request and parses response."""
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import AsyncMock, Mock
 
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "number": "1",
-            "title": "X-Men",
-            "publisher": "Marvel",
-            "year": 1991,
-            "name": "x-men",
-        }
+        mock_response = Mock()
+        mock_response.json = Mock(
+            return_value={
+                "number": "1",
+                "title": "X-Men",
+                "publisher": "Marvel",
+                "year": 1991,
+                "name": "x-men",
+            }
+        )
+        mock_response.raise_for_status = Mock()
 
-        with patch("httpx.get", return_value=mock_response):
-            adapter = CPGAdapter()
-            result = adapter.fetch_issue("12345")
+        mock_http_client.get = AsyncMock(return_value=mock_response)
 
-            assert result.source == "cpg"
-            assert result.source_issue_id == "12345"
-            assert result.issue_number == "1"
+        adapter = CPGAdapter(http_client=mock_http_client)
+        result = await adapter.fetch_issue("12345")
 
-    def test_fetch_series_not_found(self):
+        assert result.source == "cpg"
+        assert result.source_issue_id == "12345"
+        assert result.issue_number == "1"
+
+    @pytest.mark.asyncio
+    async def test_fetch_series_not_found(self, mock_http_client):
         """fetch_series raises NotFoundError on 404."""
+        from unittest.mock import AsyncMock, Mock
         import httpx
-        from unittest.mock import patch
 
-        with patch("httpx.get") as mock_get:
-            mock_response = MagicMock()
-            mock_response.status_code = 404
-            mock_get.return_value.raise_for_status.side_effect = httpx.HTTPStatusError(
+        mock_response = Mock()
+        mock_response.status_code = 404
+
+        def raise_error(*args, **kwargs):
+            raise httpx.HTTPStatusError(
                 "404 Not Found", request=MagicMock(), response=mock_response
             )
 
-            adapter = CPGAdapter()
-            with pytest.raises(NotFoundError, match="Series not found"):
-                adapter.fetch_series("nonexistent")
+        mock_response.raise_for_status = raise_error
+        mock_http_client.get = AsyncMock(return_value=mock_response)
 
-    def test_fetch_issue_not_found(self):
+        adapter = CPGAdapter(http_client=mock_http_client)
+        with pytest.raises(NotFoundError, match="Series not found"):
+            await adapter.fetch_series("nonexistent")
+
+    @pytest.mark.asyncio
+    async def test_fetch_issue_not_found(self, mock_http_client):
         """fetch_issue raises NotFoundError on 404."""
+        from unittest.mock import AsyncMock, Mock
         import httpx
-        from unittest.mock import patch
 
-        with patch("httpx.get") as mock_get:
-            mock_response = MagicMock()
-            mock_response.status_code = 404
-            mock_get.return_value.raise_for_status.side_effect = httpx.HTTPStatusError(
+        mock_response = Mock()
+        mock_response.status_code = 404
+
+        def raise_error(*args, **kwargs):
+            raise httpx.HTTPStatusError(
                 "404 Not Found", request=MagicMock(), response=mock_response
             )
 
-            adapter = CPGAdapter()
-            with pytest.raises(NotFoundError, match="Issue not found"):
-                adapter.fetch_issue("nonexistent")
+        mock_response.raise_for_status = raise_error
+        mock_http_client.get = AsyncMock(return_value=mock_response)
 
-    def test_fetch_series_network_error(self):
+        adapter = CPGAdapter(http_client=mock_http_client)
+        with pytest.raises(NotFoundError, match="Issue not found"):
+            await adapter.fetch_issue("nonexistent")
+
+    @pytest.mark.asyncio
+    async def test_fetch_series_network_error(self, mock_http_client):
         """fetch_series raises SourceError on network error."""
+        from unittest.mock import AsyncMock
         import httpx
-        from unittest.mock import patch
 
-        with patch("httpx.get", side_effect=httpx.RequestError("Network error")):
-            adapter = CPGAdapter()
-            with pytest.raises(SourceError, match="Network error"):
-                adapter.fetch_series("x-men")
+        mock_http_client.get = AsyncMock(
+            side_effect=httpx.RequestError("Network error")
+        )
 
-    def test_fetch_issue_network_error(self):
+        adapter = CPGAdapter(http_client=mock_http_client)
+        with pytest.raises(SourceError, match="Network error"):
+            await adapter.fetch_series("x-men")
+
+    @pytest.mark.asyncio
+    async def test_fetch_issue_network_error(self, mock_http_client):
         """fetch_issue raises SourceError on network error."""
+        from unittest.mock import AsyncMock
         import httpx
-        from unittest.mock import patch
 
-        with patch("httpx.get", side_effect=httpx.RequestError("Network error")):
-            adapter = CPGAdapter()
-            with pytest.raises(SourceError, match="Network error"):
-                adapter.fetch_issue("12345")
+        mock_http_client.get = AsyncMock(
+            side_effect=httpx.RequestError("Network error")
+        )
 
-    def test_fetch_series_http_error(self):
+        adapter = CPGAdapter(http_client=mock_http_client)
+        with pytest.raises(SourceError, match="Network error"):
+            await adapter.fetch_issue("12345")
+
+    @pytest.mark.asyncio
+    async def test_fetch_series_http_error(self, mock_http_client):
         """fetch_series raises SourceError on HTTP error."""
+        from unittest.mock import AsyncMock, Mock
         import httpx
-        from unittest.mock import patch
 
-        with patch("httpx.get") as mock_get:
-            mock_response = MagicMock()
-            mock_response.status_code = 500
-            mock_get.return_value.raise_for_status.side_effect = httpx.HTTPStatusError(
+        mock_response = Mock()
+        mock_response.status_code = 500
+
+        def raise_error(*args, **kwargs):
+            raise httpx.HTTPStatusError(
                 "500 Server Error", request=MagicMock(), response=mock_response
             )
 
-            adapter = CPGAdapter()
-            with pytest.raises(SourceError, match="HTTP error"):
-                adapter.fetch_series("x-men")
+        mock_response.raise_for_status = raise_error
+        mock_http_client.get = AsyncMock(return_value=mock_response)
 
-    def test_fetch_issue_http_error(self):
+        adapter = CPGAdapter(http_client=mock_http_client)
+        with pytest.raises(SourceError, match="HTTP error"):
+            await adapter.fetch_series("x-men")
+
+    @pytest.mark.asyncio
+    async def test_fetch_issue_http_error(self, mock_http_client):
         """fetch_issue raises SourceError on HTTP error."""
+        from unittest.mock import AsyncMock, Mock
         import httpx
-        from unittest.mock import patch
 
-        with patch("httpx.get") as mock_get:
-            mock_response = MagicMock()
-            mock_response.status_code = 500
-            mock_get.return_value.raise_for_status.side_effect = httpx.HTTPStatusError(
+        mock_response = Mock()
+        mock_response.status_code = 500
+
+        def raise_error(*args, **kwargs):
+            raise httpx.HTTPStatusError(
                 "500 Server Error", request=MagicMock(), response=mock_response
             )
 
-            adapter = CPGAdapter()
-            with pytest.raises(SourceError, match="HTTP error"):
-                adapter.fetch_issue("12345")
+        mock_response.raise_for_status = raise_error
+        mock_http_client.get = AsyncMock(return_value=mock_response)
+
+        adapter = CPGAdapter(http_client=mock_http_client)
+        with pytest.raises(SourceError, match="HTTP error"):
+            await adapter.fetch_issue("12345")
 
 
 class TestCPGAdapterEdgeCases:

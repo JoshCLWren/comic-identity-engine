@@ -667,3 +667,24 @@ class TestAAAdapterRealData:
     def test_alpha_flight_series_real_html(self):
         """Test with actual Alpha Flight series AA HTML."""
         pass
+
+
+@pytest.mark.asyncio
+class TestAAAdapterAsyncFetch:
+    """Tests for async fetch methods."""
+
+    async def test_fetch_series_without_http_client(self):
+        """Fetching series without HTTP client raises SourceError."""
+        adapter = AAAdapter()
+        from comic_identity_engine.adapters import SourceError
+
+        with pytest.raises(SourceError, match="HTTP client not initialized"):
+            await adapter.fetch_series("20384")
+
+    async def test_fetch_issue_without_http_client(self):
+        """Fetching issue without HTTP client raises SourceError."""
+        adapter = AAAdapter()
+        from comic_identity_engine.adapters import SourceError
+
+        with pytest.raises(SourceError, match="HTTP client not initialized"):
+            await adapter.fetch_issue("209583")

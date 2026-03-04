@@ -10,7 +10,7 @@ AA URL patterns:
 """
 
 import re
-from typing import Optional
+from typing import Any, Optional
 
 import httpx
 from selectolax.lexbor import LexborHTMLParser
@@ -21,6 +21,7 @@ from comic_identity_engine.adapters import (
     SourceError,
     ValidationError,
 )
+from comic_identity_engine.core.http_client import HttpClient
 from comic_identity_engine.models import IssueCandidate, SeriesCandidate
 from comic_identity_engine.parsing import parse_issue_candidate
 
@@ -35,15 +36,21 @@ class AAAdapter(SourceAdapter):
     SOURCE = "aa"
     BASE_URL = "https://www.atomicavenue.com"
 
-    def __init__(self, timeout: float = 30.0) -> None:
+    def __init__(
+        self,
+        http_client: HttpClient | None = None,
+        timeout: float = 30.0,
+    ) -> None:
         """Initialize AA adapter.
 
         Args:
-            timeout: HTTP request timeout in seconds
+            http_client: Optional HTTP client for making requests
+            timeout: HTTP request timeout in seconds (used if http_client not provided)
         """
+        super().__init__(http_client)
         self.timeout = timeout
 
-    def fetch_series(self, source_series_id: str) -> SeriesCandidate:
+    async def fetch_series(self, source_series_id: str) -> SeriesCandidate:
         """Fetch series from Atomic Avenue.
 
         Args:
@@ -59,8 +66,11 @@ class AAAdapter(SourceAdapter):
         """
         url = f"{self.BASE_URL}/atomic/series/{source_series_id}"
 
+        if self.http_client is None:
+            raise SourceError("HTTP client not initialized")
+
         try:
-            response = httpx.get(url, timeout=self.timeout, follow_redirects=True)
+            response = await self.http_client.get(url)
             response.raise_for_status()
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
@@ -71,7 +81,7 @@ class AAAdapter(SourceAdapter):
 
         return self.fetch_series_from_html(source_series_id, response.text)
 
-    def fetch_issue(self, source_issue_id: str) -> IssueCandidate:
+    async def fetch_issue(self, source_issue_id: str) -> IssueCandidate:
         """Fetch issue from Atomic Avenue.
 
         Args:
@@ -87,8 +97,11 @@ class AAAdapter(SourceAdapter):
         """
         url = f"{self.BASE_URL}/atomic/item/{source_issue_id}/1"
 
+        if self.http_client is None:
+            raise SourceError("HTTP client not initialized")
+
         try:
-            response = httpx.get(url, timeout=self.timeout, follow_redirects=True)
+            response = await self.http_client.get(url)
             response.raise_for_status()
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
@@ -100,7 +113,7 @@ class AAAdapter(SourceAdapter):
         return self.fetch_issue_from_html(source_issue_id, response.text)
 
     def fetch_series_from_html(
-        self, source_series_id: str, html: str
+        self, source_series_id: str, html: Optional[str]
     ) -> SeriesCandidate:
         """Parse series from pre-fetched AA HTML payload.
 
@@ -135,7 +148,9 @@ class AAAdapter(SourceAdapter):
             raw_payload={"html": html},
         )
 
-    def fetch_issue_from_html(self, source_issue_id: str, html: str) -> IssueCandidate:
+    def fetch_issue_from_html(
+        self, source_issue_id: str, html: Optional[str]
+    ) -> IssueCandidate:
         """Parse issue from pre-fetched AA HTML payload.
 
         Args:

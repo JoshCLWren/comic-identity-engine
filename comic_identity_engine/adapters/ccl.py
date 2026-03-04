@@ -21,6 +21,7 @@ from comic_identity_engine.adapters import (
     SourceError,
     ValidationError,
 )
+from comic_identity_engine.core.http_client import HttpClient
 from comic_identity_engine.models import IssueCandidate, SeriesCandidate
 from comic_identity_engine.parsing import parse_issue_candidate
 
@@ -35,17 +36,21 @@ class CCLAdapter(SourceAdapter):
     SOURCE = "ccl"
     BASE_URL = "https://www.comiccollectorlive.com"
 
-    def __init__(self, timeout: float = 30.0) -> None:
+    def __init__(
+        self,
+        http_client: HttpClient | None = None,
+        timeout: float = 30.0,
+    ) -> None:
         """Initialize CCL adapter.
 
         Args:
-            timeout: HTTP request timeout in seconds
+            http_client: Optional HTTP client for making requests
+            timeout: HTTP request timeout in seconds (used if http_client not provided)
         """
+        super().__init__(http_client)
         self.timeout = timeout
-        # SSL verification disabled due to certificate issues on CCL
-        self.client = httpx.Client(timeout=timeout, verify=False, follow_redirects=True)
 
-    def fetch_series(self, source_series_id: str) -> SeriesCandidate:
+    async def fetch_series(self, source_series_id: str) -> SeriesCandidate:
         """Fetch series from CCL.
 
         Args:
@@ -61,12 +66,15 @@ class CCLAdapter(SourceAdapter):
         """
         url = f"{self.BASE_URL}/Libraries/Series/{source_series_id}"
 
+        if self.http_client is None:
+            raise SourceError("HTTP client not initialized")
+
         try:
             # First visit main page to get ASP.NET session cookies
-            self.client.get(self.BASE_URL)
+            await self.http_client.get(self.BASE_URL)
 
             # Now fetch the series page
-            response = self.client.get(url)
+            response = await self.http_client.get(url)
             response.raise_for_status()
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
@@ -77,7 +85,7 @@ class CCLAdapter(SourceAdapter):
 
         return self.fetch_series_from_payload(source_series_id, {"html": response.text})
 
-    def fetch_issue(self, source_issue_id: str) -> IssueCandidate:
+    async def fetch_issue(self, source_issue_id: str) -> IssueCandidate:
         """Fetch issue from CCL.
 
         Args:
@@ -93,12 +101,15 @@ class CCLAdapter(SourceAdapter):
         """
         url = f"{self.BASE_URL}/Libraries/Issue/{source_issue_id}"
 
+        if self.http_client is None:
+            raise SourceError("HTTP client not initialized")
+
         try:
             # First visit main page to get ASP.NET session cookies
-            self.client.get(self.BASE_URL)
+            await self.http_client.get(self.BASE_URL)
 
             # Now fetch the issue page
-            response = self.client.get(url)
+            response = await self.http_client.get(url)
             response.raise_for_status()
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:

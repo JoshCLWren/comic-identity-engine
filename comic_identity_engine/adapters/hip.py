@@ -24,6 +24,7 @@ from comic_identity_engine.adapters import (
     SourceError,
     ValidationError,
 )
+from comic_identity_engine.core.http_client import HttpClient
 from comic_identity_engine.models import IssueCandidate, SeriesCandidate
 from comic_identity_engine.parsing import parse_issue_candidate
 
@@ -38,15 +39,21 @@ class HIPAdapter(SourceAdapter):
     SOURCE = "hip"
     BASE_URL = "https://www.hipcomic.com"
 
-    def __init__(self, timeout: float = 30.0) -> None:
+    def __init__(
+        self,
+        http_client: HttpClient | None = None,
+        timeout: float = 30.0,
+    ) -> None:
         """Initialize HIP adapter.
 
         Args:
-            timeout: HTTP request timeout in seconds
+            http_client: Optional HTTP client for making requests
+            timeout: HTTP request timeout in seconds (used if http_client not provided)
         """
+        super().__init__(http_client)
         self.timeout = timeout
 
-    def fetch_series(self, source_series_id: str) -> SeriesCandidate:
+    async def fetch_series(self, source_series_id: str) -> SeriesCandidate:
         """Fetch series from HIP price guide.
 
         Args:
@@ -64,7 +71,7 @@ class HIPAdapter(SourceAdapter):
             "Use fetch_series_from_payload() with pre-fetched HTML instead."
         )
 
-    def fetch_issue(self, source_issue_id: str) -> IssueCandidate:
+    async def fetch_issue(self, source_issue_id: str) -> IssueCandidate:
         """Fetch issue from HIP price guide.
 
         Args:
@@ -78,6 +85,9 @@ class HIPAdapter(SourceAdapter):
             ValidationError: Required fields missing or issue number invalid
             SourceError: Network or HTTP error
         """
+        if self.http_client is None:
+            raise SourceError("HTTP client not initialized")
+
         # Try the listing URL pattern first
         urls = [
             f"{self.BASE_URL}/listing/{source_issue_id}",
@@ -87,7 +97,7 @@ class HIPAdapter(SourceAdapter):
         last_error = None
         for url in urls:
             try:
-                response = httpx.get(url, timeout=self.timeout, follow_redirects=True)
+                response = await self.http_client.get(url)
                 response.raise_for_status()
                 # Success - parse the HTML
                 return self.fetch_issue_from_payload(

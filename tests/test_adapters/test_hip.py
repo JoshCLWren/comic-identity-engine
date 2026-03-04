@@ -710,11 +710,12 @@ class TestHIPAdapterEdgeCases:
 class TestHIPAdapterNotImplemented:
     """Tests for NotImplementedError on methods that cannot be implemented."""
 
-    def test_fetch_series_raises_not_implemented(self):
+    @pytest.mark.asyncio
+    async def test_fetch_series_raises_not_implemented(self):
         """fetch_series raises NotImplementedError (HIP has no series pages)."""
         adapter = HIPAdapter()
         with pytest.raises(NotImplementedError, match="fetch_series_from_payload"):
-            adapter.fetch_series("x-men-1991")
+            await adapter.fetch_series("x-men-1991")
 
 
 class TestHIPAdapterRealWorldData:

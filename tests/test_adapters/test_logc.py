@@ -1,7 +1,7 @@
 """Tests for LoCG adapter implementation."""
 
 from datetime import date
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 import httpx
@@ -323,7 +323,8 @@ class TestLoCGAdapterIssueMapping:
 class TestLoCGAdapterHTTPMethods:
     """Tests for LoCG adapter HTTP methods."""
 
-    def test_fetch_series_successful_request(self):
+    @pytest.mark.asyncio
+    async def test_fetch_series_successful_request(self, mock_http_client):
         """Successful HTTP request for series."""
         html = """
         <!DOCTYPE html>
@@ -340,15 +341,16 @@ class TestLoCGAdapterHTTPMethods:
         mock_response.status_code = 200
         mock_response.text = html
         mock_response.raise_for_status = Mock()
+        mock_http_client.get = AsyncMock(return_value=mock_response)
 
-        with patch("httpx.get", return_value=mock_response) as mock_get:
-            adapter = LoCGAdapter()
-            result = adapter.fetch_series("111275")
+        adapter = LoCGAdapter(http_client=mock_http_client)
+        result = await adapter.fetch_series("111275")
 
-            assert result.series_title == "X-Men (1991)"
-            mock_get.assert_called_once()
+        assert result.series_title == "X-Men (1991)"
+        mock_http_client.get.assert_called_once()
 
-    def test_fetch_issue_successful_request(self):
+    @pytest.mark.asyncio
+    async def test_fetch_issue_successful_request(self, mock_http_client):
         """Successful HTTP request for issue."""
         html = """
         <!DOCTYPE html>
@@ -364,15 +366,16 @@ class TestLoCGAdapterHTTPMethods:
         mock_response.status_code = 200
         mock_response.text = html
         mock_response.raise_for_status = Mock()
+        mock_http_client.get = AsyncMock(return_value=mock_response)
 
-        with patch("httpx.get", return_value=mock_response) as mock_get:
-            adapter = LoCGAdapter()
-            result = adapter.fetch_issue("1169529")
+        adapter = LoCGAdapter(http_client=mock_http_client)
+        result = await adapter.fetch_issue("1169529")
 
-            assert result.issue_number == "1"
-            mock_get.assert_called_once()
+        assert result.issue_number == "1"
+        mock_http_client.get.assert_called_once()
 
-    def test_fetch_series_not_found(self):
+    @pytest.mark.asyncio
+    async def test_fetch_series_not_found(self, mock_http_client):
         """404 response raises NotFoundError."""
         mock_response = Mock(spec=httpx.Response)
         mock_response.status_code = 404
@@ -381,13 +384,14 @@ class TestLoCGAdapterHTTPMethods:
                 "Not found", request=Mock(), response=mock_response
             )
         )
+        mock_http_client.get = AsyncMock(return_value=mock_response)
 
-        with patch("httpx.get", return_value=mock_response):
-            adapter = LoCGAdapter()
-            with pytest.raises(NotFoundError, match="Series not found"):
-                adapter.fetch_series("999999")
+        adapter = LoCGAdapter(http_client=mock_http_client)
+        with pytest.raises(NotFoundError, match="Series not found"):
+            await adapter.fetch_series("999999")
 
-    def test_fetch_issue_not_found(self):
+    @pytest.mark.asyncio
+    async def test_fetch_issue_not_found(self, mock_http_client):
         """404 response raises NotFoundError."""
         mock_response = Mock(spec=httpx.Response)
         mock_response.status_code = 404
@@ -396,13 +400,14 @@ class TestLoCGAdapterHTTPMethods:
                 "Not found", request=Mock(), response=mock_response
             )
         )
+        mock_http_client.get = AsyncMock(return_value=mock_response)
 
-        with patch("httpx.get", return_value=mock_response):
-            adapter = LoCGAdapter()
-            with pytest.raises(NotFoundError, match="Issue not found"):
-                adapter.fetch_issue("999999")
+        adapter = LoCGAdapter(http_client=mock_http_client)
+        with pytest.raises(NotFoundError, match="Issue not found"):
+            await adapter.fetch_issue("999999")
 
-    def test_fetch_series_http_error(self):
+    @pytest.mark.asyncio
+    async def test_fetch_series_http_error(self, mock_http_client):
         """Non-404 HTTP error raises SourceError."""
         from comic_identity_engine.adapters import SourceError
 
@@ -413,20 +418,22 @@ class TestLoCGAdapterHTTPMethods:
                 "Server error", request=Mock(), response=mock_response
             )
         )
+        mock_http_client.get = AsyncMock(return_value=mock_response)
 
-        with patch("httpx.get", return_value=mock_response):
-            adapter = LoCGAdapter()
-            with pytest.raises(SourceError, match="HTTP error"):
-                adapter.fetch_series("111275")
+        adapter = LoCGAdapter(http_client=mock_http_client)
+        with pytest.raises(SourceError, match="HTTP error"):
+            await adapter.fetch_series("111275")
 
-    def test_fetch_issue_network_error(self):
+    @pytest.mark.asyncio
+    async def test_fetch_issue_network_error(self, mock_http_client):
         """Network error raises SourceError."""
         from comic_identity_engine.adapters import SourceError
 
-        with patch("httpx.get", side_effect=httpx.RequestError("Connection failed")):
-            adapter = LoCGAdapter()
-            with pytest.raises(SourceError, match="Network error"):
-                adapter.fetch_issue("1169529")
+        mock_http_client.get = AsyncMock(side_effect=httpx.RequestError("Connection failed"))
+
+        adapter = LoCGAdapter(http_client=mock_http_client)
+        with pytest.raises(SourceError, match="Network error"):
+            await adapter.fetch_issue("1169529")
 
 
 class TestLoCGAdapterHelpers:
@@ -891,16 +898,19 @@ class TestLoCGAdapterEdgeCases:
 
         assert result.series_start_year is None
 
-    def test_network_error_fetch_series(self):
+    @pytest.mark.asyncio
+    async def test_network_error_fetch_series(self, mock_http_client):
         """Network error when fetching series."""
         from comic_identity_engine.adapters import SourceError
 
-        with patch("httpx.get", side_effect=httpx.RequestError("Connection failed")):
-            adapter = LoCGAdapter()
-            with pytest.raises(SourceError, match="Network error"):
-                adapter.fetch_series("111275")
+        mock_http_client.get = AsyncMock(side_effect=httpx.RequestError("Connection failed"))
 
-    def test_http_error_fetch_issue(self):
+        adapter = LoCGAdapter(http_client=mock_http_client)
+        with pytest.raises(SourceError, match="Network error"):
+            await adapter.fetch_series("111275")
+
+    @pytest.mark.asyncio
+    async def test_http_error_fetch_issue(self, mock_http_client):
         """HTTP error (non-404) when fetching issue."""
         from comic_identity_engine.adapters import SourceError
 
@@ -911,11 +921,11 @@ class TestLoCGAdapterEdgeCases:
                 "Server error", request=Mock(), response=mock_response
             )
         )
+        mock_http_client.get = AsyncMock(return_value=mock_response)
 
-        with patch("httpx.get", return_value=mock_response):
-            adapter = LoCGAdapter()
-            with pytest.raises(SourceError, match="HTTP error"):
-                adapter.fetch_issue("1169529")
+        adapter = LoCGAdapter(http_client=mock_http_client)
+        with pytest.raises(SourceError, match="HTTP error"):
+            await adapter.fetch_issue("1169529")
 
     def test_series_title_h1_fallback(self):
         """Series title extracted from h1 when title tag has no year."""
@@ -1120,3 +1130,43 @@ class TestLoCGAdapterEdgeCases:
         result = adapter.fetch_issue_from_html("12345", html)
 
         assert result.price is None
+
+
+
+class TestLoCGAdapterAsync:
+    """Async tests for LoCG adapter to verify async infrastructure works."""
+
+    @pytest.mark.asyncio
+    async def test_locg_adapter_has_async_methods(self):
+        """Test that LoCG adapter has async fetch methods."""
+        adapter = LoCGAdapter()
+        # Verify the adapter has the expected async methods
+        assert hasattr(adapter, "fetch_series")
+        assert hasattr(adapter, "fetch_issue")
+        assert hasattr(adapter, "fetch_series_from_html")
+        assert hasattr(adapter, "fetch_issue_from_html")
+
+    @pytest.mark.asyncio
+    async def test_locg_adapter_can_use_mock_http_client(self, mock_http_client):
+        """Test that LoCG adapter works with async mock HTTP client."""
+        # Create adapter with mock client
+        adapter = LoCGAdapter(http_client=mock_http_client)
+
+        # Setup mock response
+        html = """
+        <!DOCTYPE html>
+        <html>
+        <head><title>X-Men (1991) | League of Comic Geeks</title></head>
+        <body>
+        <h1 class="title">X-Men</h1>
+        <a href="/comic/111275">Marvel Comics</a>
+        </body>
+        </html>
+        """
+        mock_response = Mock()
+        mock_response.text = html
+        mock_response.raise_for_status = Mock()
+        mock_http_client.get = AsyncMock(return_value=mock_response)
+
+        # Verify adapter stores the http_client
+        assert adapter.http_client is mock_http_client
