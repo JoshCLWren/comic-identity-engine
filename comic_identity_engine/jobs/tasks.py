@@ -179,7 +179,7 @@ async def resolve_identity_task(
                 source_issue_id=parsed_url.source_issue_id,
             )
             adapter = get_adapter(parsed_url.platform)
-            candidate = adapter.fetch_issue(parsed_url.source_issue_id)
+            candidate = await adapter.fetch_issue(parsed_url.source_issue_id)
 
             # Resolve with fetched data
             resolver = IdentityResolver(session)

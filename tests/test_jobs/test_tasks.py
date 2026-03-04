@@ -121,7 +121,9 @@ class TestResolveIdentityTask:
                         mock_candidate.issue_number = "1"
                         mock_candidate.cover_date = None
                         mock_candidate.source_series_id = "456"
-                        mock_adapter.fetch_issue.return_value = mock_candidate
+                        mock_adapter.fetch_issue = AsyncMock(
+                            return_value=mock_candidate
+                        )
                         mock_get_adapter.return_value = mock_adapter
 
                         with patch(
@@ -221,7 +223,9 @@ class TestResolveIdentityTask:
                         mock_candidate.issue_number = "1"
                         mock_candidate.cover_date = None
                         mock_candidate.source_series_id = "456"
-                        mock_adapter.fetch_issue.return_value = mock_candidate
+                        mock_adapter.fetch_issue = AsyncMock(
+                            return_value=mock_candidate
+                        )
                         mock_get_adapter.return_value = mock_adapter
 
                         with patch(
@@ -338,7 +342,9 @@ class TestResolveIdentityTask:
                         mock_candidate.issue_number = "1"
                         mock_candidate.cover_date = None
                         mock_candidate.source_series_id = "456"
-                        mock_adapter.fetch_issue.return_value = mock_candidate
+                        mock_adapter.fetch_issue = AsyncMock(
+                            return_value=mock_candidate
+                        )
                         mock_get_adapter.return_value = mock_adapter
 
                         with patch(
@@ -1156,7 +1162,9 @@ class TestOperationStatusTransitions:
                         mock_candidate.issue_number = "1"
                         mock_candidate.cover_date = None
                         mock_candidate.source_series_id = "456"
-                        mock_adapter.fetch_issue.return_value = mock_candidate
+                        mock_adapter.fetch_issue = AsyncMock(
+                            return_value=mock_candidate
+                        )
                         mock_get_adapter.return_value = mock_adapter
 
                         with patch(
