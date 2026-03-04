@@ -116,10 +116,10 @@ def _display_table(data: dict[str, Any], console: Console) -> None:
         console.print("[red]No results found[/red]")
         return
 
-    canonical_uuid = result.get("canonical_uuid", "N/A")
+    canonical_uuid = result.get("issue_id", "N/A")
     confidence = result.get("confidence", 0.0)
     explanation = result.get("explanation", "N/A")
-    platform_urls = result.get("platform_urls", {})
+    platform_urls = result.get("urls", {})
 
     table = Table(title="Identity Resolution Results")
     table.add_column("Field", style="cyan", no_wrap=True)
@@ -147,7 +147,7 @@ def _display_urls(data: dict[str, Any]) -> None:
         data: The operation response data containing the result
     """
     result = data.get("response", {})
-    platform_urls = result.get("platform_urls", {})
+    platform_urls = result.get("urls", {})
 
     for url in platform_urls.values():
         click.echo(url)
