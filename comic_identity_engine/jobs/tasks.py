@@ -29,7 +29,19 @@ from typing import Any
 import structlog
 from sqlalchemy.exc import SQLAlchemyError
 
-from comic_identity_engine.adapters.clz import CLZAdapter
+from comic_identity_engine.adapters import (
+    AAAdapter,
+    CCLAdapter,
+    CLZAdapter,
+    CPGAdapter,
+    GCDAdapter,
+    HIPAdapter,
+    LoCGAdapter,
+    NotFoundError,
+    SourceAdapter,
+    SourceError,
+    ValidationError as AdapterValidationError,
+)
 from comic_identity_engine.database.connection import AsyncSessionLocal
 from comic_identity_engine.database.repositories import (
     ExternalMappingRepository,
@@ -38,6 +50,7 @@ from comic_identity_engine.database.repositories import (
     VariantRepository,
 )
 from comic_identity_engine.errors import ParseError, ResolutionError, ValidationError
+from comic_identity_engine.models import IssueCandidate
 from comic_identity_engine.services import (
     IdentityResolver,
     OperationsManager,
@@ -46,6 +59,33 @@ from comic_identity_engine.services import (
 )
 
 logger = structlog.get_logger(__name__)
+
+
+def get_adapter(platform: str) -> SourceAdapter:
+    """Get the appropriate adapter for a platform.
+
+    Args:
+        platform: Platform code (e.g., "gcd", "locg", "ccl", "aa", "cpg", "hip")
+
+    Returns:
+        SourceAdapter instance for the platform
+
+    Raises:
+        ValueError: If platform is not supported
+    """
+    adapters = {
+        "gcd": GCDAdapter,
+        "locg": LoCGAdapter,
+        "ccl": CCLAdapter,
+        "aa": AAAdapter,
+        "cpg": CPGAdapter,
+        "hip": HIPAdapter,
+    }
+
+    if platform not in adapters:
+        raise ValueError(f"Unsupported platform: {platform}")
+
+    return adapters[platform]()
 
 
 async def resolve_identity_task(
@@ -100,9 +140,73 @@ async def resolve_identity_task(
             )
 
             parsed_url = parse_url(url)
+            mapping_repo = ExternalMappingRepository(session)
 
+            # Check for existing mapping first
+            existing = await mapping_repo.find_by_source(
+                parsed_url.platform,
+                parsed_url.source_issue_id,
+            )
+            if existing:
+                logger.info(
+                    "Found existing mapping",
+                    operation_id=operation_id,
+                    issue_id=str(existing.issue_id),
+                    platform=parsed_url.platform,
+                    source_issue_id=parsed_url.source_issue_id,
+                )
+                urls = await build_urls(
+                    existing.issue_id,
+                    ["gcd", "locg", "ccl", "aa", "cpg", "hip"],
+                    session,
+                )
+                result_dict = {
+                    "issue_id": str(existing.issue_id),
+                    "confidence": 1.0,
+                    "urls": urls,
+                    "created_new": False,
+                    "explanation": f"Found existing external mapping for {parsed_url.platform}:{parsed_url.source_issue_id}",
+                }
+                await operations_manager.mark_completed(operation_uuid, result_dict)
+                await session.commit()
+                return result_dict
+
+            # Fetch from platform
+            logger.info(
+                "Fetching issue from platform",
+                operation_id=operation_id,
+                platform=parsed_url.platform,
+                source_issue_id=parsed_url.source_issue_id,
+            )
+            adapter = get_adapter(parsed_url.platform)
+            candidate = adapter.fetch_issue(parsed_url.source_issue_id)
+
+            # Resolve with fetched data
             resolver = IdentityResolver(session)
-            result = await resolver.resolve_issue(parsed_url)
+            result = await resolver.resolve_issue(
+                parsed_url,
+                upc=candidate.upc,
+                series_title=candidate.series_title,
+                series_start_year=candidate.series_start_year,
+                issue_number=candidate.issue_number,
+                cover_date=candidate.cover_date,
+            )
+
+            # Create external mapping if successful
+            if result.issue_id:
+                await mapping_repo.create_mapping(
+                    issue_id=result.issue_id,
+                    source=parsed_url.platform,
+                    source_issue_id=parsed_url.source_issue_id,
+                    source_series_id=candidate.source_series_id,
+                )
+                logger.info(
+                    "Created external mapping",
+                    operation_id=operation_id,
+                    issue_id=str(result.issue_id),
+                    platform=parsed_url.platform,
+                    source_issue_id=parsed_url.source_issue_id,
+                )
 
             urls = {}
             if result.issue_id:
@@ -143,6 +247,36 @@ async def resolve_identity_task(
             )
             await _mark_failed_safe(session, operation_uuid, error_msg)
             return {"error": error_msg, "error_type": "parse_error"}
+
+        except NotFoundError as e:
+            error_msg = f"Issue not found on platform: {e}"
+            logger.error(
+                "Identity resolution task failed - issue not found",
+                operation_id=operation_id,
+                error=error_msg,
+            )
+            await _mark_failed_safe(session, operation_uuid, error_msg)
+            return {"error": error_msg, "error_type": "not_found"}
+
+        except SourceError as e:
+            error_msg = f"Platform communication error: {e}"
+            logger.error(
+                "Identity resolution task failed - platform error",
+                operation_id=operation_id,
+                error=error_msg,
+            )
+            await _mark_failed_safe(session, operation_uuid, error_msg)
+            return {"error": error_msg, "error_type": "platform_error"}
+
+        except AdapterValidationError as e:
+            error_msg = f"Invalid data from platform: {e}"
+            logger.error(
+                "Identity resolution task failed - validation error",
+                operation_id=operation_id,
+                error=error_msg,
+            )
+            await _mark_failed_safe(session, operation_uuid, error_msg)
+            return {"error": error_msg, "error_type": "platform_validation_error"}
 
         except ResolutionError as e:
             error_msg = f"Identity resolution failed: {e}"

@@ -708,19 +708,13 @@ class TestHIPAdapterEdgeCases:
 
 
 class TestHIPAdapterNotImplemented:
-    """Tests for NotImplementedError on direct fetch methods."""
+    """Tests for NotImplementedError on methods that cannot be implemented."""
 
     def test_fetch_series_raises_not_implemented(self):
-        """fetch_series raises NotImplementedError."""
+        """fetch_series raises NotImplementedError (HIP has no series pages)."""
         adapter = HIPAdapter()
         with pytest.raises(NotImplementedError, match="fetch_series_from_payload"):
             adapter.fetch_series("x-men-1991")
-
-    def test_fetch_issue_raises_not_implemented(self):
-        """fetch_issue raises NotImplementedError."""
-        adapter = HIPAdapter()
-        with pytest.raises(NotImplementedError, match="fetch_issue_from_payload"):
-            adapter.fetch_issue("1")
 
 
 class TestHIPAdapterRealWorldData:

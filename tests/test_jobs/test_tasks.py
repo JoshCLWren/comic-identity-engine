@@ -64,7 +64,7 @@ def mock_identity_resolver():
 def mock_parse_url():
     """Mock parse_url function."""
     with patch("comic_identity_engine.jobs.tasks.parse_url") as mock:
-        mock.return_value = Mock(platform="gcd", issue_id="123")
+        mock.return_value = Mock(platform="gcd", issue_id="123", source_issue_id="123")
         yield mock
 
 
@@ -98,30 +98,56 @@ class TestResolveIdentityTask:
             mock_ops_manager_class.return_value = mock_ops_manager
 
             with patch("comic_identity_engine.jobs.tasks.parse_url") as mock_parse:
-                mock_parse.return_value = Mock(platform="gcd", issue_id="123")
+                mock_parse.return_value = Mock(
+                    platform="gcd", issue_id="123", source_issue_id="123"
+                )
 
                 with patch(
-                    "comic_identity_engine.jobs.tasks.IdentityResolver"
-                ) as mock_resolver_class:
-                    mock_resolver = Mock()
-                    mock_result = Mock()
-                    mock_result.issue_id = TEST_ISSUE_ID
-                    mock_result.created_new = True
-                    mock_result.explanation = "Matched on issue number"
-                    mock_result.best_match = Mock(overall_confidence=0.95)
-                    mock_resolver.resolve_issue = AsyncMock(return_value=mock_result)
-                    mock_resolver_class.return_value = mock_resolver
+                    "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
+                ) as mock_mapping_repo_class:
+                    mock_mapping_repo = Mock()
+                    mock_mapping_repo.find_by_source = AsyncMock(return_value=None)
+                    mock_mapping_repo.create_mapping = AsyncMock()
+                    mock_mapping_repo_class.return_value = mock_mapping_repo
 
                     with patch(
-                        "comic_identity_engine.jobs.tasks.build_urls"
-                    ) as mock_build:
-                        mock_build.return_value = {"gcd": "https://test.com"}
+                        "comic_identity_engine.jobs.tasks.get_adapter"
+                    ) as mock_get_adapter:
+                        mock_adapter = Mock()
+                        mock_candidate = Mock()
+                        mock_candidate.upc = "123456789012"
+                        mock_candidate.series_title = "Test Series"
+                        mock_candidate.series_start_year = 2020
+                        mock_candidate.issue_number = "1"
+                        mock_candidate.cover_date = None
+                        mock_candidate.source_series_id = "456"
+                        mock_adapter.fetch_issue.return_value = mock_candidate
+                        mock_get_adapter.return_value = mock_adapter
 
-                        result = await resolve_identity_task(
-                            {},
-                            "https://www.comics.org/issue/123/",
-                            str(TEST_OPERATION_ID),
-                        )
+                        with patch(
+                            "comic_identity_engine.jobs.tasks.IdentityResolver"
+                        ) as mock_resolver_class:
+                            mock_resolver = Mock()
+                            mock_result = Mock()
+                            mock_result.issue_id = TEST_ISSUE_ID
+                            mock_result.created_new = True
+                            mock_result.explanation = "Matched on issue number"
+                            mock_result.best_match = Mock(overall_confidence=0.95)
+                            mock_resolver.resolve_issue = AsyncMock(
+                                return_value=mock_result
+                            )
+                            mock_resolver_class.return_value = mock_resolver
+
+                            with patch(
+                                "comic_identity_engine.jobs.tasks.build_urls"
+                            ) as mock_build:
+                                mock_build.return_value = {"gcd": "https://test.com"}
+
+                                result = await resolve_identity_task(
+                                    {},
+                                    "https://www.comics.org/issue/123/",
+                                    str(TEST_OPERATION_ID),
+                                )
 
         assert result["issue_id"] == str(TEST_ISSUE_ID)
         assert result["confidence"] == 0.95
@@ -173,26 +199,49 @@ class TestResolveIdentityTask:
             mock_ops_manager_class.return_value = mock_ops_manager
 
             with patch("comic_identity_engine.jobs.tasks.parse_url") as mock_parse:
-                mock_parse.return_value = Mock(platform="gcd", issue_id="123")
+                mock_parse.return_value = Mock(
+                    platform="gcd", issue_id="123", source_issue_id="123"
+                )
 
                 with patch(
-                    "comic_identity_engine.jobs.tasks.IdentityResolver"
-                ) as mock_resolver_class:
-                    mock_resolver = Mock()
-                    mock_resolver.resolve_issue = AsyncMock(
-                        side_effect=ResolutionError("No matching issue found")
-                    )
-                    mock_resolver_class.return_value = mock_resolver
+                    "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
+                ) as mock_mapping_repo_class:
+                    mock_mapping_repo = Mock()
+                    mock_mapping_repo.find_by_source = AsyncMock(return_value=None)
+                    mock_mapping_repo_class.return_value = mock_mapping_repo
 
                     with patch(
-                        "comic_identity_engine.jobs.tasks._mark_failed_safe",
-                        new_callable=AsyncMock,
-                    ):
-                        result = await resolve_identity_task(
-                            {},
-                            "https://www.comics.org/issue/999999/",
-                            str(TEST_OPERATION_ID),
-                        )
+                        "comic_identity_engine.jobs.tasks.get_adapter"
+                    ) as mock_get_adapter:
+                        mock_adapter = Mock()
+                        mock_candidate = Mock()
+                        mock_candidate.upc = "123456789012"
+                        mock_candidate.series_title = "Test Series"
+                        mock_candidate.series_start_year = 2020
+                        mock_candidate.issue_number = "1"
+                        mock_candidate.cover_date = None
+                        mock_candidate.source_series_id = "456"
+                        mock_adapter.fetch_issue.return_value = mock_candidate
+                        mock_get_adapter.return_value = mock_adapter
+
+                        with patch(
+                            "comic_identity_engine.jobs.tasks.IdentityResolver"
+                        ) as mock_resolver_class:
+                            mock_resolver = Mock()
+                            mock_resolver.resolve_issue = AsyncMock(
+                                side_effect=ResolutionError("No matching issue found")
+                            )
+                            mock_resolver_class.return_value = mock_resolver
+
+                            with patch(
+                                "comic_identity_engine.jobs.tasks._mark_failed_safe",
+                                new_callable=AsyncMock,
+                            ):
+                                result = await resolve_identity_task(
+                                    {},
+                                    "https://www.comics.org/issue/999999/",
+                                    str(TEST_OPERATION_ID),
+                                )
 
         assert "error" in result
         assert result["error_type"] == "resolution_error"
@@ -266,30 +315,56 @@ class TestResolveIdentityTask:
             mock_ops_manager_class.return_value = mock_ops_manager
 
             with patch("comic_identity_engine.jobs.tasks.parse_url") as mock_parse:
-                mock_parse.return_value = Mock(platform="gcd", issue_id="123")
+                mock_parse.return_value = Mock(
+                    platform="gcd", issue_id="123", source_issue_id="123"
+                )
 
                 with patch(
-                    "comic_identity_engine.jobs.tasks.IdentityResolver"
-                ) as mock_resolver_class:
-                    mock_resolver = Mock()
-                    mock_result = Mock()
-                    mock_result.issue_id = TEST_ISSUE_ID
-                    mock_result.created_new = False
-                    mock_result.explanation = "New issue created"
-                    mock_result.best_match = None  # No best match
-                    mock_resolver.resolve_issue = AsyncMock(return_value=mock_result)
-                    mock_resolver_class.return_value = mock_resolver
+                    "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
+                ) as mock_mapping_repo_class:
+                    mock_mapping_repo = Mock()
+                    mock_mapping_repo.find_by_source = AsyncMock(return_value=None)
+                    mock_mapping_repo.create_mapping = AsyncMock()
+                    mock_mapping_repo_class.return_value = mock_mapping_repo
 
                     with patch(
-                        "comic_identity_engine.jobs.tasks.build_urls"
-                    ) as mock_build:
-                        mock_build.return_value = {}
+                        "comic_identity_engine.jobs.tasks.get_adapter"
+                    ) as mock_get_adapter:
+                        mock_adapter = Mock()
+                        mock_candidate = Mock()
+                        mock_candidate.upc = "123456789012"
+                        mock_candidate.series_title = "Test Series"
+                        mock_candidate.series_start_year = 2020
+                        mock_candidate.issue_number = "1"
+                        mock_candidate.cover_date = None
+                        mock_candidate.source_series_id = "456"
+                        mock_adapter.fetch_issue.return_value = mock_candidate
+                        mock_get_adapter.return_value = mock_adapter
 
-                        result = await resolve_identity_task(
-                            {},
-                            "https://www.comics.org/issue/123/",
-                            str(TEST_OPERATION_ID),
-                        )
+                        with patch(
+                            "comic_identity_engine.jobs.tasks.IdentityResolver"
+                        ) as mock_resolver_class:
+                            mock_resolver = Mock()
+                            mock_result = Mock()
+                            mock_result.issue_id = TEST_ISSUE_ID
+                            mock_result.created_new = False
+                            mock_result.explanation = "New issue created"
+                            mock_result.best_match = None  # No best match
+                            mock_resolver.resolve_issue = AsyncMock(
+                                return_value=mock_result
+                            )
+                            mock_resolver_class.return_value = mock_resolver
+
+                            with patch(
+                                "comic_identity_engine.jobs.tasks.build_urls"
+                            ) as mock_build:
+                                mock_build.return_value = {}
+
+                                result = await resolve_identity_task(
+                                    {},
+                                    "https://www.comics.org/issue/123/",
+                                    str(TEST_OPERATION_ID),
+                                )
 
         assert result["confidence"] == 1.0  # Default when no best_match
 
@@ -1058,30 +1133,56 @@ class TestOperationStatusTransitions:
             mock_ops_manager_class.return_value = mock_ops_manager
 
             with patch("comic_identity_engine.jobs.tasks.parse_url") as mock_parse:
-                mock_parse.return_value = Mock(platform="gcd", issue_id="123")
+                mock_parse.return_value = Mock(
+                    platform="gcd", issue_id="123", source_issue_id="123"
+                )
 
                 with patch(
-                    "comic_identity_engine.jobs.tasks.IdentityResolver"
-                ) as mock_resolver_class:
-                    mock_resolver = Mock()
-                    mock_result = Mock()
-                    mock_result.issue_id = TEST_ISSUE_ID
-                    mock_result.created_new = True
-                    mock_result.explanation = "Test"
-                    mock_result.best_match = Mock(overall_confidence=0.9)
-                    mock_resolver.resolve_issue = AsyncMock(return_value=mock_result)
-                    mock_resolver_class.return_value = mock_resolver
+                    "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
+                ) as mock_mapping_repo_class:
+                    mock_mapping_repo = Mock()
+                    mock_mapping_repo.find_by_source = AsyncMock(return_value=None)
+                    mock_mapping_repo.create_mapping = AsyncMock()
+                    mock_mapping_repo_class.return_value = mock_mapping_repo
 
                     with patch(
-                        "comic_identity_engine.jobs.tasks.build_urls"
-                    ) as mock_build:
-                        mock_build.return_value = {}
+                        "comic_identity_engine.jobs.tasks.get_adapter"
+                    ) as mock_get_adapter:
+                        mock_adapter = Mock()
+                        mock_candidate = Mock()
+                        mock_candidate.upc = "123456789012"
+                        mock_candidate.series_title = "Test Series"
+                        mock_candidate.series_start_year = 2020
+                        mock_candidate.issue_number = "1"
+                        mock_candidate.cover_date = None
+                        mock_candidate.source_series_id = "456"
+                        mock_adapter.fetch_issue.return_value = mock_candidate
+                        mock_get_adapter.return_value = mock_adapter
 
-                        await resolve_identity_task(
-                            {},
-                            "https://test.com",
-                            str(TEST_OPERATION_ID),
-                        )
+                        with patch(
+                            "comic_identity_engine.jobs.tasks.IdentityResolver"
+                        ) as mock_resolver_class:
+                            mock_resolver = Mock()
+                            mock_result = Mock()
+                            mock_result.issue_id = TEST_ISSUE_ID
+                            mock_result.created_new = True
+                            mock_result.explanation = "Test"
+                            mock_result.best_match = Mock(overall_confidence=0.9)
+                            mock_resolver.resolve_issue = AsyncMock(
+                                return_value=mock_result
+                            )
+                            mock_resolver_class.return_value = mock_resolver
+
+                            with patch(
+                                "comic_identity_engine.jobs.tasks.build_urls"
+                            ) as mock_build:
+                                mock_build.return_value = {}
+
+                                await resolve_identity_task(
+                                    {},
+                                    "https://test.com",
+                                    str(TEST_OPERATION_ID),
+                                )
 
         assert len(status_log) == 2
         assert status_log[0][0] == "mark_running"

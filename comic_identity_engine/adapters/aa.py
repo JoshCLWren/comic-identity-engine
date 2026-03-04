@@ -12,10 +12,13 @@ AA URL patterns:
 import re
 from typing import Optional
 
+import httpx
 from selectolax.lexbor import LexborHTMLParser
 
 from comic_identity_engine.adapters import (
+    NotFoundError,
     SourceAdapter,
+    SourceError,
     ValidationError,
 )
 from comic_identity_engine.models import IssueCandidate, SeriesCandidate
@@ -25,18 +28,23 @@ from comic_identity_engine.parsing import parse_issue_candidate
 class AAAdapter(SourceAdapter):
     """Adapter for Atomic Avenue (atomicavenue.com).
 
-    This adapter works with pre-fetched HTML responses. It does not
-    make any network calls - it accepts raw HTML payloads.
+    This adapter fetches data from Atomic Avenue HTML pages and maps
+    it to internal candidate models.
     """
 
     SOURCE = "aa"
+    BASE_URL = "https://www.atomicavenue.com"
 
-    def __init__(self) -> None:
-        """Initialize AA adapter."""
-        pass
+    def __init__(self, timeout: float = 30.0) -> None:
+        """Initialize AA adapter.
+
+        Args:
+            timeout: HTTP request timeout in seconds
+        """
+        self.timeout = timeout
 
     def fetch_series(self, source_series_id: str) -> SeriesCandidate:
-        """Fetch series from AA HTML response.
+        """Fetch series from Atomic Avenue.
 
         Args:
             source_series_id: AA series ID (e.g., "20384")
@@ -45,15 +53,26 @@ class AAAdapter(SourceAdapter):
             SeriesCandidate with validated metadata
 
         Raises:
-            NotImplementedError: Use fetch_series_from_html instead
+            NotFoundError: Series not found (404)
+            SourceError: Network or HTTP error
+            ValidationError: Required fields missing
         """
-        raise NotImplementedError(
-            "Use fetch_series_from_html() instead - this adapter "
-            "does not fetch data from remote sources"
-        )
+        url = f"{self.BASE_URL}/atomic/series/{source_series_id}"
+
+        try:
+            response = httpx.get(url, timeout=self.timeout, follow_redirects=True)
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                raise NotFoundError(f"Series not found: {source_series_id}") from e
+            raise SourceError(f"HTTP error fetching series: {e}") from e
+        except httpx.RequestError as e:
+            raise SourceError(f"Network error fetching series: {e}") from e
+
+        return self.fetch_series_from_html(source_series_id, response.text)
 
     def fetch_issue(self, source_issue_id: str) -> IssueCandidate:
-        """Fetch issue from AA HTML response.
+        """Fetch issue from Atomic Avenue.
 
         Args:
             source_issue_id: AA item ID (e.g., "209583")
@@ -62,12 +81,23 @@ class AAAdapter(SourceAdapter):
             IssueCandidate with validated metadata
 
         Raises:
-            NotImplementedError: Use fetch_issue_from_html instead
+            NotFoundError: Issue not found (404)
+            SourceError: Network or HTTP error
+            ValidationError: Required fields missing or issue number invalid
         """
-        raise NotImplementedError(
-            "Use fetch_issue_from_html() instead - this adapter "
-            "does not fetch data from remote sources"
-        )
+        url = f"{self.BASE_URL}/atomic/item/{source_issue_id}/1"
+
+        try:
+            response = httpx.get(url, timeout=self.timeout, follow_redirects=True)
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                raise NotFoundError(f"Issue not found: {source_issue_id}") from e
+            raise SourceError(f"HTTP error fetching issue: {e}") from e
+        except httpx.RequestError as e:
+            raise SourceError(f"Network error fetching issue: {e}") from e
+
+        return self.fetch_issue_from_html(source_issue_id, response.text)
 
     def fetch_series_from_html(
         self, source_series_id: str, html: str
@@ -245,7 +275,7 @@ class AAAdapter(SourceAdapter):
         """
         series_link = parser.css_first("h2.dropLeftMargin a")
         if series_link:
-            href = series_link.attributes.get("href", "")
+            href = series_link.attributes.get("href") or ""
             match = re.search(r"/series/(\d+)", href)
             if match:
                 return match.group(1)

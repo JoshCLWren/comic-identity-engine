@@ -11,8 +11,11 @@ import re
 from datetime import date
 from typing import Any
 
+import httpx
+
 from comic_identity_engine.adapters import (
     SourceAdapter,
+    SourceError,
     ValidationError,
 )
 from comic_identity_engine.models import IssueCandidate, SeriesCandidate
@@ -22,18 +25,23 @@ from comic_identity_engine.parsing import parse_issue_candidate
 class GCDAdapter(SourceAdapter):
     """Adapter for Grand Comics Database (comics.org).
 
-    This adapter works with pre-fetched GCD API responses. It does not
-    make any network calls - it accepts raw JSON payloads.
+        This adapter fetches data from the GCD API and maps it to internal
+    candidate models.
     """
 
     SOURCE = "gcd"
+    BASE_URL = "https://www.comics.org/api"
 
-    def __init__(self) -> None:
-        """Initialize GCD adapter."""
-        pass
+    def __init__(self, timeout: float = 30.0) -> None:
+        """Initialize GCD adapter.
+
+        Args:
+            timeout: HTTP request timeout in seconds
+        """
+        self.timeout = timeout
 
     def fetch_series(self, source_series_id: str) -> SeriesCandidate:
-        """Fetch series from GCD API response.
+        """Fetch series from GCD API.
 
         Args:
             source_series_id: GCD series ID (e.g., "4254")
@@ -42,16 +50,28 @@ class GCDAdapter(SourceAdapter):
             SeriesCandidate with validated metadata
 
         Raises:
-            NotFoundError: Series not found in payload cache
+            NotFoundError: Series not found in GCD
             ValidationError: Required fields missing
+            SourceError: Network or API error
         """
-        raise NotImplementedError(
-            "Use fetch_series_from_payload() instead - this adapter "
-            "does not fetch data from remote sources"
-        )
+        url = f"{self.BASE_URL}/series/{source_series_id}/?format=json"
+
+        try:
+            response = httpx.get(url, timeout=self.timeout, follow_redirects=True)
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                from comic_identity_engine.adapters import NotFoundError
+
+                raise NotFoundError(f"Series not found: {source_series_id}") from e
+            raise SourceError(f"HTTP error fetching series: {e}") from e
+        except httpx.RequestError as e:
+            raise SourceError(f"Network error fetching series: {e}") from e
+
+        return self.fetch_series_from_payload(source_series_id, response.json())
 
     def fetch_issue(self, source_issue_id: str) -> IssueCandidate:
-        """Fetch issue from GCD API response.
+        """Fetch issue from GCD API.
 
         Args:
             source_issue_id: GCD issue ID (e.g., "125295")
@@ -60,13 +80,25 @@ class GCDAdapter(SourceAdapter):
             IssueCandidate with validated metadata
 
         Raises:
-            NotFoundError: Issue not found in payload cache
+            NotFoundError: Issue not found in GCD
             ValidationError: Required fields missing or issue number invalid
+            SourceError: Network or API error
         """
-        raise NotImplementedError(
-            "Use fetch_issue_from_payload() instead - this adapter "
-            "does not fetch data from remote sources"
-        )
+        url = f"{self.BASE_URL}/issue/{source_issue_id}/?format=json"
+
+        try:
+            response = httpx.get(url, timeout=self.timeout, follow_redirects=True)
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                from comic_identity_engine.adapters import NotFoundError
+
+                raise NotFoundError(f"Issue not found: {source_issue_id}") from e
+            raise SourceError(f"HTTP error fetching issue: {e}") from e
+        except httpx.RequestError as e:
+            raise SourceError(f"Network error fetching issue: {e}") from e
+
+        return self.fetch_issue_from_payload(source_issue_id, response.json())
 
     def fetch_series_from_payload(
         self, source_series_id: str, payload: dict[str, Any]

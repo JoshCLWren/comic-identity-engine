@@ -13,8 +13,15 @@ Adapters must NOT:
 - Modify the parsing logic
 """
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
+
 from comic_identity_engine.models import IssueCandidate, SeriesCandidate
+
+if TYPE_CHECKING:
+    from comic_identity_engine.core.http_client import HttpClient
 
 
 class SourceAdapter(ABC):
@@ -22,13 +29,28 @@ class SourceAdapter(ABC):
 
     Each adapter implements fetch_series() and fetch_issue() to retrieve
     data from its source platform and return normalized candidate models.
+
+    Attributes:
+        http_client: Optional shared HTTP client for making requests.
+            If not provided, adapters should create their own.
     """
 
+    def __init__(self, http_client: HttpClient | None = None) -> None:
+        """Initialize the adapter.
+
+        Args:
+            http_client: Optional shared HTTP client for making requests.
+                If provided, the adapter should use this client for all
+                HTTP operations. If not provided, the adapter may create
+                its own client or use alternative methods.
+        """
+        self.http_client = http_client
+
     @abstractmethod
-    def fetch_series(
+    async def fetch_series(
         self, source_series_id: str
     ) -> SeriesCandidate:  # pragma: no cover
-        """Fetch series data from source platform.
+        """Fetch series data from source platform asynchronously.
 
         Args:
             source_series_id: Platform-specific series identifier
@@ -44,8 +66,10 @@ class SourceAdapter(ABC):
         pass
 
     @abstractmethod
-    def fetch_issue(self, source_issue_id: str) -> IssueCandidate:  # pragma: no cover
-        """Fetch issue data from source platform.
+    async def fetch_issue(
+        self, source_issue_id: str
+    ) -> IssueCandidate:  # pragma: no cover
+        """Fetch issue data from source platform asynchronously.
 
         The issue_number field MUST be validated using parse_issue_candidate()
         before returning the IssueCandidate.

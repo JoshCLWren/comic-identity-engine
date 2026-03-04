@@ -654,18 +654,6 @@ class TestAAAdapterEdgeCases:
         assert start_year is None
         assert end_year is None
 
-    def test_fetch_series_raises_not_implemented(self):
-        """fetch_series raises NotImplementedError."""
-        adapter = AAAdapter()
-        with pytest.raises(NotImplementedError, match="fetch_series_from_html"):
-            adapter.fetch_series("20384")
-
-    def test_fetch_issue_raises_not_implemented(self):
-        """fetch_issue raises NotImplementedError."""
-        adapter = AAAdapter()
-        with pytest.raises(NotImplementedError, match="fetch_issue_from_html"):
-            adapter.fetch_issue("209583")
-
 
 class TestAAAdapterRealData:
     """Tests using actual AA HTML responses."""

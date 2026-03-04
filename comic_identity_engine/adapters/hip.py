@@ -16,8 +16,12 @@ import re
 from datetime import date
 from typing import Any
 
+import httpx
+
 from comic_identity_engine.adapters import (
+    NotFoundError,
     SourceAdapter,
+    SourceError,
     ValidationError,
 )
 from comic_identity_engine.models import IssueCandidate, SeriesCandidate
@@ -27,15 +31,20 @@ from comic_identity_engine.parsing import parse_issue_candidate
 class HIPAdapter(SourceAdapter):
     """Adapter for HipComic.com price guide.
 
-    This adapter works with pre-fetched HTML payloads from HipComic.com.
-    It does not make any network calls - it accepts raw HTML content.
+    This adapter fetches data from HipComic.com and maps it to internal
+    candidate models.
     """
 
     SOURCE = "hip"
+    BASE_URL = "https://www.hipcomic.com"
 
-    def __init__(self) -> None:
-        """Initialize HIP adapter."""
-        pass
+    def __init__(self, timeout: float = 30.0) -> None:
+        """Initialize HIP adapter.
+
+        Args:
+            timeout: HTTP request timeout in seconds
+        """
+        self.timeout = timeout
 
     def fetch_series(self, source_series_id: str) -> SeriesCandidate:
         """Fetch series from HIP price guide.
@@ -47,31 +56,54 @@ class HIPAdapter(SourceAdapter):
             SeriesCandidate with validated metadata
 
         Raises:
-            NotFoundError: Series not found in payload cache
+            NotImplementedError: HIP does not have traditional series pages
             ValidationError: Required fields missing
         """
         raise NotImplementedError(
-            "Use fetch_series_from_payload() instead - this adapter "
-            "does not fetch data from remote sources"
+            "HIP does not have traditional series pages like other platforms. "
+            "Use fetch_series_from_payload() with pre-fetched HTML instead."
         )
 
     def fetch_issue(self, source_issue_id: str) -> IssueCandidate:
         """Fetch issue from HIP price guide.
 
         Args:
-            source_issue_id: HIP issue ID (encoded issue number, e.g., "1-1")
+            source_issue_id: HIP listing ID (e.g., "12345678")
 
         Returns:
             IssueCandidate with validated metadata
 
         Raises:
-            NotFoundError: Issue not found in payload cache
+            NotFoundError: Issue not found on HIP (404)
             ValidationError: Required fields missing or issue number invalid
+            SourceError: Network or HTTP error
         """
-        raise NotImplementedError(
-            "Use fetch_issue_from_payload() instead - this adapter "
-            "does not fetch data from remote sources"
-        )
+        # Try the listing URL pattern first
+        urls = [
+            f"{self.BASE_URL}/listing/{source_issue_id}",
+            f"{self.BASE_URL}/new-comic-listings/{source_issue_id}",
+        ]
+
+        last_error = None
+        for url in urls:
+            try:
+                response = httpx.get(url, timeout=self.timeout, follow_redirects=True)
+                response.raise_for_status()
+                # Success - parse the HTML
+                return self.fetch_issue_from_payload(
+                    source_issue_id, {"html": response.text}
+                )
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 404:
+                    # Try next URL pattern
+                    last_error = e
+                    continue
+                raise SourceError(f"HTTP error fetching issue: {e}") from e
+            except httpx.RequestError as e:
+                raise SourceError(f"Network error fetching issue: {e}") from e
+
+        # All URLs returned 404
+        raise NotFoundError(f"Issue not found: {source_issue_id}") from last_error
 
     def fetch_series_from_payload(
         self, source_series_id: str, payload: dict[str, Any]

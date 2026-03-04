@@ -1,9 +1,17 @@
 """Tests for CPG adapter implementation."""
 
 from datetime import date
+from unittest.mock import MagicMock, patch
+
+import httpx
 import pytest
 
-from comic_identity_engine.adapters import CPGAdapter, ValidationError
+from comic_identity_engine.adapters import (
+    CPGAdapter,
+    NotFoundError,
+    SourceError,
+    ValidationError,
+)
 
 
 class TestCPGAdapterSeriesMapping:
@@ -553,6 +561,137 @@ class TestCPGAdapterHelpers:
         assert result is None
 
 
+class TestCPGAdapterFetchMethods:
+    """Tests for CPG adapter HTTP fetch methods."""
+
+    def test_fetch_series_successful_request(self):
+        """fetch_series makes HTTP request and parses response."""
+        import json
+        from unittest.mock import patch, MagicMock
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "title": "X-Men",
+            "publisher": "Marvel",
+            "year": 1991,
+        }
+
+        with patch("httpx.get", return_value=mock_response):
+            adapter = CPGAdapter()
+            result = adapter.fetch_series("x-men")
+
+            assert result.source == "cpg"
+            assert result.source_series_id == "x-men"
+            assert result.series_title == "X-Men"
+
+    def test_fetch_issue_successful_request(self):
+        """fetch_issue makes HTTP request and parses response."""
+        from unittest.mock import patch, MagicMock
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "number": "1",
+            "title": "X-Men",
+            "publisher": "Marvel",
+            "year": 1991,
+            "name": "x-men",
+        }
+
+        with patch("httpx.get", return_value=mock_response):
+            adapter = CPGAdapter()
+            result = adapter.fetch_issue("12345")
+
+            assert result.source == "cpg"
+            assert result.source_issue_id == "12345"
+            assert result.issue_number == "1"
+
+    def test_fetch_series_not_found(self):
+        """fetch_series raises NotFoundError on 404."""
+        import httpx
+        from unittest.mock import patch
+
+        with patch("httpx.get") as mock_get:
+            mock_response = MagicMock()
+            mock_response.status_code = 404
+            mock_get.return_value.raise_for_status.side_effect = httpx.HTTPStatusError(
+                "404 Not Found", request=MagicMock(), response=mock_response
+            )
+
+            adapter = CPGAdapter()
+            with pytest.raises(NotFoundError, match="Series not found"):
+                adapter.fetch_series("nonexistent")
+
+    def test_fetch_issue_not_found(self):
+        """fetch_issue raises NotFoundError on 404."""
+        import httpx
+        from unittest.mock import patch
+
+        with patch("httpx.get") as mock_get:
+            mock_response = MagicMock()
+            mock_response.status_code = 404
+            mock_get.return_value.raise_for_status.side_effect = httpx.HTTPStatusError(
+                "404 Not Found", request=MagicMock(), response=mock_response
+            )
+
+            adapter = CPGAdapter()
+            with pytest.raises(NotFoundError, match="Issue not found"):
+                adapter.fetch_issue("nonexistent")
+
+    def test_fetch_series_network_error(self):
+        """fetch_series raises SourceError on network error."""
+        import httpx
+        from unittest.mock import patch
+
+        with patch("httpx.get", side_effect=httpx.RequestError("Network error")):
+            adapter = CPGAdapter()
+            with pytest.raises(SourceError, match="Network error"):
+                adapter.fetch_series("x-men")
+
+    def test_fetch_issue_network_error(self):
+        """fetch_issue raises SourceError on network error."""
+        import httpx
+        from unittest.mock import patch
+
+        with patch("httpx.get", side_effect=httpx.RequestError("Network error")):
+            adapter = CPGAdapter()
+            with pytest.raises(SourceError, match="Network error"):
+                adapter.fetch_issue("12345")
+
+    def test_fetch_series_http_error(self):
+        """fetch_series raises SourceError on HTTP error."""
+        import httpx
+        from unittest.mock import patch
+
+        with patch("httpx.get") as mock_get:
+            mock_response = MagicMock()
+            mock_response.status_code = 500
+            mock_get.return_value.raise_for_status.side_effect = httpx.HTTPStatusError(
+                "500 Server Error", request=MagicMock(), response=mock_response
+            )
+
+            adapter = CPGAdapter()
+            with pytest.raises(SourceError, match="HTTP error"):
+                adapter.fetch_series("x-men")
+
+    def test_fetch_issue_http_error(self):
+        """fetch_issue raises SourceError on HTTP error."""
+        import httpx
+        from unittest.mock import patch
+
+        with patch("httpx.get") as mock_get:
+            mock_response = MagicMock()
+            mock_response.status_code = 500
+            mock_get.return_value.raise_for_status.side_effect = httpx.HTTPStatusError(
+                "500 Server Error", request=MagicMock(), response=mock_response
+            )
+
+            adapter = CPGAdapter()
+            with pytest.raises(SourceError, match="HTTP error"):
+                adapter.fetch_issue("12345")
+
+
 class TestCPGAdapterEdgeCases:
     """Edge case tests for CPG adapter."""
 
@@ -722,20 +861,6 @@ class TestCPGAdapterEdgeCases:
         result = adapter.fetch_issue_from_payload("space001", payload)
 
         assert result.issue_number == "1"
-
-    def test_fetch_series_raises_not_implemented(self):
-        """fetch_series raises NotImplementedError."""
-        adapter = CPGAdapter()
-
-        with pytest.raises(NotImplementedError, match="fetch_series_from_payload"):
-            adapter.fetch_series("x-men")
-
-    def test_fetch_issue_raises_not_implemented(self):
-        """fetch_issue raises NotImplementedError."""
-        adapter = CPGAdapter()
-
-        with pytest.raises(NotImplementedError, match="fetch_issue_from_payload"):
-            adapter.fetch_issue("abc123")
 
     def test_series_mapping_preserves_raw_payload(self):
         """Series mapping preserves raw payload."""

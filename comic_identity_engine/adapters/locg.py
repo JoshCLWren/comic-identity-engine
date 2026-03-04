@@ -43,6 +43,11 @@ class LoCGAdapter(SourceAdapter):
             timeout: HTTP request timeout in seconds
         """
         self.timeout = timeout
+        self.headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
+        }
 
     def fetch_series(self, source_series_id: str) -> SeriesCandidate:
         """Fetch series from LoCG.
@@ -61,7 +66,9 @@ class LoCGAdapter(SourceAdapter):
         url = f"{self.BASE_URL}/comic/{source_series_id}"
 
         try:
-            response = httpx.get(url, timeout=self.timeout, follow_redirects=True)
+            response = httpx.get(
+                url, timeout=self.timeout, follow_redirects=True, headers=self.headers
+            )
             response.raise_for_status()
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
@@ -91,7 +98,9 @@ class LoCGAdapter(SourceAdapter):
         url = f"{self.BASE_URL}/comic/{source_issue_id}"
 
         try:
-            response = httpx.get(url, timeout=self.timeout, follow_redirects=True)
+            response = httpx.get(
+                url, timeout=self.timeout, follow_redirects=True, headers=self.headers
+            )
             response.raise_for_status()
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:

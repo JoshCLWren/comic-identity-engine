@@ -1,6 +1,6 @@
 """Comics Price Guide (CPG) adapter implementation.
 
-This adapter ingests pre-fetched CPG data and maps it to internal
+This adapter fetches data from CPG and maps it to internal
 candidate models. CPG provides comic pricing and marketplace data
 with coverage of both older and modern comics.
 
@@ -13,8 +13,12 @@ import re
 from datetime import date
 from typing import Any
 
+import httpx
+
 from comic_identity_engine.adapters import (
+    NotFoundError,
     SourceAdapter,
+    SourceError,
     ValidationError,
 )
 from comic_identity_engine.models import IssueCandidate, SeriesCandidate
@@ -24,14 +28,23 @@ from comic_identity_engine.parsing import parse_issue_candidate
 class CPGAdapter(SourceAdapter):
     """Adapter for Comics Price Guide (comicspriceguide.com).
 
-    This adapter works with pre-fetched CPG data payloads. It does not
-    make any network calls - it accepts raw JSON/dict payloads.
+    This adapter fetches data from CPG API and maps it to internal
+    candidate models.
     """
 
     SOURCE = "cpg"
+    BASE_URL = "https://www.comicspriceguide.com"
+
+    def __init__(self, timeout: float = 30.0) -> None:
+        """Initialize CPG adapter.
+
+        Args:
+            timeout: HTTP request timeout in seconds
+        """
+        self.timeout = timeout
 
     def fetch_series(self, source_series_id: str) -> SeriesCandidate:
-        """Fetch series from CPG data payload.
+        """Fetch series from CPG.
 
         Args:
             source_series_id: CPG series slug (e.g., "x-men")
@@ -40,15 +53,26 @@ class CPGAdapter(SourceAdapter):
             SeriesCandidate with validated metadata
 
         Raises:
-            NotImplementedError: Use fetch_series_from_payload() instead
+            NotFoundError: Series not found on CPG
+            ValidationError: Required fields missing
+            SourceError: Network or API error
         """
-        raise NotImplementedError(
-            "Use fetch_series_from_payload() instead - this adapter "
-            "does not fetch data from remote sources"
-        )
+        url = f"{self.BASE_URL}/api/series/{source_series_id}"
+
+        try:
+            response = httpx.get(url, timeout=self.timeout, follow_redirects=True)
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                raise NotFoundError(f"Series not found: {source_series_id}") from e
+            raise SourceError(f"HTTP error fetching series: {e}") from e
+        except httpx.RequestError as e:
+            raise SourceError(f"Network error fetching series: {e}") from e
+
+        return self.fetch_series_from_payload(source_series_id, response.json())
 
     def fetch_issue(self, source_issue_id: str) -> IssueCandidate:
-        """Fetch issue from CPG data payload.
+        """Fetch issue from CPG.
 
         Args:
             source_issue_id: CPG resource ID
@@ -57,12 +81,23 @@ class CPGAdapter(SourceAdapter):
             IssueCandidate with validated metadata
 
         Raises:
-            NotImplementedError: Use fetch_issue_from_payload() instead
+            NotFoundError: Issue not found on CPG
+            ValidationError: Required fields missing or issue number invalid
+            SourceError: Network or API error
         """
-        raise NotImplementedError(
-            "Use fetch_issue_from_payload() instead - this adapter "
-            "does not fetch data from remote sources"
-        )
+        url = f"{self.BASE_URL}/api/item/{source_issue_id}"
+
+        try:
+            response = httpx.get(url, timeout=self.timeout, follow_redirects=True)
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                raise NotFoundError(f"Issue not found: {source_issue_id}") from e
+            raise SourceError(f"HTTP error fetching issue: {e}") from e
+        except httpx.RequestError as e:
+            raise SourceError(f"Network error fetching issue: {e}") from e
+
+        return self.fetch_issue_from_payload(source_issue_id, response.json())
 
     def fetch_series_from_payload(
         self, source_series_id: str, payload: dict[str, Any]

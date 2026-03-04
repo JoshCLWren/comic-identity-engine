@@ -1,22 +1,24 @@
 """Comic Collector Live (CCL) adapter implementation.
 
-This adapter ingests pre-fetched CCL data and maps it to internal
-candidate models. CCL is a marketplace and collection tracking platform
-with UUID-based issue identification.
+This adapter fetches data from ComicCollectorLive and maps it to internal
+candidate models. CCL is a marketplace and collection tracking platform.
 
 CCL URL format:
-- comiccollectorlive.com/issue/comic-books/SERIES-SLUG/ISSUE-NUMBER/GUID
-- comiccollectorlive.com/issue/comic-books/SERIES-SLUG/ISSUE-NUMBER-VARIANT-DESC/GUID
+- comiccollectorlive.com/Libraries/Issue/{issue_id}
+- comiccollectorlive.com/Libraries/Series/{series_id}
 """
 
 import re
 from datetime import date
 from typing import Any, Optional
 
+import httpx
 from selectolax.lexbor import LexborHTMLParser
 
 from comic_identity_engine.adapters import (
+    NotFoundError,
     SourceAdapter,
+    SourceError,
     ValidationError,
 )
 from comic_identity_engine.models import IssueCandidate, SeriesCandidate
@@ -26,49 +28,86 @@ from comic_identity_engine.parsing import parse_issue_candidate
 class CCLAdapter(SourceAdapter):
     """Adapter for Comic Collector Live (comiccollectorlive.com).
 
-    This adapter works with pre-fetched CCL HTML payloads. It does not
-    make any network calls - it accepts raw HTML/dict payloads.
+    This adapter fetches data from CCL and maps it to internal candidate models.
+    It supports both direct fetching from CCL URLs and parsing pre-fetched HTML.
     """
 
     SOURCE = "ccl"
+    BASE_URL = "https://www.comiccollectorlive.com"
 
-    def __init__(self) -> None:
-        """Initialize CCL adapter."""
-        pass
-
-    def fetch_series(self, source_series_id: str) -> SeriesCandidate:
-        """Fetch series from CCL data payload.
+    def __init__(self, timeout: float = 30.0) -> None:
+        """Initialize CCL adapter.
 
         Args:
-            source_series_id: CCL series UUID (e.g., "84ac79ed-2a10-4a38-9b4c-6df3e0db37de")
+            timeout: HTTP request timeout in seconds
+        """
+        self.timeout = timeout
+        # SSL verification disabled due to certificate issues on CCL
+        self.client = httpx.Client(timeout=timeout, verify=False, follow_redirects=True)
+
+    def fetch_series(self, source_series_id: str) -> SeriesCandidate:
+        """Fetch series from CCL.
+
+        Args:
+            source_series_id: CCL series ID (e.g., "787")
 
         Returns:
             SeriesCandidate with validated metadata
 
         Raises:
-            NotImplementedError: Use fetch_series_from_payload() instead
+            NotFoundError: Series not found on CCL
+            ValidationError: Required fields missing
+            SourceError: Network or scraping error
         """
-        raise NotImplementedError(
-            "Use fetch_series_from_payload() instead - this adapter "
-            "does not fetch data from remote sources"
-        )
+        url = f"{self.BASE_URL}/Libraries/Series/{source_series_id}"
+
+        try:
+            # First visit main page to get ASP.NET session cookies
+            self.client.get(self.BASE_URL)
+
+            # Now fetch the series page
+            response = self.client.get(url)
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                raise NotFoundError(f"Series not found: {source_series_id}") from e
+            raise SourceError(f"HTTP error fetching series: {e}") from e
+        except httpx.RequestError as e:
+            raise SourceError(f"Network error fetching series: {e}") from e
+
+        return self.fetch_series_from_payload(source_series_id, {"html": response.text})
 
     def fetch_issue(self, source_issue_id: str) -> IssueCandidate:
-        """Fetch issue from CCL data payload.
+        """Fetch issue from CCL.
 
         Args:
-            source_issue_id: CCL issue UUID
+            source_issue_id: CCL issue ID (e.g., "28636")
 
         Returns:
             IssueCandidate with validated metadata
 
         Raises:
-            NotImplementedError: Use fetch_issue_from_payload() instead
+            NotFoundError: Issue not found on CCL
+            ValidationError: Required fields missing or issue number invalid
+            SourceError: Network or scraping error
         """
-        raise NotImplementedError(
-            "Use fetch_issue_from_payload() instead - this adapter "
-            "does not fetch data from remote sources"
-        )
+        url = f"{self.BASE_URL}/Libraries/Issue/{source_issue_id}"
+
+        try:
+            # First visit main page to get ASP.NET session cookies
+            self.client.get(self.BASE_URL)
+
+            # Now fetch the issue page
+            response = self.client.get(url)
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                raise NotFoundError(f"Issue not found: {source_issue_id}") from e
+            raise SourceError(f"HTTP error fetching issue: {e}") from e
+        except httpx.RequestError as e:
+            raise SourceError(f"Network error fetching issue: {e}") from e
+
+        return self.fetch_issue_from_payload(source_issue_id, {"html": response.text})
 
     def fetch_series_from_payload(
         self, source_series_id: str, payload: dict[str, Any]

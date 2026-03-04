@@ -8,7 +8,33 @@ import pytest
 from comic_identity_engine.adapters import CCLAdapter, ValidationError
 
 
-class TestCCLAdapterSeriesMapping:
+@pytest.fixture
+def mock_httpx_client(monkeypatch):
+    """Fixture to mock httpx.Client for network tests."""
+    mock_response = Mock()
+    mock_response.text = "<html><body><h1>Test</h1></body></html>"
+    mock_response.status_code = 200
+    mock_response.raise_for_status = Mock()
+
+    mock_client = Mock()
+    mock_client.get.return_value = mock_response
+
+    # Create a mock class that acts as a context manager properly
+    class MockClientClass:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return mock_client
+
+        def __exit__(self, *args):
+            return False
+
+    monkeypatch.setattr("httpx.Client", MockClientClass)
+    return MockClientClass, mock_client, mock_response
+
+
+class TestCCLAdapterFetch:
     """Tests for CCL series payload mapping."""
 
     def test_successful_series_mapping(self):
@@ -591,17 +617,39 @@ class TestCCLAdapterEdgeCases:
 
         assert result is None
 
-    def test_fetch_series_raises_not_implemented(self):
-        """fetch_series() raises NotImplementedError."""
-        adapter = CCLAdapter()
-        with pytest.raises(NotImplementedError, match="fetch_series_from_payload"):
-            adapter.fetch_series("test-id")
+    def test_fetch_series_404_raises_not_found(self, mock_httpx_client):
+        """fetch_series() raises NotFoundError on 404."""
+        import httpx
 
-    def test_fetch_issue_raises_not_implemented(self):
-        """fetch_issue() raises NotImplementedError."""
+        _, mock_client, mock_response = mock_httpx_client
+        mock_request = Mock()
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "Not Found", request=mock_request, response=mock_response
+        )
+        mock_response.status_code = 404
+
         adapter = CCLAdapter()
-        with pytest.raises(NotImplementedError, match="fetch_issue_from_payload"):
-            adapter.fetch_issue("test-id")
+        from comic_identity_engine.adapters import NotFoundError
+
+        with pytest.raises(NotFoundError, match="Series not found"):
+            adapter.fetch_series("12345")
+
+    def test_fetch_issue_404_raises_not_found(self, mock_httpx_client):
+        """fetch_issue() raises NotFoundError on 404."""
+        import httpx
+
+        _, mock_client, mock_response = mock_httpx_client
+        mock_request = Mock()
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "Not Found", request=mock_request, response=mock_response
+        )
+        mock_response.status_code = 404
+
+        adapter = CCLAdapter()
+        from comic_identity_engine.adapters import NotFoundError
+
+        with pytest.raises(NotFoundError, match="Issue not found"):
+            adapter.fetch_issue("28636")
 
     def test_extract_date_by_label_no_match(self):
         """Date extraction with no matching label returns None."""
