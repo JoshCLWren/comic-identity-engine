@@ -19,6 +19,7 @@ dependencies = [
     "httpx>=0.28",
     # HTML Parsing
     "selectolax>=0.3",
+    "beautifulsoup4>=4.12",
     # Retry Logic
     "tenacity>=9.0",
     # Fuzzy Matching
@@ -34,6 +35,9 @@ dependencies = [
     "python-dotenv>=1.0",
     # Logging
     "structlog>=25.1",
+    # Comic Web Scrapers (for cross-platform search)
+    # Using local path for development - update to git+https://... for production
+    "comic-web-scrapers @ file:///mnt/extra/josh/code/comic-web-scrapers",
 ]
 
 [dependency-groups]
@@ -47,6 +51,9 @@ dev = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

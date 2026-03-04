@@ -167,6 +167,7 @@ class HttpClient:
     DEFAULT_TIMEOUT = 30.0
     DEFAULT_MAX_CONNECTIONS = 10
     DEFAULT_RETRY_CONFIG = RetryConfig()
+    DEFAULT_VERIFY_SSL = True
 
     def __init__(
         self,
@@ -176,6 +177,7 @@ class HttpClient:
         retry_config: RetryConfig | None = None,
         base_url: str | None = None,
         headers: dict[str, str] | None = None,
+        verify_ssl: bool = DEFAULT_VERIFY_SSL,
     ) -> None:
         """Initialize the HTTP client.
 
@@ -186,6 +188,7 @@ class HttpClient:
             retry_config: Retry configuration (default: 3 attempts, exponential backoff)
             base_url: Optional base URL for all requests
             headers: Optional default headers for all requests
+            verify_ssl: Whether to verify SSL certificates (default: True)
 
         Raises:
             ValueError: If timeout or max_connections is invalid
@@ -201,6 +204,7 @@ class HttpClient:
         self.retry_config = retry_config or self.DEFAULT_RETRY_CONFIG
         self.base_url = base_url
         self.headers = headers or {}
+        self.verify_ssl = verify_ssl
 
         self._client: httpx.AsyncClient | None = None
         self._rate_limiter = RateLimiter(platform=platform)
@@ -208,28 +212,34 @@ class HttpClient:
 
     async def __aenter__(self) -> HttpClient:
         """Enter async context and initialize the httpx client."""
-        limits = httpx.Limits(
-            max_connections=self.max_connections,
-            max_keepalive_connections=self.max_connections,
-        )
-
-        timeout = httpx.Timeout(self.timeout)
-
-        self._client = httpx.AsyncClient(
-            timeout=timeout,
-            limits=limits,
-            base_url=self.base_url or "",
-            headers=self.headers,
-        )
-
-        self._logger.debug(
-            "http_client.initialized",
-            platform=self.platform,
-            timeout=self.timeout,
-            max_connections=self.max_connections,
-        )
-
+        await self._ensure_initialized()
         return self
+
+    async def _ensure_initialized(self) -> None:
+        """Ensure the httpx client is initialized."""
+        if self._client is None:
+            limits = httpx.Limits(
+                max_connections=self.max_connections,
+                max_keepalive_connections=self.max_connections,
+            )
+
+            timeout = httpx.Timeout(self.timeout)
+
+            self._client = httpx.AsyncClient(
+                timeout=timeout,
+                limits=limits,
+                base_url=self.base_url or "",
+                headers=self.headers,
+                verify=self.verify_ssl,
+            )
+
+            self._logger.debug(
+                "http_client.initialized",
+                platform=self.platform,
+                timeout=self.timeout,
+                max_connections=self.max_connections,
+                verify_ssl=self.verify_ssl,
+            )
 
     async def __aexit__(
         self,
@@ -435,6 +445,7 @@ class HttpClient:
         Returns:
             httpx.Response object
         """
+        await self._ensure_initialized()
         request_headers = {**self.headers, **(headers or {})}
         return await self._request_with_retry(
             "GET",

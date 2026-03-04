@@ -89,7 +89,7 @@ class CCLAdapter(SourceAdapter):
         """Fetch issue from CCL.
 
         Args:
-            source_issue_id: CCL issue ID (e.g., "28636")
+            source_issue_id: CCL issue GUID (e.g., "60580fdf-e19b-40dc-84c9-0f043807992b")
 
         Returns:
             IssueCandidate with validated metadata

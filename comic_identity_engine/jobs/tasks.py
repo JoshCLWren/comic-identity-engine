@@ -49,7 +49,12 @@ from comic_identity_engine.database.repositories import (
     SeriesRunRepository,
     VariantRepository,
 )
-from comic_identity_engine.errors import ParseError, ResolutionError, ValidationError
+from comic_identity_engine.errors import (
+    NetworkError,
+    ParseError,
+    ResolutionError,
+    ValidationError,
+)
 from comic_identity_engine.models import IssueCandidate
 from comic_identity_engine.services import (
     IdentityResolver,
@@ -73,19 +78,27 @@ def get_adapter(platform: str) -> SourceAdapter:
     Raises:
         ValueError: If platform is not supported
     """
+    from comic_identity_engine.core.http_client import HttpClient
+
+    # CCL has SSL certificate issues, so disable verification for now
+    verify_ssl = platform != "ccl"
+
     adapters = {
-        "gcd": GCDAdapter,
-        "locg": LoCGAdapter,
-        "ccl": CCLAdapter,
-        "aa": AAAdapter,
-        "cpg": CPGAdapter,
-        "hip": HIPAdapter,
+        "gcd": (GCDAdapter, verify_ssl),
+        "locg": (LoCGAdapter, verify_ssl),
+        "ccl": (CCLAdapter, False),
+        "aa": (AAAdapter, verify_ssl),
+        "cpg": (CPGAdapter, verify_ssl),
+        "hip": (HIPAdapter, verify_ssl),
     }
 
     if platform not in adapters:
         raise ValueError(f"Unsupported platform: {platform}")
 
-    return adapters[platform]()
+    adapter_class, should_verify = adapters[platform]
+    http_client = HttpClient(platform=platform, verify_ssl=should_verify)
+
+    return adapter_class(http_client=http_client)
 
 
 async def resolve_identity_task(
@@ -141,6 +154,7 @@ async def resolve_identity_task(
 
             parsed_url = parse_url(url)
             mapping_repo = ExternalMappingRepository(session)
+            series_repo = SeriesRunRepository(session)
 
             # Check for existing mapping first
             existing = await mapping_repo.find_by_source(
@@ -155,6 +169,40 @@ async def resolve_identity_task(
                     platform=parsed_url.platform,
                     source_issue_id=parsed_url.source_issue_id,
                 )
+
+                # Cross-platform search: find this issue on other platforms
+                resolver = IdentityResolver(session)
+                issue_repo = IssueRepository(session)
+                issue = await issue_repo.find_by_id(existing.issue_id)
+                series = (
+                    await series_repo.find_by_id(issue.series_run_id) if issue else None
+                )
+
+                if issue and series:
+                    try:
+                        cross_platform_urls = await resolver.search_cross_platform(
+                            issue_id=existing.issue_id,
+                            series_title=series.title,
+                            issue_number=issue.issue_number,
+                            year=issue.cover_date.year if issue.cover_date else None,
+                            publisher=series.publisher,
+                            skip_platform=parsed_url.platform,
+                        )
+                        logger.info(
+                            "Cross-platform search completed",
+                            operation_id=operation_id,
+                            issue_id=str(existing.issue_id),
+                            found_platforms=list(cross_platform_urls.keys()),
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            "Cross-platform search failed, continuing without it",
+                            operation_id=operation_id,
+                            issue_id=str(existing.issue_id),
+                            error=str(e),
+                        )
+                        cross_platform_urls = {}
+
                 urls = await build_urls(
                     existing.issue_id,
                     ["gcd", "locg", "ccl", "aa", "cpg", "hip"],
@@ -208,13 +256,52 @@ async def resolve_identity_task(
                     source_issue_id=parsed_url.source_issue_id,
                 )
 
+                # Cross-platform search: find this issue on other platforms
+                cross_platform_urls = {}
+                try:
+                    cross_platform_urls = await resolver.search_cross_platform(
+                        issue_id=result.issue_id,
+                        series_title=candidate.series_title,
+                        issue_number=candidate.issue_number,
+                        year=candidate.cover_date.year
+                        if candidate.cover_date
+                        else None,
+                        publisher=None,
+                        skip_platform=parsed_url.platform,
+                    )
+                    logger.info(
+                        "Cross-platform search completed",
+                        operation_id=operation_id,
+                        issue_id=str(result.issue_id),
+                        found_platforms=list(cross_platform_urls.keys()),
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "Cross-platform search failed, continuing without it",
+                        operation_id=operation_id,
+                        issue_id=str(result.issue_id),
+                        error=str(e),
+                    )
+                    cross_platform_urls = {}
+
             urls = {}
             if result.issue_id:
-                urls = await build_urls(
+                # Start with cross-platform search results (platforms we just found)
+                urls = cross_platform_urls.copy()
+
+                # Add URLs from existing database mappings (for platforms we didn't search)
+                existing_mappings_urls = await build_urls(
                     result.issue_id,
                     ["gcd", "locg", "ccl", "aa", "cpg", "hip"],
                     session,
                 )
+
+                # Merge - use search results preferentially, fill in gaps with existing mappings
+                for platform, url in existing_mappings_urls.items():
+                    if not urls.get(
+                        platform
+                    ):  # Only use existing if we don't have a search result
+                        urls[platform] = url
 
             result_dict = {
                 "issue_id": str(result.issue_id) if result.issue_id else None,
@@ -257,6 +344,16 @@ async def resolve_identity_task(
             )
             await _mark_failed_safe(session, operation_uuid, error_msg)
             return {"error": error_msg, "error_type": "not_found"}
+
+        except NetworkError as e:
+            error_msg = f"Network error communicating with platform: {e}"
+            logger.error(
+                "Identity resolution task failed - network error",
+                operation_id=operation_id,
+                error=error_msg,
+            )
+            await _mark_failed_safe(session, operation_uuid, error_msg)
+            return {"error": error_msg, "error_type": "network_error"}
 
         except SourceError as e:
             error_msg = f"Platform communication error: {e}"

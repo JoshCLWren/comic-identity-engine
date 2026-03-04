@@ -18,10 +18,11 @@ ALGORITHM PRIORITY:
 5. No match → create new → 1.00 confidence
 """
 
+import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import date
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 import jellyfish
 import structlog
@@ -522,3 +523,379 @@ class IdentityResolver:
         )
 
         return issue
+
+    async def search_cross_platform(
+        self,
+        issue_id: uuid.UUID,
+        series_title: str,
+        issue_number: str,
+        year: Optional[int] = None,
+        publisher: Optional[str] = None,
+        skip_platform: Optional[str] = None,
+    ) -> Dict[str, str]:
+        """Search for this issue on other platforms and create external mappings.
+
+        Args:
+            issue_id: Canonical issue UUID
+            series_title: Series title
+            issue_number: Issue number
+            year: Optional publication year (helps with filtering)
+            publisher: Optional publisher name (helps with filtering)
+            skip_platform: Platform code to skip (the source platform)
+
+        Returns:
+            Dictionary mapping platform code to URL for all found platforms
+
+        Raises:
+            ResolutionError: If cross-platform search fails
+        """
+        logger.info(
+            "Starting cross-platform search",
+            issue_id=str(issue_id),
+            series_title=series_title,
+            issue_number=issue_number,
+            year=year,
+            skip_platform=skip_platform,
+        )
+        logger.info(
+            "Starting cross-platform search",
+            issue_id=str(issue_id),
+            series_title=series_title,
+            issue_number=issue_number,
+            year=year,
+            skip_platform=skip_platform,
+        )
+
+        platforms_to_search = []
+        if skip_platform != "aa":
+            platforms_to_search.append("aa")
+        if skip_platform != "ccl":
+            platforms_to_search.append("ccl")
+        if skip_platform != "hip":
+            platforms_to_search.append("hip")
+
+        found_urls = {}
+
+        for platform in platforms_to_search:
+            try:
+                platform_url = await self._search_single_platform(
+                    platform,
+                    issue_id,
+                    series_title,
+                    issue_number,
+                    year,
+                    publisher,
+                )
+                if platform_url:
+                    found_urls[platform] = platform_url
+                    logger.info(
+                        "Found platform URL",
+                        platform=platform,
+                        url=platform_url,
+                    )
+            except Exception as e:
+                logger.warning(
+                    "Platform search failed",
+                    platform=platform,
+                    error=str(e),
+                    error_type=type(e).__name__,
+                )
+                continue
+
+        logger.info(
+            "Cross-platform search completed",
+            issue_id=str(issue_id),
+            found_platforms=list(found_urls.keys()),
+        )
+
+        return found_urls
+
+    async def _search_single_platform(
+        self,
+        platform: str,
+        issue_id: uuid.UUID,
+        series_title: str,
+        issue_number: str,
+        year: Optional[int],
+        publisher: Optional[str],
+    ) -> Optional[str]:
+        """Search a single platform and create external mapping if found.
+
+        Args:
+            platform: Platform code (aa, ccl, hip)
+            issue_id: Canonical issue UUID
+            series_title: Series title
+            issue_number: Issue number
+            year: Optional publication year
+            publisher: Optional publisher name
+
+        Returns:
+            Platform URL if found and mapped, None otherwise
+        """
+        try:
+            scraper = self._get_scraper(platform)
+            if not scraper:
+                logger.debug("No scraper available", platform=platform)
+                return None
+
+            # Initialize without Redis cache - we don't need caching for search
+            try:
+                await scraper.initialize()
+            except Exception as e:
+                logger.warning(
+                    "Scraper initialize failed, trying without cache",
+                    platform=platform,
+                    error=str(e),
+                )
+
+            comic_dict = {
+                "title": series_title,
+                "issue": issue_number,
+                "year": year,
+                "publisher": publisher,
+            }
+
+            search_result = await scraper.search_comic(comic_dict)
+
+            await scraper.cleanup()
+
+            if not search_result or not search_result.has_results:
+                logger.debug(
+                    "No search results",
+                    platform=platform,
+                    series_title=series_title,
+                    issue_number=issue_number,
+                )
+                return None
+
+            best_listing = self._select_best_listing(search_result, issue_number)
+            if not best_listing:
+                logger.debug("No suitable listing found", platform=platform)
+                return None
+
+            source_issue_id, source_series_id = self._extract_ids_from_url(
+                platform, best_listing.url
+            )
+
+            if source_issue_id:
+                await self.mapping_repo.create_mapping(
+                    issue_id=issue_id,
+                    source=platform,
+                    source_issue_id=source_issue_id,
+                    source_series_id=source_series_id,
+                )
+                logger.info(
+                    "Created external mapping from search",
+                    platform=platform,
+                    source_issue_id=source_issue_id,
+                    source_series_id=source_series_id,
+                )
+
+                return best_listing.url
+
+        except ImportError as e:
+            logger.warning(
+                "Scraper not available",
+                platform=platform,
+                error=str(e),
+            )
+            return None
+        except Exception as e:
+            logger.error(
+                "Platform search failed",
+                platform=platform,
+                error=str(e),
+                error_type=type(e).__name__,
+            )
+            return None
+
+            print(f"[DEBUG] Scraper found for {platform}, initializing...")
+            await scraper.initialize()
+
+            comic_dict = {
+                "title": series_title,
+                "issue": issue_number,
+                "year": year,
+                "publisher": publisher,
+            }
+            print(f"[DEBUG] Searching with comic_dict: {comic_dict}")
+
+            search_result = await scraper.search_comic(comic_dict)
+            print(
+                f"[DEBUG] Search result: has_results={search_result.has_results if search_result else 'None'}"
+            )
+            if search_result and search_result.listings:
+                print(f"[DEBUG] Number of listings: {len(search_result.listings)}")
+
+            await scraper.cleanup()
+
+            if not search_result or not search_result.has_results:
+                print(f"[DEBUG] No search results for platform: {platform}")
+                logger.debug(
+                    "No search results",
+                    platform=platform,
+                    series_title=series_title,
+                    issue_number=issue_number,
+                )
+                return None
+
+            best_listing = self._select_best_listing(search_result, issue_number)
+            if not best_listing:
+                print(f"[DEBUG] No suitable listing found for platform: {platform}")
+                logger.debug("No suitable listing found", platform=platform)
+                return None
+
+            print(f"[DEBUG] Best listing URL: {best_listing.url}")
+            source_issue_id, source_series_id = self._extract_ids_from_url(
+                platform, best_listing.url
+            )
+            print(
+                f"[DEBUG] Extracted IDs: source_issue_id={source_issue_id}, source_series_id={source_series_id}"
+            )
+
+            if source_issue_id:
+                await self.mapping_repo.create_mapping(
+                    issue_id=issue_id,
+                    source=platform,
+                    source_issue_id=source_issue_id,
+                    source_series_id=source_series_id,
+                )
+                logger.info(
+                    "Created external mapping from search",
+                    platform=platform,
+                    source_issue_id=source_issue_id,
+                    source_series_id=source_series_id,
+                )
+
+                return best_listing.url
+            else:
+                print(
+                    f"[DEBUG] Could not extract source_issue_id from URL: {best_listing.url}"
+                )
+
+        except ImportError as e:
+            print(f"[DEBUG] ImportError for platform {platform}: {e}")
+            logger.warning(
+                "Scraper not available",
+                platform=platform,
+                error=str(e),
+            )
+            return None
+        except Exception as e:
+            print(f"[DEBUG] Exception for platform {platform}: {e}")
+            logger.error(
+                "Platform search failed",
+                platform=platform,
+                error=str(e),
+                error_type=type(e).__name__,
+            )
+            return None
+
+    def _get_scraper(self, platform: str):
+        """Get scraper instance for platform.
+
+        Args:
+            platform: Platform code (aa, ccl, hip)
+
+        Returns:
+            Scraper instance or None if not available
+        """
+        try:
+            # Create a simple cache provider for scrapers
+            class SimpleCacheProvider:
+                async def get(self, key):
+                    return None
+
+                async def set(self, key, value, ttl=None):
+                    pass
+
+                async def delete(self, key):
+                    pass
+
+            cache_provider = SimpleCacheProvider()
+
+            if platform == "aa":
+                from comic_scrapers.atomic_avenue.scraper import (
+                    AtomicAvenueScraper,
+                )
+
+                return AtomicAvenueScraper(cache_provider=cache_provider)
+            elif platform == "ccl":
+                from comic_scrapers.ccl.scraper_http import CCLHTTPScraper
+
+                return CCLHTTPScraper(cookies={}, cache_provider=cache_provider)
+            elif platform == "hip":
+                from comic_scrapers.hip.scraper import HipScraper
+
+                return HipScraper(cache_provider=cache_provider)
+            else:
+                return None
+        except ImportError:
+            logger.warning("Scraper package not installed", platform=platform)
+            return None
+
+    def _select_best_listing(self, search_result, issue_number: str) -> Optional[Any]:
+        """Select the best listing from search results.
+
+        Args:
+            search_result: SearchResult from scraper
+            issue_number: Target issue number
+
+        Returns:
+            Best listing or None
+        """
+        if not search_result.listings:
+            return None
+
+        for listing in search_result.listings:
+            if listing.url:
+                # Check if issue number matches
+                if hasattr(listing, "issue_number") and listing.issue_number:
+                    if str(listing.issue_number) == str(issue_number):
+                        return listing
+                # If no issue number info, use first listing with URL
+                elif listing.url:
+                    return listing
+
+        return None
+
+    def _extract_ids_from_url(
+        self, platform: str, url: str
+    ) -> tuple[Optional[str], Optional[str]]:
+        """Extract source_issue_id and source_series_id from platform URL.
+
+        Args:
+            platform: Platform code
+            url: Platform URL
+
+        Returns:
+            Tuple of (source_issue_id, source_series_id)
+        """
+        if not url:
+            return None, None
+
+        try:
+            if platform == "aa":
+                match = re.search(r"/item/(\d+)/", url)
+                if match:
+                    return match.group(1), None
+
+            elif platform == "ccl":
+                match = re.search(r"/issue/([a-f0-9-]+)/(\d+)", url)
+                if match:
+                    return match.group(2), match.group(1)
+
+            elif platform == "hip":
+                match = re.search(r"/listing/.*?/(\d+)", url)
+                if match:
+                    return match.group(1), None
+
+        except Exception as e:
+            logger.warning(
+                "Failed to extract IDs from URL",
+                platform=platform,
+                url=url,
+                error=str(e),
+            )
+
+        return None, None
