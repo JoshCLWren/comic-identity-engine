@@ -18,6 +18,7 @@ from comic_identity_engine.adapters import (
     SourceError,
     ValidationError,
 )
+from comic_identity_engine.core.http_client import HttpClient
 from comic_identity_engine.models import IssueCandidate, SeriesCandidate
 from comic_identity_engine.parsing import parse_issue_candidate
 
@@ -32,15 +33,21 @@ class GCDAdapter(SourceAdapter):
     SOURCE = "gcd"
     BASE_URL = "https://www.comics.org/api"
 
-    def __init__(self, timeout: float = 30.0) -> None:
+    def __init__(
+        self,
+        http_client: HttpClient | None = None,
+        timeout: float = 30.0,
+    ) -> None:
         """Initialize GCD adapter.
 
         Args:
-            timeout: HTTP request timeout in seconds
+            http_client: Optional HTTP client for making requests
+            timeout: HTTP request timeout in seconds (used if http_client not provided)
         """
+        super().__init__(http_client)
         self.timeout = timeout
 
-    def fetch_series(self, source_series_id: str) -> SeriesCandidate:
+    async def fetch_series(self, source_series_id: str) -> SeriesCandidate:
         """Fetch series from GCD API.
 
         Args:
@@ -56,8 +63,11 @@ class GCDAdapter(SourceAdapter):
         """
         url = f"{self.BASE_URL}/series/{source_series_id}/?format=json"
 
+        if self.http_client is None:
+            raise SourceError("HTTP client not initialized")
+
         try:
-            response = httpx.get(url, timeout=self.timeout, follow_redirects=True)
+            response = await self.http_client.get(url)
             response.raise_for_status()
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
@@ -70,7 +80,7 @@ class GCDAdapter(SourceAdapter):
 
         return self.fetch_series_from_payload(source_series_id, response.json())
 
-    def fetch_issue(self, source_issue_id: str) -> IssueCandidate:
+    async def fetch_issue(self, source_issue_id: str) -> IssueCandidate:
         """Fetch issue from GCD API.
 
         Args:
@@ -86,8 +96,11 @@ class GCDAdapter(SourceAdapter):
         """
         url = f"{self.BASE_URL}/issue/{source_issue_id}/?format=json"
 
+        if self.http_client is None:
+            raise SourceError("HTTP client not initialized")
+
         try:
-            response = httpx.get(url, timeout=self.timeout, follow_redirects=True)
+            response = await self.http_client.get(url)
             response.raise_for_status()
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:

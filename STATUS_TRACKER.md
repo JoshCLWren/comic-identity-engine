@@ -293,6 +293,7 @@
 | 2026-03-03 | Baseline | 1,180 | 1,180 | 0 | All tests pass (but adapters are sync) |
 | 2026-03-03 | Phase 1 | 39 | 39 | 0 | Base class async, GCD tests still pass |
 | 2026-03-03 | Phase 2 | 41 | 41 | 0 | Added async fixtures and 2 async proof-of-concept tests |
+| 2026-03-03 | Phase 3 | 41 | 41 | 0 | GCD adapter fully async, all tests pass |
 
 ---
 
