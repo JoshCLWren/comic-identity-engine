@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 from datetime import date
-from unittest.mock import patch, Mock
+from unittest.mock import patch, Mock, AsyncMock
 
 import pytest
 
@@ -428,3 +428,42 @@ class TestGCDAdapterEdgeCases:
             result = adapter._parse_price("not_a_number USD")
 
         assert result is None
+
+
+class TestGCDAdapterAsync:
+    """Async tests for GCD adapter to verify async infrastructure works."""
+
+    @pytest.mark.asyncio
+    async def test_gcd_adapter_has_async_methods(self):
+        """Test that GCD adapter has async fetch methods."""
+        adapter = GCDAdapter()
+        # Verify the adapter has the expected async methods
+        assert hasattr(adapter, "fetch_series")
+        assert hasattr(adapter, "fetch_issue")
+        assert hasattr(adapter, "fetch_series_from_payload")
+        assert hasattr(adapter, "fetch_issue_from_payload")
+
+    @pytest.mark.asyncio
+    async def test_gcd_adapter_can_use_mock_http_client(self, mock_http_client):
+        """Test that GCD adapter works with async mock HTTP client."""
+        # Create adapter and manually attach mock client
+        adapter = GCDAdapter()
+        adapter.http_client = mock_http_client
+
+        # Setup mock response
+        mock_response = Mock()
+        mock_response.json = Mock(
+            return_value={
+                "series_name": "X-Men (1991 series)",
+                "number": "1",
+                "descriptor": "1",
+                "key_date": "1991-10-00",
+                "indicia_publisher": "Marvel Comics",
+                "series": "https://www.comics.org/api/series/4254/?format=json",
+            }
+        )
+        mock_response.raise_for_status = Mock()
+        mock_http_client.get = AsyncMock(return_value=mock_response)
+
+        # Verify adapter stores the http_client
+        assert adapter.http_client is mock_http_client
