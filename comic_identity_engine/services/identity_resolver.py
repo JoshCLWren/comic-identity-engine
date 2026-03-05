@@ -640,8 +640,8 @@ class IdentityResolver:
                 return None
 
             # Different scrapers have different APIs
-            if platform == "aa":
-                # AtomicAvenueScraper uses positional arguments
+            if platform in ("aa", "cpg"):
+                # AtomicAvenueScraper and CPGScraper use positional arguments
                 search_result = await scraper.search_comic(
                     title=series_title,
                     issue=issue_number,
@@ -728,7 +728,7 @@ class IdentityResolver:
         """Get scraper instance for platform.
 
         Args:
-            platform: Platform code (aa, ccl, hip)
+            platform: Platform code (aa, ccl, hip, cpg, gcd, locg)
 
         Returns:
             Scraper instance or None if not available
@@ -746,6 +746,18 @@ class IdentityResolver:
                 from comic_search_lib.scrapers.hip import HipScraper
 
                 return HipScraper(timeout=30)
+            elif platform == "cpg":
+                from comic_search_lib.scrapers.cpg import CPGScraper
+
+                return CPGScraper(timeout=30)
+            elif platform == "gcd":
+                from comic_search_lib.scrapers.gcd import GCDScraper
+
+                return GCDScraper(timeout=30)
+            elif platform == "locg":
+                from comic_search_lib.scrapers.locg import LoCGScraper
+
+                return LoCGScraper(timeout=30)
             else:
                 return None
         except ImportError:
