@@ -116,10 +116,10 @@ def _display_table(data: dict[str, Any], console: Console) -> None:
         console.print("[red]No results found[/red]")
         return
 
-    canonical_uuid = result.get("issue_id", "N/A")
+    canonical_uuid = result.get("canonical_uuid", "N/A")
     confidence = result.get("confidence", 0.0)
     explanation = result.get("explanation", "N/A")
-    platform_urls = result.get("urls", {})
+    platform_urls = result.get("platform_urls", {})
 
     table = Table(title="Identity Resolution Results")
     table.add_column("Field", style="cyan", no_wrap=True)
@@ -130,12 +130,10 @@ def _display_table(data: dict[str, Any], console: Console) -> None:
     table.add_row("Explanation", explanation)
 
     if platform_urls:
-        urls_table = Table(show_header=False, box=None)
-        urls_table.add_column("Platform", style="yellow")
-        urls_table.add_column("URL", style="blue")
-        for platform, url in sorted(platform_urls.items()):
-            urls_table.add_row(platform, url)
-        table.add_row("Platform URLs", urls_table)
+        url_lines = "\n".join(
+            f"{platform}: {url}" for platform, url in sorted(platform_urls.items())
+        )
+        table.add_row("Platform URLs", url_lines)
 
     console.print(table)
 
@@ -147,7 +145,7 @@ def _display_urls(data: dict[str, Any]) -> None:
         data: The operation response data containing the result
     """
     result = data.get("response", {})
-    platform_urls = result.get("urls", {})
+    platform_urls = result.get("platform_urls", {})
 
     for url in platform_urls.values():
         click.echo(url)

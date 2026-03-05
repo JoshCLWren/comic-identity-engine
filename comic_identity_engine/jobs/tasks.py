@@ -178,6 +178,7 @@ async def resolve_identity_task(
                     await series_repo.find_by_id(issue.series_run_id) if issue else None
                 )
 
+                cross_platform_urls = {}
                 if issue and series:
                     try:
                         cross_platform_urls = await resolver.search_cross_platform(
@@ -203,15 +204,20 @@ async def resolve_identity_task(
                         )
                         cross_platform_urls = {}
 
-                urls = await build_urls(
+                urls = cross_platform_urls.copy()
+                existing_mappings_urls = await build_urls(
                     existing.issue_id,
                     ["gcd", "locg", "ccl", "aa", "cpg", "hip"],
                     session,
                 )
+                for platform, url in existing_mappings_urls.items():
+                    if not urls.get(platform):
+                        urls[platform] = url
+
                 result_dict = {
-                    "issue_id": str(existing.issue_id),
+                    "canonical_uuid": str(existing.issue_id),
                     "confidence": 1.0,
-                    "urls": urls,
+                    "platform_urls": urls,
                     "created_new": False,
                     "explanation": f"Found existing external mapping for {parsed_url.platform}:{parsed_url.source_issue_id}",
                 }
@@ -304,11 +310,11 @@ async def resolve_identity_task(
                         urls[platform] = url
 
             result_dict = {
-                "issue_id": str(result.issue_id) if result.issue_id else None,
+                "canonical_uuid": str(result.issue_id) if result.issue_id else None,
                 "confidence": (
                     result.best_match.overall_confidence if result.best_match else 1.0
                 ),
-                "urls": urls,
+                "platform_urls": urls,
                 "created_new": result.created_new,
                 "explanation": result.explanation,
             }
@@ -485,7 +491,7 @@ async def bulk_resolve_task(
 
                     result_entry = {
                         "url": url,
-                        "issue_id": (
+                        "canonical_uuid": (
                             str(resolution_result.issue_id)
                             if resolution_result.issue_id
                             else None
@@ -495,7 +501,7 @@ async def bulk_resolve_task(
                             if resolution_result.best_match
                             else 1.0
                         ),
-                        "urls": urls_dict,
+                        "platform_urls": urls_dict,
                         "created_new": resolution_result.created_new,
                         "explanation": resolution_result.explanation,
                         "success": True,

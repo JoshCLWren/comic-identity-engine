@@ -30,9 +30,8 @@ async def test_cross_platform_search_with_mock_scrapers():
     publisher = "Marvel"
 
     mock_aa_scraper = MagicMock()
-    mock_aa_scraper.initialize = AsyncMock()
     mock_aa_scraper.search_comic = AsyncMock()
-    mock_aa_scraper.cleanup = AsyncMock()
+    mock_aa_scraper.close = AsyncMock()
 
     mock_search_result = MagicMock()
     mock_search_result.has_results = True
@@ -41,7 +40,12 @@ async def test_cross_platform_search_with_mock_scrapers():
     ]
     mock_aa_scraper.search_comic.return_value = mock_search_result
 
-    with patch.object(resolver, "_get_scraper", return_value=mock_aa_scraper):
+    def _get_scraper_side_effect(platform):
+        if platform == "aa":
+            return mock_aa_scraper
+        return None
+
+    with patch.object(resolver, "_get_scraper", side_effect=_get_scraper_side_effect):
         with patch.object(resolver.mapping_repo, "create_mapping", AsyncMock()):
             urls = await resolver.search_cross_platform(
                 issue_id=issue_id,
@@ -54,9 +58,10 @@ async def test_cross_platform_search_with_mock_scrapers():
 
     assert "aa" in urls
     assert urls["aa"] == "https://atomicavenue.com/atomic/item/12345/1/details"
-    mock_aa_scraper.initialize.assert_called_once()
-    mock_aa_scraper.search_comic.assert_called_once()
-    mock_aa_scraper.cleanup.assert_called_once()
+    mock_aa_scraper.search_comic.assert_called_once_with(
+        title=series_title, issue=issue_number, year=year, publisher=publisher
+    )
+    mock_aa_scraper.close.assert_called_once()
 
 
 def test_extract_ids_from_url():

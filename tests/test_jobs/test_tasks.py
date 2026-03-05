@@ -151,9 +151,9 @@ class TestResolveIdentityTask:
                                     str(TEST_OPERATION_ID),
                                 )
 
-        assert result["issue_id"] == str(TEST_ISSUE_ID)
+        assert result["canonical_uuid"] == str(TEST_ISSUE_ID)
         assert result["confidence"] == 0.95
-        assert result["urls"] == {"gcd": "https://test.com"}
+        assert result["platform_urls"] == {"gcd": "https://test.com"}
         assert result["created_new"] is True
         assert result["explanation"] == "Matched on issue number"
         mock_ops_manager.mark_running.assert_called_once_with(TEST_OPERATION_ID)
@@ -1197,7 +1197,7 @@ class TestOperationStatusTransitions:
         assert status_log[0][1] == TEST_OPERATION_ID
         assert status_log[1][0] == "mark_completed"
         assert status_log[1][1] == TEST_OPERATION_ID
-        assert "issue_id" in status_log[1][2]
+        assert "canonical_uuid" in status_log[1][2]
 
     @pytest.mark.asyncio
     async def test_resolve_task_status_transition_pending_to_running_to_failed(

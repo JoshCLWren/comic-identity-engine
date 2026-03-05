@@ -35,9 +35,9 @@ dependencies = [
     "python-dotenv>=1.0",
     # Logging
     "structlog>=25.1",
-    # Comic Web Scrapers (for cross-platform search)
+    # Comic Search Library (for cross-platform search)
     # Using local path for development - update to git+https://... for production
-    "comic-web-scrapers @ file:///mnt/extra/josh/code/comic-web-scrapers",
+    "comic-search-lib @ file:///mnt/extra/josh/code/comic-search-lib",
 ]
 
 [dependency-groups]

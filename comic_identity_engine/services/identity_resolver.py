@@ -35,7 +35,7 @@ from comic_identity_engine.database.repositories import (
     SeriesRunRepository,
     VariantRepository,
 )
-from comic_identity_engine.errors import ResolutionError
+from comic_identity_engine.errors import DuplicateEntityError, ResolutionError
 
 if TYPE_CHECKING:
     from comic_identity_engine.database.models import Issue
@@ -632,149 +632,76 @@ class IdentityResolver:
         Returns:
             Platform URL if found and mapped, None otherwise
         """
+        scraper = None
         try:
             scraper = self._get_scraper(platform)
             if not scraper:
                 logger.debug("No scraper available", platform=platform)
                 return None
 
-            # Initialize without Redis cache - we don't need caching for search
-            try:
-                await scraper.initialize()
-            except Exception as e:
-                logger.warning(
-                    "Scraper initialize failed, trying without cache",
-                    platform=platform,
-                    error=str(e),
+            # Different scrapers have different APIs
+            if platform == "aa":
+                # AtomicAvenueScraper uses positional arguments
+                search_result = await scraper.search_comic(
+                    title=series_title,
+                    issue=issue_number,
+                    year=year,
+                    publisher=publisher,
                 )
-
-            comic_dict = {
-                "title": series_title,
-                "issue": issue_number,
-                "year": year,
-                "publisher": publisher,
-            }
-
-            search_result = await scraper.search_comic(comic_dict)
-
-            await scraper.cleanup()
-
-            if not search_result or not search_result.has_results:
-                logger.debug(
-                    "No search results",
-                    platform=platform,
-                    series_title=series_title,
-                    issue_number=issue_number,
-                )
-                return None
-
-            best_listing = self._select_best_listing(search_result, issue_number)
-            if not best_listing:
-                logger.debug("No suitable listing found", platform=platform)
-                return None
-
-            source_issue_id, source_series_id = self._extract_ids_from_url(
-                platform, best_listing.url
-            )
-
-            if source_issue_id:
-                await self.mapping_repo.create_mapping(
-                    issue_id=issue_id,
-                    source=platform,
-                    source_issue_id=source_issue_id,
-                    source_series_id=source_series_id,
-                )
-                logger.info(
-                    "Created external mapping from search",
-                    platform=platform,
-                    source_issue_id=source_issue_id,
-                    source_series_id=source_series_id,
-                )
-
-                return best_listing.url
-
-        except ImportError as e:
-            logger.warning(
-                "Scraper not available",
-                platform=platform,
-                error=str(e),
-            )
-            return None
-        except Exception as e:
-            logger.error(
-                "Platform search failed",
-                platform=platform,
-                error=str(e),
-                error_type=type(e).__name__,
-            )
-            return None
-
-            print(f"[DEBUG] Scraper found for {platform}, initializing...")
-            await scraper.initialize()
-
-            comic_dict = {
-                "title": series_title,
-                "issue": issue_number,
-                "year": year,
-                "publisher": publisher,
-            }
-            print(f"[DEBUG] Searching with comic_dict: {comic_dict}")
-
-            search_result = await scraper.search_comic(comic_dict)
-            print(
-                f"[DEBUG] Search result: has_results={search_result.has_results if search_result else 'None'}"
-            )
-            if search_result and search_result.listings:
-                print(f"[DEBUG] Number of listings: {len(search_result.listings)}")
-
-            await scraper.cleanup()
-
-            if not search_result or not search_result.has_results:
-                print(f"[DEBUG] No search results for platform: {platform}")
-                logger.debug(
-                    "No search results",
-                    platform=platform,
-                    series_title=series_title,
-                    issue_number=issue_number,
-                )
-                return None
-
-            best_listing = self._select_best_listing(search_result, issue_number)
-            if not best_listing:
-                print(f"[DEBUG] No suitable listing found for platform: {platform}")
-                logger.debug("No suitable listing found", platform=platform)
-                return None
-
-            print(f"[DEBUG] Best listing URL: {best_listing.url}")
-            source_issue_id, source_series_id = self._extract_ids_from_url(
-                platform, best_listing.url
-            )
-            print(
-                f"[DEBUG] Extracted IDs: source_issue_id={source_issue_id}, source_series_id={source_series_id}"
-            )
-
-            if source_issue_id:
-                await self.mapping_repo.create_mapping(
-                    issue_id=issue_id,
-                    source=platform,
-                    source_issue_id=source_issue_id,
-                    source_series_id=source_series_id,
-                )
-                logger.info(
-                    "Created external mapping from search",
-                    platform=platform,
-                    source_issue_id=source_issue_id,
-                    source_series_id=source_series_id,
-                )
-
-                return best_listing.url
             else:
-                print(
-                    f"[DEBUG] Could not extract source_issue_id from URL: {best_listing.url}"
+                # CCL and Hip use a comic dict
+                comic_dict = {
+                    "title": series_title,
+                    "issue": issue_number,
+                    "year": year,
+                    "publisher": publisher,
+                }
+                search_result = await scraper.search_comic(comic_dict)
+
+            if not search_result or not search_result.has_results:
+                logger.debug(
+                    "No search results",
+                    platform=platform,
+                    series_title=series_title,
+                    issue_number=issue_number,
                 )
+                return None
+
+            best_listing = self._select_best_listing(search_result, issue_number)
+            if not best_listing:
+                logger.debug("No suitable listing found", platform=platform)
+                return None
+
+            source_issue_id, source_series_id = self._extract_ids_from_url(
+                platform, best_listing.url
+            )
+
+            if source_issue_id:
+                try:
+                    await self.mapping_repo.create_mapping(
+                        issue_id=issue_id,
+                        source=platform,
+                        source_issue_id=source_issue_id,
+                        source_series_id=source_series_id,
+                    )
+                    logger.info(
+                        "Created external mapping from search",
+                        platform=platform,
+                        source_issue_id=source_issue_id,
+                        source_series_id=source_series_id,
+                    )
+                except DuplicateEntityError:
+                    # Mapping already exists - check if it's for the same issue
+                    logger.debug(
+                        "External mapping already exists, reusing it",
+                        platform=platform,
+                        source_issue_id=source_issue_id,
+                    )
+                    # The mapping exists, which is fine - continue to return the URL
+
+                return best_listing.url
 
         except ImportError as e:
-            print(f"[DEBUG] ImportError for platform {platform}: {e}")
             logger.warning(
                 "Scraper not available",
                 platform=platform,
@@ -782,7 +709,6 @@ class IdentityResolver:
             )
             return None
         except Exception as e:
-            print(f"[DEBUG] Exception for platform {platform}: {e}")
             logger.error(
                 "Platform search failed",
                 platform=platform,
@@ -790,6 +716,13 @@ class IdentityResolver:
                 error_type=type(e).__name__,
             )
             return None
+        finally:
+            # Clean up scraper if it has a close method
+            if scraper and hasattr(scraper, "close"):
+                try:
+                    await scraper.close()
+                except Exception:
+                    pass
 
     def _get_scraper(self, platform: str):
         """Get scraper instance for platform.
@@ -801,33 +734,18 @@ class IdentityResolver:
             Scraper instance or None if not available
         """
         try:
-            # Create a simple cache provider for scrapers
-            class SimpleCacheProvider:
-                async def get(self, key):
-                    return None
-
-                async def set(self, key, value, ttl=None):
-                    pass
-
-                async def delete(self, key):
-                    pass
-
-            cache_provider = SimpleCacheProvider()
-
             if platform == "aa":
-                from comic_scrapers.atomic_avenue.scraper import (
-                    AtomicAvenueScraper,
-                )
+                from comic_search_lib.scrapers.atomic_avenue import AtomicAvenueScraper
 
-                return AtomicAvenueScraper(cache_provider=cache_provider)
+                return AtomicAvenueScraper(timeout=30)
             elif platform == "ccl":
-                from comic_scrapers.ccl.scraper_http import CCLHTTPScraper
+                from comic_search_lib.scrapers.ccl import CCLScraper
 
-                return CCLHTTPScraper(cookies={}, cache_provider=cache_provider)
+                return CCLScraper(timeout=30)
             elif platform == "hip":
-                from comic_scrapers.hip.scraper import HipScraper
+                from comic_search_lib.scrapers.hip import HipScraper
 
-                return HipScraper(cache_provider=cache_provider)
+                return HipScraper(timeout=30)
             else:
                 return None
         except ImportError:
@@ -847,15 +765,20 @@ class IdentityResolver:
         if not search_result.listings:
             return None
 
+        # First try to find a listing with a matching issue_number
+        for listing in search_result.listings:
+            if (
+                listing.url
+                and hasattr(listing, "issue_number")
+                and listing.issue_number
+            ):
+                if str(listing.issue_number) == str(issue_number):
+                    return listing
+
+        # If no exact match found, return the first listing with a URL
         for listing in search_result.listings:
             if listing.url:
-                # Check if issue number matches
-                if hasattr(listing, "issue_number") and listing.issue_number:
-                    if str(listing.issue_number) == str(issue_number):
-                        return listing
-                # If no issue number info, use first listing with URL
-                elif listing.url:
-                    return listing
+                return listing
 
         return None
 
@@ -886,6 +809,11 @@ class IdentityResolver:
                     return match.group(2), match.group(1)
 
             elif platform == "hip":
+                # Try price guide URL format first
+                match = re.search(r"/price-guide/.*?/(\d+)/(\d+)/", url)
+                if match:
+                    return match.group(2), match.group(1)
+                # Try listing URL format
                 match = re.search(r"/listing/.*?/(\d+)", url)
                 if match:
                     return match.group(1), None
