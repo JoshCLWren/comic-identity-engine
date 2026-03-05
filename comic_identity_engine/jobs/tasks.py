@@ -233,7 +233,14 @@ async def resolve_identity_task(
                 source_issue_id=parsed_url.source_issue_id,
             )
             adapter = get_adapter(parsed_url.platform)
-            candidate = await adapter.fetch_issue(parsed_url.source_issue_id)
+
+            # AA requires full URL with slug for issue fetching
+            if parsed_url.platform == "aa" and parsed_url.full_url:
+                candidate = await adapter.fetch_issue(
+                    parsed_url.source_issue_id, full_url=parsed_url.full_url
+                )
+            else:
+                candidate = await adapter.fetch_issue(parsed_url.source_issue_id)
 
             # Resolve with fetched data
             resolver = IdentityResolver(session)

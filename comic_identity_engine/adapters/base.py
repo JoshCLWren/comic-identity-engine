@@ -67,7 +67,7 @@ class SourceAdapter(ABC):
 
     @abstractmethod
     async def fetch_issue(
-        self, source_issue_id: str
+        self, source_issue_id: str, full_url: str | None = None
     ) -> IssueCandidate:  # pragma: no cover
         """Fetch issue data from source platform asynchronously.
 
@@ -76,6 +76,7 @@ class SourceAdapter(ABC):
 
         Args:
             source_issue_id: Platform-specific issue identifier
+            full_url: Optional full URL (required for some platforms like AA)
 
         Returns:
             IssueCandidate with validated metadata

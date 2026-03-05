@@ -84,7 +84,9 @@ class CPGAdapter(SourceAdapter):
 
         return self.fetch_series_from_payload(source_series_id, response.json())
 
-    async def fetch_issue(self, source_issue_id: str) -> IssueCandidate:
+    async def fetch_issue(
+        self, source_issue_id: str, full_url: str | None = None
+    ) -> IssueCandidate:
         """Fetch issue from CPG.
 
         Args:

@@ -34,12 +34,14 @@ class ParsedUrl:
         source_series_id: Series ID on source platform (if available)
         source_issue_id: Issue ID on source platform
         variant_suffix: Variant suffix (e.g., "A", "B", "NS") if present in URL
+        full_url: Full original URL (for platforms that need it like AA)
     """
 
     platform: str
     source_issue_id: str
     source_series_id: Optional[str] = None
     variant_suffix: Optional[str] = None
+    full_url: Optional[str] = None
 
 
 def parse_url(url: str) -> ParsedUrl:
@@ -304,9 +306,10 @@ def _parse_aa_url(url: str) -> ParsedUrl:
                     platform="aa",
                     source_issue_id=item_id,
                     variant_suffix=variant_num,
+                    full_url=url,
                 )
 
-        return ParsedUrl(platform="aa", source_issue_id=item_id)
+        return ParsedUrl(platform="aa", source_issue_id=item_id, full_url=url)
 
     series_match = re.search(r"/atomic/series/(\d+)", url)
     if series_match:

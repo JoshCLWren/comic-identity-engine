@@ -9,11 +9,15 @@ AA URL patterns:
 - atomicavenue.com/atomic/series/SERIES_ID (series page)
 """
 
+import asyncio
+import logging
 import re
+from dataclasses import dataclass
 from typing import Any, Optional
 
 import httpx
 from selectolax.lexbor import LexborHTMLParser
+from urllib.parse import quote
 
 from comic_identity_engine.adapters import (
     NotFoundError,
@@ -25,6 +29,17 @@ from comic_identity_engine.core.http_client import HttpClient
 from comic_identity_engine.models import IssueCandidate, SeriesCandidate
 from comic_identity_engine.parsing import parse_issue_candidate
 
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class SearchResult:
+    """Simple search result for cross-platform matching."""
+
+    url: str
+    has_results: bool
+    source_issue_id: Optional[str] = None
+
 
 class AAAdapter(SourceAdapter):
     """Adapter for Atomic Avenue (atomicavenue.com).
@@ -34,7 +49,7 @@ class AAAdapter(SourceAdapter):
     """
 
     SOURCE = "aa"
-    BASE_URL = "https://www.atomicavenue.com"
+    BASE_URL = "https://atomicavenue.com"
 
     def __init__(
         self,
@@ -81,11 +96,14 @@ class AAAdapter(SourceAdapter):
 
         return self.fetch_series_from_html(source_series_id, response.text)
 
-    async def fetch_issue(self, source_issue_id: str) -> IssueCandidate:
+    async def fetch_issue(
+        self, source_issue_id: str, full_url: Optional[str] = None
+    ) -> IssueCandidate:
         """Fetch issue from Atomic Avenue.
 
         Args:
             source_issue_id: AA item ID (e.g., "209583")
+            full_url: Optional full URL with slug (required for AA issues)
 
         Returns:
             IssueCandidate with validated metadata
@@ -95,7 +113,10 @@ class AAAdapter(SourceAdapter):
             SourceError: Network or HTTP error
             ValidationError: Required fields missing or issue number invalid
         """
-        url = f"{self.BASE_URL}/atomic/item/{source_issue_id}/1"
+        if full_url:
+            url = full_url
+        else:
+            url = f"{self.BASE_URL}/atomic/item/{source_issue_id}/1"
 
         if self.http_client is None:
             raise SourceError("HTTP client not initialized")
@@ -210,9 +231,19 @@ class AAAdapter(SourceAdapter):
         Returns:
             Series title or None
         """
-        title_elem = parser.css_first("h2.dropLeftMargin a, h2.dropLeftMargin")
+        # Try multiple selectors for different AA page formats
+        title_elem = parser.css_first("#ctl00_ContentPlaceHolder1_lblIssueName a")
+        if not title_elem:
+            title_elem = parser.css_first("h2.dropLeftMargin a")
+        if not title_elem:
+            title_elem = parser.css_first("h2.dropLeftMargin")
         if title_elem:
-            return title_elem.text().strip()
+            title_text = title_elem.text().strip()
+            # Remove issue number if present (e.g., "Leave it to Chance #1" -> "Leave it to Chance")
+            issue_match = re.search(r"\s*#\d+", title_text)
+            if issue_match:
+                return title_text[: issue_match.start()].strip()
+            return title_text
         return None
 
     def _extract_series_metadata(
@@ -266,9 +297,17 @@ class AAAdapter(SourceAdapter):
         Returns:
             Issue number or None
         """
-        issue_elem = parser.css_first(".issueSearchIssueNum")
+        # Try multiple selectors for different AA page formats
+        issue_elem = parser.css_first("#ctl00_ContentPlaceHolder1_lblIssueName")
+        if not issue_elem:
+            issue_elem = parser.css_first(".issueSearchIssueNum")
+
         if issue_elem:
             text = issue_elem.text().strip()
+            # Extract issue number from format like "Leave it to Chance #1"
+            issue_match = re.search(r"#(\S+)", text)
+            if issue_match:
+                return issue_match.group(1)
             # First check if it looks like a range (should not extract ranges)
             if re.search(r"\d+\s*-\s*\d+", text):
                 return None

@@ -71,7 +71,9 @@ class HIPAdapter(SourceAdapter):
             "Use fetch_series_from_payload() with pre-fetched HTML instead."
         )
 
-    async def fetch_issue(self, source_issue_id: str) -> IssueCandidate:
+    async def fetch_issue(
+        self, source_issue_id: str, full_url: str | None = None
+    ) -> IssueCandidate:
         """Fetch issue from HIP price guide.
 
         Args:
