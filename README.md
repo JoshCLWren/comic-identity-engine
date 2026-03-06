@@ -4,7 +4,7 @@ Domain-specific entity resolution system for comic books.
 
 ## Current Status
 
-**Phase**: Initial Implementation
+**Phase**: Production-Ready MVP
 
 ### Completed Components
 
@@ -15,21 +15,54 @@ Domain-specific entity resolution system for comic books.
    - Supports: negative numbers, decimals, fractions, variants, leading zeros
    - Error handling: EMPTY_INPUT, ONLY_SEPARATOR, INVALID_FORMAT, MULTI_ISSUE_RANGE
 
-2. **Candidate Models** ✅
-   - Location: `comic_identity_engine/models.py`
-   - Classes: `IssueCandidate`, `SeriesCandidate`
-   - Purpose: Intermediate representation for source ingestion
+2. **Database Layer** ✅
+   - Location: `comic_identity_engine/database/`
+   - ORM: SQLAlchemy 2.0 with asyncpg
+   - Models: `SeriesRun`, `Issue`, `Variant`, `ExternalMapping`, `Operation`
+   - Repositories: Full CRUD for all entities
+   - Migrations: Alembic with 3 migrations (schema, seed data, constraints)
+   - Test coverage: 37 tests for models and repositories
 
-3. **Adapter Architecture** ✅
-   - Location: `comic_identity_engine/adapters.py`
+3. **Platform Adapters** ✅ (7 platforms)
+   - Location: `comic_identity_engine/adapters/`
    - Base: `SourceAdapter` abstract class
+   - Implemented: GCD, LoCG, CCL, AA, CPG, HIP, CLZ
    - Exceptions: `AdapterError`, `NotFoundError`, `ValidationError`, `SourceError`
 
-4. **GCD Adapter** ✅
-   - Location: `comic_identity_engine/gcd_adapter.py`
-   - Class: `GCDAdapter`
-   - Methods: `fetch_series_from_payload()`, `fetch_issue_from_payload()`
-   - Test coverage: 22 tests, all passing
+4. **Identity Resolution Service** ✅
+   - Location: `comic_identity_engine/services/identity_resolver.py`
+   - Cross-platform issue search by UPC, issue number, or URL
+   - Confidence scoring with explainable matches
+   - Test coverage: 200+ tests for cross-platform search
+
+5. **REST API** ✅
+   - Location: `comic_identity_engine/api/`
+   - Framework: FastAPI with uvicorn
+   - Routers: `/identity`, `/jobs`
+   - Documentation: Auto-generated OpenAPI docs
+   - Test coverage: 20+ tests for API endpoints
+
+6. **CLI** ✅
+   - Location: `comic_identity_engine/cli/`
+   - Commands: `cie-find`, `cie-import-clz`, `cie-admin`, `cie-worker`
+   - Features: Interactive search, bulk import, job management
+
+7. **Job Queue** ✅
+   - Location: `comic_identity_engine/jobs/`
+   - Backend: arq with Redis
+   - Features: Async operations, retry logic, progress tracking
+   - AIP-151 compliant operation tracking
+
+8. **Cache Layer** ✅
+   - Location: `comic_identity_engine/core/cache/`
+   - Implementations: Memory cache, Redis singleton, Tiered cache
+   - Features: HTTP caching decorator, TTL support
+
+### Test Coverage
+
+- **Total tests**: 1,191 tests collected
+- **Coverage**: 98.83% (exceeds 98% requirement)
+- **Test frameworks**: pytest, pytest-asyncio, pytest-cov
 
 ### Research Data
 
@@ -51,6 +84,8 @@ See `examples/` for raw data and cross-platform comparison.
 - **Canonical issue number** - normalized, separate from display format
 - **Variant suffixes** - extracted and stored separately
 - **External IDs mapping** - platform-specific IDs (GCD, LoCG, CCL, etc.)
+- **Repository pattern** - abstracts database access from business logic
+- **Async-first** - all I/O operations are async for performance
 
 ## Project Structure
 
@@ -60,25 +95,61 @@ comic-identity-engine/
 │   ├── __init__.py
 │   ├── parsing.py          # Issue number parsing logic
 │   ├── models.py           # Candidate data models
-│   ├── adapters.py         # Source adapter base classes
-│   └── gcd_adapter.py      # Grand Comics Database adapter
-├── tests/
-│   ├── __init__.py
-│   ├── test_parsing.py     # Parsing test suite (32 tests)
-│   └── test_gcd_adapter.py # GCD adapter test suite (22 tests)
-├── docs/
-│   ├── issue-id-format.md  # Internal issue identifier specification
-│   ├── series-id-format.md # Internal series identifier specification
-│   └── gcd-payload-ref.md  # GCD API payload reference
-├── examples/
-│   ├── edge-cases/         # Edge case research and test cases
-│   ├── gcd/                # Grand Comics Database data
-│   ├── locg/               # League of Comic Geeks data
-│   ├── ccl/                # Comic Collector Live data
-│   ├── aa/                 # Atomic Avenue data
-│   ├── cpg/                # Comics Price Guide data
-│   ├── hipcomic/           # HIP Comic data
-│   ├── clz/                # CLZ data
+│   ├── config.py           # Configuration management
+│   ├── errors.py           # Custom exceptions
+│   ├── adapters/           # Platform adapters
+│   │   ├── base.py         # Abstract base class
+│   │   ├── gcd.py          # Grand Comics Database
+│   │   ├── locg.py         # League of Comic Geeks
+│   │   ├── ccl.py          # Comic Collector Live
+│   │   ├── aa.py           # Atomic Avenue
+│   │   ├── cpg.py          # Comics Price Guide
+│   │   ├── hip.py          # HIP Comic
+│   │   └── clz.py          # CLZ Comics
+│   ├── api/                # REST API
+│   │   ├── main.py         # FastAPI app factory
+│   │   ├── schemas.py      # Pydantic models
+│   │   ├── dependencies.py # Dependency injection
+│   │   └── routers/        # API route handlers
+│   ├── cli/                # Command-line interface
+│   │   ├── main.py         # CLI entry point
+│   │   └── commands/       # CLI commands
+│   ├── services/           # Business logic
+│   │   ├── identity_resolver.py  # Cross-platform search
+│   │   ├── operations.py         # Job tracking
+│   │   ├── url_builder.py        # URL construction
+│   │   └── url_parser.py         # URL parsing
+│   ├── database/           # Database layer
+│   │   ├── models.py       # SQLAlchemy ORM models
+│   │   ├── repositories.py # Repository classes
+│   │   ├── connection.py   # DB connection management
+│   │   └── migrations/     # Alembic migrations
+│   ├── jobs/               # Async job queue
+│   │   ├── worker.py       # arq worker
+│   │   ├── queue.py        # Queue configuration
+│   │   └── tasks.py        # Job tasks
+│   └── core/               # Core utilities
+│       ├── cache/          # Caching layer
+│       ├── http_client.py  # HTTP client wrapper
+│       └── interfaces.py   # Core interfaces
+├── tests/                  # Test suite (1,191 tests)
+│   ├── test_parsing.py
+│   ├── test_gcd_adapter.py
+│   ├── test_adapters/      # Adapter tests
+│   ├── test_api/           # API tests
+│   ├── test_cli/           # CLI tests
+│   ├── test_jobs/          # Job queue tests
+│   ├── test_services/      # Service tests
+│   └── test_database.py    # Database tests
+├── examples/               # Usage examples and research
+│   ├── edge-cases/         # Edge case research
+│   ├── gcd/                # GCD data samples
+│   ├── locg/               # LoCG data samples
+│   ├── ccl/                # CCL data samples
+│   ├── aa/                 # AA data samples
+│   ├── cpg/                # CPG data samples
+│   ├── hipcomic/           # HIP data samples
+│   ├── clz/                # CLZ data samples
 │   └── COMPARISON.md       # Cross-platform analysis
 ├── AGENTS.md               # Agent guidelines
 └── README.md               # Project overview
@@ -88,14 +159,26 @@ comic-identity-engine/
 
 ### Environment Setup
 
-This project uses [`uv`](https://github.com/astral-sh/uv) for dependency management:
+This project uses [`uv`](https://github.com/astral-sh/uv) for dependency management and [`direnv`](https://direnv.net/) for environment variables:
 
 ```bash
 # One-time setup
 uv sync
+direnv allow  # Loads .envrc automatically
 
 # Run tests
 uv run pytest
+
+# Run with coverage
+uv run pytest --cov=comic_identity_engine
+```
+
+### Docker-Based CI (Recommended)
+
+```bash
+# Build and run all tests locally using Docker
+docker compose build ci
+docker compose run --rm ci
 ```
 
 ### Shell Aliases (Optional)
@@ -116,12 +199,34 @@ See [SHELL.md](SHELL.md) for details.
 
 ## Usage
 
-### Parse Issue Numbers
+### Command-Line Interface
+
+```bash
+# Find an issue by UPC (cross-platform search)
+cie-find 75960601772099911
+
+# Find an issue by URL (auto-detects platform)
+cie-find https://www.comiccollectorlive.com/...
+cie-find https://leagueofcomicgeeks.com/...
+
+# Import CLZ backup file
+cie-import-clz backup.clz
+
+# Run the job worker
+cie-worker
+
+# Admin commands
+cie-admin db migrate
+cie-admin db seed
+```
+
+### Python API
+
+#### Parse Issue Numbers
 
 ```python
 from comic_identity_engine.parsing import parse_issue_candidate
 
-# Parse a candidate issue number
 result = parse_issue_candidate("-1A")
 
 if result.success:
@@ -131,40 +236,81 @@ else:
     print(f"Error: {result.error_code} - {result.error_message}")
 ```
 
-### Ingest GCD Issue Data
+#### Cross-Platform Identity Resolution
 
 ```python
-from comic_identity_engine.adapters import GCDAdapter
-import json
+from comic_identity_engine.database import get_db
+from comic_identity_engine.services.identity_resolver import IdentityResolver
 
-# Load pre-fetched GCD API response
-with open('gcd-issue-125295.json') as f:
-    payload = json.load(f)
-
-adapter = GCDAdapter()
-issue = adapter.fetch_issue_from_payload("125295", payload)
-
-print(f"Issue: {issue.series_title} #{issue.issue_number}")
-print(f"Publisher: {issue.publisher}")
-print(f"Cover Date: {issue.cover_date}")
-print(f"UPC: {issue.upc}")
+async def find_issue():
+    async for db in get_db():
+        resolver = IdentityResolver(db)
+        
+        # Find by UPC (searches all platforms)
+        result = await resolver.find_by_upc("75960601772099911")
+        
+        if result.matches:
+            for match in result.matches:
+                print(f"Found: {match.series_title} #{match.issue_number}")
+                print(f"Confidence: {match.overall_confidence}")
+                print(f"Explanation: {match.explanation}")
 ```
 
-### Run Tests
+#### Database Operations
+
+```python
+from comic_identity_engine.database import (
+    SeriesRunRepository,
+    IssueRepository,
+    ExternalMappingRepository,
+    get_db,
+)
+
+async def example_usage():
+    async for db in get_db():
+        # Create series
+        series_repo = SeriesRunRepository(db)
+        series = await series_repo.create(
+            title="X-Men",
+            start_year=1991,
+            publisher="Marvel Comics",
+        )
+
+        # Create issue
+        issue_repo = IssueRepository(db)
+        issue = await issue_repo.create(
+            series_run_id=series.id,
+            issue_number="-1",
+            upc="75960601772099911",
+        )
+
+        # Create external mapping
+        mapping_repo = ExternalMappingRepository(db)
+        await mapping_repo.create_mapping(
+            issue_id=issue.id,
+            source="gcd",
+            source_issue_id="125295",
+            source_series_id="4254",
+        )
+```
+
+### REST API
 
 ```bash
-python3 -c "
-import sys
-sys.path.insert(0, '.')
-from comic_identity_engine.parsing import parse_issue_candidate
+# Start the API server
+uv run uvicorn comic_identity_engine.api.main:create_app --reload
 
-# Quick validation
-assert parse_issue_candidate('-1').canonical_issue_number == '-1'
-assert parse_issue_candidate('0.5').canonical_issue_number == '0.5'
-assert parse_issue_candidate('1000.DE').variant_suffix == 'DE'
-print('All checks passed!')
-"
+# Find an issue by UPC
+curl http://localhost:8000/api/v1/identity/find?upc=75960601772099911
+
+# Find an issue by URL
+curl "http://localhost:8000/api/v1/identity/find?url=https://..."
+
+# Check job status
+curl http://localhost:8000/api/v1/jobs/{operation_id}
 ```
+
+The API includes auto-generated OpenAPI documentation at `http://localhost:8000/docs`.
 
 ## Development Guidelines
 
