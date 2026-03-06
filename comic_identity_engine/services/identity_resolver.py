@@ -571,6 +571,8 @@ class IdentityResolver:
             platforms_to_search.append("aa")
         if skip_platform != "ccl":
             platforms_to_search.append("ccl")
+        if skip_platform != "cpg":
+            platforms_to_search.append("cpg")
         if skip_platform != "hip":
             platforms_to_search.append("hip")
 
@@ -827,6 +829,12 @@ class IdentityResolver:
                     return match.group(2), match.group(1)
                 # Try listing URL format
                 match = re.search(r"/listing/.*?/(\d+)", url)
+                if match:
+                    return match.group(1), None
+
+            elif platform == "cpg":
+                # CPG URL format: /titles/{series_slug}/{issue_number}/{resource_id}
+                match = re.search(r"/titles/[^/]+/[^/]+/([^/]+)", url)
                 if match:
                     return match.group(1), None
 

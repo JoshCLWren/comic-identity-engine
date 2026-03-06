@@ -139,6 +139,7 @@ async def resolve_identity_task(
         0.95
     """
     async with AsyncSessionLocal() as session:
+        operation_uuid = None
         try:
             operation_uuid = uuid.UUID(operation_id)
             operations_manager = OperationsManager(session)
@@ -346,6 +347,7 @@ async def resolve_identity_task(
                 error=error_msg,
             )
             await _mark_failed_safe(session, operation_uuid, error_msg)
+            await session.commit()
             return {"error": error_msg, "error_type": "parse_error"}
 
         except NotFoundError as e:
@@ -356,6 +358,7 @@ async def resolve_identity_task(
                 error=error_msg,
             )
             await _mark_failed_safe(session, operation_uuid, error_msg)
+            await session.commit()
             return {"error": error_msg, "error_type": "not_found"}
 
         except NetworkError as e:
@@ -366,6 +369,7 @@ async def resolve_identity_task(
                 error=error_msg,
             )
             await _mark_failed_safe(session, operation_uuid, error_msg)
+            await session.commit()
             return {"error": error_msg, "error_type": "network_error"}
 
         except SourceError as e:
@@ -376,6 +380,7 @@ async def resolve_identity_task(
                 error=error_msg,
             )
             await _mark_failed_safe(session, operation_uuid, error_msg)
+            await session.commit()
             return {"error": error_msg, "error_type": "platform_error"}
 
         except AdapterValidationError as e:
@@ -386,6 +391,7 @@ async def resolve_identity_task(
                 error=error_msg,
             )
             await _mark_failed_safe(session, operation_uuid, error_msg)
+            await session.commit()
             return {"error": error_msg, "error_type": "platform_validation_error"}
 
         except ResolutionError as e:
@@ -396,6 +402,7 @@ async def resolve_identity_task(
                 error=error_msg,
             )
             await _mark_failed_safe(session, operation_uuid, error_msg)
+            await session.commit()
             return {"error": error_msg, "error_type": "resolution_error"}
 
         except SQLAlchemyError as e:
@@ -406,6 +413,7 @@ async def resolve_identity_task(
                 error=error_msg,
             )
             await _mark_failed_safe(session, operation_uuid, error_msg)
+            await session.commit()
             return {"error": error_msg, "error_type": "database_error"}
 
         except Exception as e:
@@ -416,7 +424,9 @@ async def resolve_identity_task(
                 error=error_msg,
                 error_type=type(e).__name__,
             )
-            await _mark_failed_safe(session, operation_uuid, error_msg)
+            if operation_uuid:
+                await _mark_failed_safe(session, operation_uuid, error_msg)
+                await session.commit()
             return {"error": error_msg, "error_type": "unexpected_error"}
 
 

@@ -184,7 +184,7 @@ requires-dist = [
     { name = "asyncpg", specifier = ">=0.30" },
     { name = "beautifulsoup4", specifier = ">=4.12" },
     { name = "click", specifier = ">=8.1" },
-    { name = "comic-search-lib", directory = "../mnt/extra/josh/code/comic-search-lib" },
+    { name = "comic-search-lib", directory = "../comic-search-lib" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "jellyfish", specifier = ">=1.1" },
@@ -212,7 +212,7 @@ dev = [
 [[package]]
 name = "comic-search-lib"
 version = "0.1.0"
-source = { directory = "../mnt/extra/josh/code/comic-search-lib" }
+source = { directory = "../comic-search-lib" }
 dependencies = [
     { name = "httpx" },
     { name = "jellyfish" },
