@@ -198,8 +198,11 @@ def _parse_locg_url(url: str) -> ParsedUrl:
     """Parse LoCG (League of Comic Geeks) URL.
 
     URL patterns:
+    - leagueofcomicgeeks.com/comic/ISSUE_ID[/slug]
     - leagueofcomicgeeks.com/comic/SERIES_ID/slug-ISSUE_NUM?variant=VARIANT_ID
-    - leagueofcomicgeeks.com/comic/SERIES_ID/ISSUE_ID
+    - leagueofcomicgeeks.com/comics/series/SERIES_ID/
+
+    Note: The first number in /comic/ is typically the ISSUE_ID for issue pages.
 
     Args:
         url: LoCG URL
@@ -210,32 +213,21 @@ def _parse_locg_url(url: str) -> ParsedUrl:
     Raises:
         ParseError: If URL cannot be parsed
     """
+    # Check for variant query parameter (variant IDs)
     variant_match = re.search(r"variant=(\d+)", url)
     if variant_match:
         variant_id = variant_match.group(1)
-
-        issue_match = re.search(r"/comic/(\d+)/", url)
-        if issue_match:
-            series_id = issue_match.group(1)
+        # For variant URLs, extract series ID from path
+        series_match = re.search(r"/comic/(\d+)", url)
+        if series_match:
+            series_id = series_match.group(1)
             return ParsedUrl(
                 platform="locg",
                 source_issue_id=variant_id,
                 source_series_id=series_id,
             )
 
-    issue_match = re.search(r"/comic/(\d+)/[^/]+-(\d+)", url)
-    if not issue_match:
-        issue_match = re.search(r"/comic/(\d+)/(\d+)", url)
-
-    if issue_match:
-        series_id = issue_match.group(1)
-        issue_id = issue_match.group(2)
-        return ParsedUrl(
-            platform="locg",
-            source_issue_id=issue_id,
-            source_series_id=series_id,
-        )
-
+    # Match series page
     series_match = re.search(r"/comics/series/(\d+)/", url)
     if series_match:
         series_id = series_match.group(1)
@@ -243,6 +235,16 @@ def _parse_locg_url(url: str) -> ParsedUrl:
             platform="locg",
             source_issue_id=series_id,
             source_series_id=series_id,
+        )
+
+    # Match issue page: /comic/ISSUE_ID[/slug]
+    # The first number is the issue ID, the rest is an optional slug
+    issue_match = re.search(r"/comic/(\d+)", url)
+    if issue_match:
+        issue_id = issue_match.group(1)
+        return ParsedUrl(
+            platform="locg",
+            source_issue_id=issue_id,
         )
 
     raise ParseError(f"Invalid LoCG URL format: {url}")

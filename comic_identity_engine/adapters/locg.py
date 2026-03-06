@@ -261,31 +261,38 @@ class LoCGAdapter(SourceAdapter):
         Returns:
             Series title or None
         """
+        # Try to find h1 with title class (newer LoCG structure)
         h1_match = re.search(
             r'<h1[^>]*class="[^"]*title[^"]*"[^>]*>([^<]+)</h1>', html, re.I
         )
-        title_match = re.search(
-            r"<title>([^<]+?)\s*\|\s*League of Comic Geeks</title>", html
-        )
-
-        title_from_tag = None
-        if title_match:
-            title_from_tag = title_match.group(1).strip()
-
-        h1_from_tag = None
         if h1_match:
-            h1_from_tag = h1_match.group(1).strip()
+            title = h1_match.group(1).strip()
+            # Extract series name from "SeriesName #Issue" format
+            issue_match = re.search(r"(.+?)\s+#\d+", title)
+            if issue_match:
+                return issue_match.group(1).strip()
+            return title
 
-        if title_from_tag and h1_from_tag:
-            if re.search(r"\(\d{4}\)", title_from_tag):
-                return title_from_tag
-            return h1_from_tag
+        # Try to find any h1 tag (fallback)
+        h1_any_match = re.search(r"<h1[^>]*>([^<]+)</h1>", html, re.I)
+        if h1_any_match:
+            title = h1_any_match.group(1).strip()
+            # Extract series name from "SeriesName #Issue" format
+            issue_match = re.search(r"(.+?)\s+#\d+", title)
+            if issue_match:
+                return issue_match.group(1).strip()
+            # If no issue number, return as-is
+            return title
 
-        if h1_from_tag:
-            return h1_from_tag
-
-        if title_from_tag:
-            return title_from_tag
+        # Try title tag as last resort
+        title_match = re.search(r"<title>([^<]+?)\s*Reviews</title>", html, re.I)
+        if title_match:
+            title = title_match.group(1).strip()
+            # Extract series name from "SeriesName #Issue Reviews" format
+            issue_match = re.search(r"(.+?)\s+#\d+", title)
+            if issue_match:
+                return issue_match.group(1).strip()
+            return title
 
         return None
 
@@ -298,10 +305,22 @@ class LoCGAdapter(SourceAdapter):
         Returns:
             Issue number string or None
         """
+        # Try h1 tag with "SeriesName #Issue" format
+        match = re.search(r"<h1[^>]*>([^<]+?)\s+#(\d+)", html, re.I)
+        if match:
+            return match.group(2)
+
+        # Try title tag with "SeriesName #Issue Reviews" format
+        match = re.search(r"<title>[^<]+?\s+#(\d+)\s+Reviews", html, re.I)
+        if match:
+            return match.group(1)
+
+        # Try generic title tag pattern
         match = re.search(r"<title>[^<]+?#([\d\./-]+)(?:\s*\||\s*$)", html)
         if match:
             return match.group(1)
 
+        # Try h2 tag as fallback
         match = re.search(
             r'<h2[^>]*class="[^"]*issue[^"]*"[^>]*>([^<]+)</h2>', html, re.I
         )
@@ -337,20 +356,26 @@ class LoCGAdapter(SourceAdapter):
         Returns:
             Publisher name or None
         """
+        # Try publisher page link
         patterns = [
-            r'<a[^>]*href="/publishers/[^"]+"[^>]*>([^<]+)</a>',
-            r'<a[^>]*href="/comic/\d+"[^>]*>([^<]+)</a>',
-            r'<p[^>]*class="[^"]*publisher[^"]*"[^>]*>([^<]+)</p>',
-            r'<span[^>]*class="[^"]*publisher[^"]*"[^>]*>([^<]+)</span>',
-            r"Publisher[^:]*:\s*<[^>]+>([^<]+)<",
+            r'<a[^>]*href="/publishers/[^"]*"[^>]*>([^<]+)</a>',
+            r'<a[^>]*href="/comics/(?:dc|marvel|image|dark-horse|idw)[^"]*"[^>]*>([^<]+)</a>',
+            r'<a[^>]*href="/comics/([a-z]+)"[^>]*>',
         ]
 
         for pattern in patterns:
             match = re.search(pattern, html, re.I)
             if match:
                 publisher = match.group(1).strip()
+                # Capitalize publisher name
                 if publisher:
-                    return publisher
+                    return publisher.title()
+
+        # Look for common publisher names in text
+        publishers = ["DC Comics", "Marvel", "Image Comics", "Dark Horse", "IDW"]
+        for publisher in publishers:
+            if publisher in html:
+                return publisher
 
         return None
 
@@ -467,6 +492,18 @@ class LoCGAdapter(SourceAdapter):
                             "October": 10,
                             "November": 11,
                             "December": 12,
+                            "Jan": 1,
+                            "Feb": 2,
+                            "Mar": 3,
+                            "Apr": 4,
+                            "May": 5,
+                            "Jun": 6,
+                            "Jul": 7,
+                            "Aug": 8,
+                            "Sep": 9,
+                            "Oct": 10,
+                            "Nov": 11,
+                            "Dec": 12,
                         }
 
                         month = months.get(month_str)
@@ -512,9 +549,9 @@ class LoCGAdapter(SourceAdapter):
         """
         patterns = [
             r'<span[^>]*class="[^"]*upc[^"]*"[^>]*>(\d{12,})</span>',
+            r"UPC[^<]*</[^>]+>\s*(\d{12,})",
             r"UPC[^:]*:\s*(\d{12,})",
-            r"barcode[^:]*:\s*(\d{12,})",
-            r"ISBN[^:]*:\s*([\dX-]+)",
+            r">(\d{12,})<",  # Generic 12+ digit number
         ]
 
         for pattern in patterns:
