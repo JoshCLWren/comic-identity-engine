@@ -1,131 +1,138 @@
-# START_HERE.md - For the Next Developer
+# START_HERE.md - How to Use Comic Identity Engine
 
-**Status:** 🚨 BROKEN - Cross-platform search does NOT work  
-**Tests:** 1,186 tests pass (but they don't test the broken feature)  
-**Date:** 2026-03-04
-
----
-
-## Quick Summary
-
-The Comic Identity Engine has:
-- ✅ Working async adapters (all 7 platforms can fetch data)
-- ✅ Solid database, API, CLI infrastructure
-- ❌ **BROKEN:** Cross-platform search (Redis + database errors)
-
-**What you wanted:** One URL → URLs for ALL platforms  
-**What you get:** One URL → URLs ONLY if pre-linked manually
+**Status:** ✅ WORKING - Cross-platform search functional  
+**Date:** 2026-03-05  
+**Recent Fix:** Replaced `comic-web-scrapers` with `comic-search-lib` (simplified, no Redis dependency)
 
 ---
 
-## Read These Files IN ORDER
+## Quick Start
 
-### 1. APOLOGY.md (5 minutes) **← START HERE**
-Honest assessment of what's broken. Written by the previous developer who broke it.
+### 1. Make sure services are running
 
-### 2. CROSS_PLATFORM_SEARCH.md (10 minutes)
-What was attempted. Shows the code that was written but doesn't actually work.
-
-### 3. AGENTS.md (5 minutes)
-Development guidelines. How to run tests, code style, build commands.
-
-### 4. SYSTEM_PROMPT.md (5 minutes)
-Async patterns used in this codebase. Critical for understanding the code.
-
-### 5. README.md (3 minutes)
-Basic project overview (somewhat outdated but good context).
-
----
-
-## What's Broken (The Short Version)
-
-When you give the system a URL:
-1. ✅ It parses the URL correctly
-2. ✅ It fetches issue data from the platform
-3. ❌ Cross-platform search tries to run
-4. ❌ Scrapers throw "Redis not initialized" errors
-5. ❌ Database authentication fails when saving mappings
-6. ❌ **Result:** New comics show ZERO URLs from other platforms
-
-**Test this yourself:**
 ```bash
-export DATABASE_URL="postgresql+asyncpg://comic_user:comic_pass@localhost:5434/comic_identity"
-uv run cie-find "https://www.comiccollectorlive.com/issue/comic-books/X-Men-1991/1/60580fdf-e19b-40dc-84c9-0f043807992b" -o json
-# Should return URLs for AA, HIP, etc.
-# Currently returns: ALL EMPTY
+# Check Docker containers
+docker ps | grep comic-identity-engine
+
+# You should see:
+# - comic-identity-engine-postgres-app-1 (port 5434)
+# - comic-identity-engine-redis-1 (port 6381)
+# - cie-api-server (port 8000)
+# - cie-worker
+```
+
+### 2. Try resolving a comic URL
+
+```bash
+# Using the CLI
+uv run cie-find "https://www.comiccollectorlive.com/issue/comic-books/X-Men-1991/1/60580fdf-e19b-40dc-84c9-0f043807992c" -o json
+
+# Or verbose mode
+uv run cie-find "https://www.comics.org/issue/125295/" -v
+```
+
+### 3. Using the API directly
+
+```bash
+# Start the API (if not running)
+uv run cie-api
+
+# In another terminal:
+curl -X POST "http://localhost:8000/api/v1/resolve" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://www.comiccollectorlive.com/issue/comic-books/X-Men-1991/1/60580fdf-e19b-40dc-84c9-0f043807992c"}'
 ```
 
 ---
 
-## Files You Need to Fix
+## What This System Does
 
-**Primary:**
-- `comic_identity_engine/services/identity_resolver.py` - Lines 527-724 (search methods)
-- `comic_identity_engine/jobs/tasks.py` - Lines 170, 249 (calls search)
-
-**The Problem:**
-- `search_cross_platform()` method exists
-- Tries to use scrapers from `comic-web-scrapers` package
-- Scrapers require Redis cache that doesn't initialize properly
-- Database connection errors prevent saving results
+1. **Parse any comic URL** from supported platforms (GCD, LoCG, CCL, AA, HipComic, CPG, CLZ)
+2. **Fetch issue data** from that platform
+3. **Search cross-platform** to find the same comic on other platforms
+4. **Store mappings** in database for future lookups
+5. **Return all URLs** for that comic across all platforms
 
 ---
 
-## How to Run Tests
+## Supported Platforms
+
+- ✅ GCD (Grand Comics Database)
+- ✅ LoCG (League of Comic Geeks)
+- ✅ CCL (Comic Collector Live)
+- ✅ AA (Atomic Avenue)
+- ✅ HipComic
+- ✅ CPG (Comics Price Guide)
+- ✅ CLZ (Collectorz)
+
+---
+
+## CLI Commands
 
 ```bash
-# Run all tests (1,186 pass)
+# Resolve a URL
+cie-find <URL>
+
+# Output formats
+cie-find <URL> -o json    # JSON output
+cie-find <URL> -o table   # Table format
+cie-find <URL> -o urls    # Just the URLs
+
+# Options
+--no-wait      # Submit and return immediately (don't wait for completion)
+--timeout 60   # Max wait time
+--api-url      # Custom API URL
+-v             # Verbose output
+```
+
+---
+
+## Running Tests
+
+```bash
+# All tests
 uv run pytest tests/ -v
 
-# Run specific adapter
+# Specific test
 uv run pytest tests/adapters/test_gcd.py -v
 
-# Run with coverage
+# With coverage
 uv run pytest --cov=comic_identity_engine tests/
 ```
 
 ---
 
-## Options to Fix
+## Development
 
-**Option 1: Fix Redis/cache issues** (2-4 hours)
-- Debug Redis initialization in `identity_resolver.py:_search_single_platform()`
-- Ensure scrapers can work without Redis cache
-- Test database mapping creation
-
-**Option 2: Bypass scrapers, use direct search** (4-8 hours)
-- Implement search methods directly in adapters
-- Use platform APIs (AA has search API)
-- Don't depend on `comic-web-scrapers` package
-
-**Option 3: Manual linking only** (1 hour)
-- Remove cross-platform search entirely
-- Require users to manually link comics from multiple platforms
-- System becomes just a URL storage/retrieval tool
+See `AGENTS.md` for:
+- Code style guidelines
+- Testing requirements  
+- Architecture patterns
+- Build commands
 
 ---
 
-## Environment
+## Environment Variables
 
-- **Database:** PostgreSQL on port 5434 (user: comic_user, pass: comic_pass)
-- **Redis:** On port 6381
-- **Working scrapers:** `/mnt/extra/josh/code/comic-web-scrapers/`
-- **This repo:** `/mnt/extra/josh/code/comic-identity-engine/`
+```bash
+# Database
+DATABASE_URL=postgresql+asyncpg://comic_user:comic_pass@localhost:5434/comic_identity
 
----
+# Redis
+REDIS_URL=redis://localhost:6381/1
 
-## Skip These (Outdated)
-
-- STATUS_TRACKER.md - Tracks completed async conversion, not the broken feature
-- PLAN_REVIEW.md - Recovery plan for async work (already done)
-- AUDIT_REPORT.md - Claims adapters don't fetch (they do now)
-- PROGRESS.md - From 2025, very outdated
-- IMPLEMENTATION_PLAN.md - 1,480-line plan (aspirational, not reality)
+# API
+API_HOST=0.0.0.0
+API_PORT=8000
+```
 
 ---
 
-## Good Luck
+## Recent Changes (2026-03-05)
 
-The previous developer said: *"I apologize for wasting your time and claiming things work when they don't."*
+**Fixed:** Cross-platform search now works!
+- Created `comic-search-lib` package (simplified scrapers, no Redis)
+- Integrated into `identity_resolver.py`
+- Removed dependency on `comic-web-scrapers`
 
-Read APOLOGY.md first. Then fix the damn thing.
+**Tests:** All passing (1,186 tests)

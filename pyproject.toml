@@ -78,5 +78,5 @@ fail_under = 98
 cie-find = "comic_identity_engine.cli.main:cli_find"
 cie-import-clz = "comic_identity_engine.cli.commands.import_clz:cli_import_clz"
 cie-admin = "comic_identity_engine.cli.commands.admin:cli_admin"
-cie-api = "comic_identity_engine.api.app:main"
+# To run the API: uv run uvicorn comic_identity_engine.api.main:create_app --reload
 cie-worker = "comic_identity_engine.jobs.worker:main"
