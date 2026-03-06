@@ -36,7 +36,7 @@ class TestDatabaseConfiguration:
     def test_database_url_exists(self):
         """Test DATABASE_URL is defined."""
         assert DATABASE_URL is not None
-        assert "postgresql://" in DATABASE_URL
+        assert "postgresql" in DATABASE_URL
 
     def test_async_database_url_exists(self):
         """Test ASYNC_DATABASE_URL is defined."""

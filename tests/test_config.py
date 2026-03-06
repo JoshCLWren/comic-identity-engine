@@ -89,7 +89,9 @@ class TestDatabaseSettings:
 
     def test_test_database_url_optional(self):
         """Test TEST_DATABASE_URL is optional."""
-        with patch.dict(os.environ, {"DATABASE_URL": "postgresql://localhost/db"}):
+        with patch.dict(
+            os.environ, {"DATABASE_URL": "postgresql://localhost/db"}, clear=True
+        ):
             settings = DatabaseSettings()
             assert settings.test_database_url is None
 
