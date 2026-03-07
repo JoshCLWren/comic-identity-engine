@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import asyncio
 import signal
-import sys
 from typing import Any
 
 import structlog
@@ -91,7 +90,10 @@ async def create_redis_pool() -> Any:
     """
     settings = get_settings()
     redis_settings = ArqRedisSettings.from_dsn(settings.arq.queue_url)
-    return await create_pool(redis_settings)
+    return await create_pool(
+        redis_settings,
+        default_queue_name=settings.arq.arq_queue_name,
+    )
 
 
 class WorkerSettings:
@@ -111,6 +113,7 @@ class WorkerSettings:
 
     # Class-level attributes required by arq CLI
     redis_settings = ArqRedisSettings.from_dsn(get_settings().arq.queue_url)
+    queue_name = get_settings().arq.arq_queue_name
     max_jobs = get_settings().arq.arq_max_jobs
     job_timeout = get_settings().arq.arq_job_timeout
     keep_result = get_settings().arq.arq_keep_result
@@ -137,6 +140,7 @@ def create_worker(settings_cls: type[WorkerSettings] = WorkerSettings) -> Worker
         >>> # Run the worker
     """
     return Worker(
+        queue_name=settings_cls.queue_name,
         redis_settings=settings_cls.redis_settings,
         max_jobs=settings_cls.max_jobs,
         job_timeout=settings_cls.job_timeout,
@@ -157,6 +161,7 @@ def run_worker() -> None:
     logger.info(
         "Starting arq worker",
         redis_url=WorkerSettings.redis_settings.host,
+        queue_name=WorkerSettings.queue_name,
         max_jobs=WorkerSettings.max_jobs,
         job_timeout=WorkerSettings.job_timeout,
         functions_count=len(WorkerSettings.functions),

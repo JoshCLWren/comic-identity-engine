@@ -59,7 +59,6 @@ from comic_identity_engine.errors import (
 from comic_identity_engine.services import (
     IdentityResolver,
     OperationsManager,
-    build_urls,
     parse_url,
 )
 
@@ -333,21 +332,20 @@ async def resolve_identity_task(
                         )
                         cross_platform_urls = {}
 
-                urls = cross_platform_urls.copy()
-                existing_mappings_urls = await build_urls(
-                    existing.issue_id,
-                    ["gcd", "locg", "ccl", "aa", "cpg", "hip"],
-                    session,
-                )
-                for platform, url in existing_mappings_urls.items():
+                urls = {parsed_url.platform: url}
+                # TODO: once external mappings persist authoritative source URLs,
+                # merge the stored per-platform URLs here. Until then, only return
+                # exact URLs from this request or from the live cross-platform run.
+                for platform, found_url in cross_platform_urls.items():
                     if not urls.get(platform):
-                        urls[platform] = url
+                        urls[platform] = found_url
 
                 result_dict = {
                     "canonical_uuid": str(existing.issue_id),
                     "confidence": 1.0,
                     "platform_urls": urls,
                     "platform_status": platform_status,
+                    "platform_events": cross_platform_result.get("events", []),
                     "created_new": False,
                     "explanation": f"Found existing external mapping for {parsed_url.platform}:{parsed_url.source_issue_id}",
                 }
@@ -385,7 +383,7 @@ async def resolve_identity_task(
 
             # Create external mapping if successful
             cross_platform_urls = {}
-            cross_platform_result = {"urls": {}, "status": {}}
+            cross_platform_result = {"urls": {}, "status": {}, "events": []}
             platform_status = {}
             source_mapping_action = None
 
@@ -460,26 +458,17 @@ async def resolve_identity_task(
                         error=str(e),
                     )
                     cross_platform_urls = {}
-                    cross_platform_result = {"urls": {}, "status": {}}
+                    cross_platform_result = {"urls": {}, "status": {}, "events": []}
 
             urls = {}
             if result.issue_id:
-                # Start with cross-platform search results (platforms we just found)
-                urls = cross_platform_urls.copy()
-
-                # Add URLs from existing database mappings (for platforms we didn't search)
-                existing_mappings_urls = await build_urls(
-                    result.issue_id,
-                    ["gcd", "locg", "ccl", "aa", "cpg", "hip"],
-                    session,
-                )
-
-                # Merge - use search results preferentially, fill in gaps with existing mappings
-                for platform, url in existing_mappings_urls.items():
-                    if not urls.get(
-                        platform
-                    ):  # Only use existing if we don't have a search result
-                        urls[platform] = url
+                urls = {parsed_url.platform: url}
+                # TODO: once external mappings persist authoritative source URLs,
+                # merge the stored per-platform URLs here. Until then, only return
+                # exact URLs from this request or from the live cross-platform run.
+                for platform, found_url in cross_platform_urls.items():
+                    if not urls.get(platform):
+                        urls[platform] = found_url
 
             result_dict = {
                 "canonical_uuid": str(result.issue_id) if result.issue_id else None,
@@ -488,6 +477,9 @@ async def resolve_identity_task(
                 ),
                 "platform_urls": urls,
                 "platform_status": platform_status if result.issue_id else {},
+                "platform_events": (
+                    cross_platform_result.get("events", []) if result.issue_id else []
+                ),
                 "created_new": result.created_new,
                 "explanation": result.explanation,
                 "source_mapping_action": source_mapping_action,
@@ -739,11 +731,9 @@ async def bulk_resolve_task(
 
                     urls_dict = {}
                     if resolution_result.issue_id:
-                        urls_dict = await build_urls(
-                            resolution_result.issue_id,
-                            ["gcd", "locg", "ccl", "aa", "cpg", "hip"],
-                            session,
-                        )
+                        # TODO: bulk results should return authoritative stored
+                        # source URLs once external mappings persist them.
+                        urls_dict = {parsed_url.platform: url}
 
                     result_entry = {
                         "url": url,

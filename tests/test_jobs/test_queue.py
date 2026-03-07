@@ -11,6 +11,7 @@ from comic_identity_engine.jobs.queue import JobQueue
 
 # Test constants
 TEST_REDIS_URL = "redis://localhost:6379/0"
+TEST_QUEUE_NAME = "cie:test:queue"
 TEST_OPERATION_ID = uuid.UUID("550e8400-e29b-41d4-a716-446655440000")
 TEST_ISSUE_ID = uuid.UUID("550e8400-e29b-41d4-a716-446655440001")
 
@@ -20,6 +21,7 @@ def mock_settings():
     """Mock settings with arq configuration."""
     settings = Mock()
     settings.arq.queue_url = TEST_REDIS_URL
+    settings.arq.arq_queue_name = TEST_QUEUE_NAME
     return settings
 
 
@@ -62,6 +64,7 @@ class TestJobQueueInitialization:
 
                 assert queue._redis_pool is None
                 assert queue._redis_settings == mock_arq_redis_settings
+                assert queue._queue_name == TEST_QUEUE_NAME
 
 
 class TestJobQueueGetPool:
@@ -89,7 +92,10 @@ class TestJobQueueGetPool:
                     pool = await queue._get_pool()
 
                     assert pool == mock_redis_pool
-                    mock_create_pool.assert_called_once_with(mock_arq_redis_settings)
+                    mock_create_pool.assert_called_once_with(
+                        mock_arq_redis_settings,
+                        default_queue_name=TEST_QUEUE_NAME,
+                    )
                     assert queue._redis_pool == mock_redis_pool
 
     @pytest.mark.asyncio
@@ -176,6 +182,9 @@ class TestEnqueueResolve:
                         "resolve_identity_task",
                         url=test_url,
                         operation_id=str(TEST_OPERATION_ID),
+                        force=False,
+                        clear_mappings=None,
+                        dry_run=False,
                     )
 
     @pytest.mark.asyncio

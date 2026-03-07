@@ -97,6 +97,11 @@ class ArqSettings(BaseSettings):
         description="arq job queue Redis URL (defaults to redis_url DB 0)",
         json_schema_extra={"env": "ARQ_QUEUE_URL"},
     )
+    arq_queue_name: str = Field(
+        default="arq:queue",
+        description="arq queue name used for enqueueing and worker consumption",
+        json_schema_extra={"env": "ARQ_QUEUE_NAME"},
+    )
     arq_max_jobs: int = Field(
         default=10,
         description="Maximum number of concurrent jobs",
@@ -193,6 +198,14 @@ class AdapterSettings(BaseSettings):
         default="ComicIdentityEngine/1.0 (+https://github.com/anomalyco/comic-identity-engine)",
         description="User agent for platform adapter requests",
         json_schema_extra={"env": "ADAPTER_USER_AGENT"},
+    )
+    platform_search_timeout: int | None = Field(
+        default=None,
+        description=(
+            "Optional hard wall-clock timeout for each platform search in seconds. "
+            "If unset, platform searches are not force-cut early."
+        ),
+        json_schema_extra={"env": "PLATFORM_SEARCH_TIMEOUT"},
     )
 
 

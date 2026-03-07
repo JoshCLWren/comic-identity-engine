@@ -11,6 +11,7 @@ services:
       - PYTHONUNBUFFERED=1
       - DATABASE_URL=postgresql+asyncpg://comic_user:comic_pass@postgres-app:5432/comic_identity
       - REDIS_URL=redis://redis:6379/0
+      - ARQ_QUEUE_NAME=cie:docker:queue
     depends_on:
       postgres-app:
         condition: service_healthy
@@ -28,6 +29,7 @@ services:
       - PYTHONUNBUFFERED=1
       - DATABASE_URL=postgresql+asyncpg://comic_user:comic_pass@postgres-app:5432/comic_identity
       - REDIS_URL=redis://redis:6379/0
+      - ARQ_QUEUE_NAME=cie:docker:queue
     depends_on:
       postgres-app:
         condition: service_healthy

@@ -25,6 +25,17 @@ from rich.live import Live
 from rich.table import Table
 
 
+ALL_PLATFORMS = ["gcd", "locg", "aa", "ccl", "cpg", "hip"]
+PLATFORM_NAMES = {
+    "gcd": "Grand Comics Database",
+    "locg": "League of Comic Geeks",
+    "aa": "Atomic Avenue",
+    "ccl": "Comic Collector Live",
+    "cpg": "ComicPriceGuide",
+    "hip": "HipComic",
+}
+
+
 def _extract_operation_id(name: str) -> str:
     """Extract UUID from operation name format 'operations/{uuid}'.
 
@@ -67,15 +78,6 @@ def _build_progress_table(
     table.add_column("Status", style="white")
     table.add_column("Details", style="dim")
 
-    platform_names = {
-        "gcd": "Grand Comics Database",
-        "locg": "League of Comic Geeks",
-        "aa": "Atomic Avenue",
-        "ccl": "Comic Collector Live",
-        "cpg": "ComicPriceGuide",
-        "hip": "HipComic",
-    }
-
     status_colors = {
         "found": "green",
         "not_found": "yellow",
@@ -115,7 +117,7 @@ def _build_progress_table(
             strategy = None
             retry = None
 
-        display_name = platform_names.get(platform, platform.upper())
+        display_name = PLATFORM_NAMES.get(platform, platform.upper())
         status_display = status_labels.get(status, status)
 
         details = []
@@ -152,10 +154,16 @@ def _normalize_platform_entry(entry: Any) -> tuple[str, str]:
         detail_parts = []
         strategy = entry.get("strategy")
         retry = entry.get("retry")
+        reason = entry.get("reason")
+        detail = entry.get("detail")
         if strategy and strategy != "exact":
             detail_parts.append(strategy)
         if retry:
             detail_parts.append(f"attempt={retry}")
+        if reason:
+            detail_parts.append(f"reason={reason}")
+        if detail:
+            detail_parts.append(str(detail))
         return status, ", ".join(detail_parts)
 
     return str(entry), ""
@@ -263,8 +271,7 @@ def _poll_operation(
     start_time = time.time()
     poll_interval = 0.1
 
-    all_platforms = ["gcd", "locg", "aa", "ccl", "cpg", "hip"]
-    total_platforms = len(all_platforms)
+    total_platforms = len(ALL_PLATFORMS)
 
     if verbose:
         console.print(f"[dim]Polling operation {operation_id}...[/dim]")
@@ -275,7 +282,7 @@ def _poll_operation(
     last_metadata: dict[str, Any] = {}
     last_platform_status: dict[str, Any] = {}
 
-    with Live(console=console, refresh_per_second=10, transient=True) as live:
+    with Live(console=console, refresh_per_second=10, transient=False) as live:
         while time.time() - start_time < timeout:
             response = client.get(f"{api_url}/api/v1/identity/resolve/{operation_id}")
             response.raise_for_status()
@@ -306,7 +313,10 @@ def _poll_operation(
 
                 live.update(progress_table)
             elif verbose:
-                status = last_metadata.get("status", "unknown")
+                if not data.get("done"):
+                    status = last_metadata.get("status", "unknown")
+                else:
+                    status = "completed"
                 live.update(_build_status_message(status, elapsed))
 
             if data.get("done"):
@@ -341,7 +351,7 @@ def _display_json(data: dict[str, Any]) -> None:
     click.echo(json.dumps(data, indent=2))
 
 
-def _display_table(data: dict[str, Any], console: Console) -> None:
+def _display_table(data: dict[str, Any], console: Console, *, verbose: bool = False) -> None:
     """Display results in a pretty table format.
 
     Args:
@@ -386,7 +396,7 @@ def _display_table(data: dict[str, Any], console: Console) -> None:
     table.add_row("Canonical UUID", str(canonical_uuid))
     table.add_row("Confidence", f"{confidence:.2%}")
     table.add_row("Explanation", explanation)
-    if platform_status:
+    if platform_status and not verbose:
         table.add_row(
             "Cross-Platform Search",
             (
@@ -402,7 +412,7 @@ def _display_table(data: dict[str, Any], console: Console) -> None:
         )
         table.add_row("Platform URLs", url_lines)
 
-    if platform_status:
+    if platform_status and not verbose:
         status_colors = {
             "found": "green",
             "not_found": "yellow",
@@ -437,6 +447,176 @@ def _display_urls(data: dict[str, Any]) -> None:
 
     for url in platform_urls.values():
         click.echo(url)
+
+
+def _build_platform_timeline(
+    data: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Build a per-platform timeline from persisted platform events."""
+    result = data.get("response") or {}
+    events = result.get("platform_events", [])
+    platform_status = result.get("platform_status", {}) or {}
+    platform_urls = result.get("platform_urls", {}) or {}
+    if not events and not platform_status:
+        return []
+
+    base_time = min(
+        (
+            float(event["timestamp"])
+            for event in events
+            if isinstance(event, dict) and event.get("timestamp") is not None
+        ),
+        default=0.0,
+    )
+    timeline: list[dict[str, Any]] = []
+    for platform in ALL_PLATFORMS:
+        matching_events = [
+            event
+            for event in events
+            if isinstance(event, dict) and event.get("platform") == platform
+        ]
+        started_at = None
+        finished_at = None
+        final_status = None
+        strategies: list[str] = []
+        retries: list[str] = []
+        final_reason = None
+        final_detail = None
+        final_strategy = None
+        final_retry = None
+
+        for event in matching_events:
+            timestamp = event.get("timestamp")
+            if timestamp is not None and started_at is None:
+                started_at = float(timestamp)
+            status = str(event.get("status", "unknown"))
+            final_status = status
+            if event.get("strategy"):
+                final_strategy = str(event["strategy"])
+            if event.get("retry") is not None:
+                final_retry = int(event["retry"])
+            if event.get("reason"):
+                final_reason = str(event["reason"])
+            if event.get("detail"):
+                final_detail = str(event["detail"])
+            if status in {"found", "not_found", "failed"} and timestamp is not None:
+                finished_at = float(timestamp)
+            strategy = event.get("strategy")
+            if strategy and strategy not in strategies and strategy != "exact":
+                strategies.append(str(strategy))
+            retry = event.get("retry")
+            if retry is not None:
+                retry_label = str(retry)
+                if retry_label not in retries:
+                    retries.append(retry_label)
+
+        raw_status = platform_status.get(platform)
+        if raw_status:
+            if isinstance(raw_status, dict):
+                final_status = raw_status.get("status", "unknown")
+                if raw_status.get("strategy"):
+                    final_strategy = str(raw_status["strategy"])
+                if raw_status.get("retry") is not None:
+                    final_retry = int(raw_status["retry"])
+                if raw_status.get("reason"):
+                    final_reason = str(raw_status["reason"])
+                if raw_status.get("detail"):
+                    final_detail = str(raw_status["detail"])
+            else:
+                final_status = str(raw_status)
+
+        started_delta = (
+            f"+{started_at - base_time:.1f}s" if started_at is not None and base_time else "-"
+        )
+        finished_delta = (
+            f"+{finished_at - base_time:.1f}s"
+            if finished_at is not None and base_time
+            else "-"
+        )
+        duration = (
+            f"{finished_at - started_at:.1f}s"
+            if started_at is not None and finished_at is not None
+            else "-"
+        )
+
+        detail_parts = []
+        if final_reason == "source_mapping":
+            detail_parts.append("source mapping")
+        elif final_reason == "match_found":
+            match_parts = []
+            if final_retry is not None:
+                match_parts.append(f"attempt {final_retry}")
+            if final_strategy:
+                match_parts.append(f"via {final_strategy}")
+            detail_parts.append(" ".join(match_parts) or "match found")
+        elif final_reason == "timeout":
+            detail_parts.append(final_detail or "timed out")
+        elif final_reason in {"no_match", "no_match_after_errors"}:
+            detail_parts.append(final_detail or "no match")
+        elif final_reason == "network_error":
+            detail_parts.append(final_detail or "network error")
+        elif final_reason == "task_crashed":
+            detail_parts.append(final_detail or "task crashed")
+        elif final_detail:
+            detail_parts.append(final_detail)
+
+        if (
+            strategies
+            and final_reason not in {"match_found", "source_mapping"}
+            and "attempts across" not in (final_detail or "")
+        ):
+            detail_parts.append("strategies=" + ",".join(strategies))
+
+        timeline.append(
+            {
+                "platform": platform,
+                "name": PLATFORM_NAMES.get(platform, platform.upper()),
+                "started_at": started_delta,
+                "finished_at": finished_delta,
+                "duration": duration,
+                "status": final_status or "not_started",
+                "details": " | ".join(detail_parts),
+                "url": platform_urls.get(platform, ""),
+            }
+        )
+
+    return timeline
+
+
+def _display_platform_timeline(data: dict[str, Any], console: Console) -> None:
+    """Display a durable per-platform timeline for verbose troubleshooting."""
+    timeline = _build_platform_timeline(data)
+    if not timeline:
+        return
+
+    table = Table(title="Cross-Platform Timeline (all searches launched at +0.0s)")
+    table.add_column("Platform", style="cyan", no_wrap=True)
+    table.add_column("Started", style="dim", no_wrap=True)
+    table.add_column("Finished", style="dim", no_wrap=True)
+    table.add_column("Duration", style="dim", no_wrap=True)
+    table.add_column("Outcome", style="white", no_wrap=True)
+    table.add_column("Details", style="dim")
+
+    status_colors = {
+        "found": "green",
+        "not_found": "yellow",
+        "failed": "red",
+        "searching": "blue",
+        "not_started": "dim",
+    }
+
+    for entry in timeline:
+        color = status_colors.get(entry["status"], "white")
+        table.add_row(
+            entry["name"],
+            entry["started_at"],
+            entry["finished_at"],
+            entry["duration"],
+            f"[{color}]{entry['status']}[/{color}]",
+            entry["details"] or "-",
+        )
+
+    console.print(table)
 
 
 @click.command(name="cie-find")
@@ -584,7 +764,9 @@ def cli_find(
             if output == "json":
                 _display_json(final_data)
             elif output == "table":
-                _display_table(final_data, console)
+                _display_table(final_data, console, verbose=verbose)
+                if verbose:
+                    _display_platform_timeline(final_data, console)
             elif output == "urls":
                 _display_urls(final_data)
 

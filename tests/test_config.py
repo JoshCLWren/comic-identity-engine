@@ -179,6 +179,7 @@ class TestArqSettings:
         with patch.dict(os.environ, {}, clear=True):
             settings = ArqSettings()
             assert settings.arq_queue_url is None
+            assert settings.arq_queue_name == "arq:queue"
             assert settings.arq_max_jobs == 10
             assert settings.arq_job_timeout == 300
             assert settings.arq_keep_result == 3600
@@ -189,6 +190,7 @@ class TestArqSettings:
             os.environ,
             {
                 "ARQ_QUEUE_URL": "redis://localhost:6379/1",
+                "ARQ_QUEUE_NAME": "cie:test:queue",
                 "ARQ_MAX_JOBS": "20",
                 "ARQ_JOB_TIMEOUT": "600",
                 "ARQ_KEEP_RESULT": "7200",
@@ -196,6 +198,7 @@ class TestArqSettings:
         ):
             settings = ArqSettings()
             assert settings.arq_queue_url == "redis://localhost:6379/1"
+            assert settings.arq_queue_name == "cie:test:queue"
             assert settings.arq_max_jobs == 20
             assert settings.arq_job_timeout == 600
             assert settings.arq_keep_result == 7200

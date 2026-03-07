@@ -19,8 +19,10 @@ from rich.console import Console
 
 from comic_identity_engine.cli.main import (
     _build_status_message,
+    _build_platform_timeline,
     _display_json,
     _display_table,
+    _display_platform_timeline,
     _display_urls,
     _extract_operation_id,
     _format_failure_message,
@@ -307,7 +309,12 @@ class TestPollOperation:
                 "error_type": "validation_error",
                 "platform_status": {
                     "gcd": "found",
-                    "locg": {"status": "searching", "strategy": "fuzzy_title"},
+                    "locg": {
+                        "status": "searching",
+                        "strategy": "fuzzy_title",
+                        "reason": "retrying",
+                        "detail": "waiting for next attempt",
+                    },
                 },
             },
             request_url="https://www.comics.org/issue/12345/",
@@ -315,7 +322,7 @@ class TestPollOperation:
 
         assert "type=validation_error" in message
         assert "gcd=found" in message
-        assert "locg=searching (fuzzy_title)" in message
+        assert "locg=searching (fuzzy_title, reason=retrying, waiting for next attempt)" in message
 
     def test_poll_operation_verbose_output(self, mock_client, console):
         """Test verbose output during polling."""
@@ -345,7 +352,7 @@ class TestPollOperation:
         assert "550e8400-e29b-41d4-a716-446655440000" in output
 
     def test_poll_operation_verbose_with_status(self, mock_client, console):
-        """Test verbose polling does not leave stale status spam behind."""
+        """Test verbose polling leaves the last live status visible."""
         incomplete_data = {
             "name": "operations/550e8400-e29b-41d4-a716-446655440000",
             "done": False,
@@ -374,7 +381,7 @@ class TestPollOperation:
 
         output = console.file.getvalue()
         assert "Polling operation" in output
-        assert "Status: processing" not in output
+        assert "Status: completed" in output
 
     def test_poll_operation_http_error(self, mock_client, console):
         """Test handling of HTTP errors during polling."""
@@ -510,6 +517,30 @@ class TestDisplayTable:
         assert "Exact match found" in output
         assert "gcd" in output
         assert "checked=2 in parallel" in output
+
+    def test_display_table_verbose_omits_redundant_search_sections(self, console):
+        """Test verbose table output leaves search timeline to the timeline renderer."""
+        data = {
+            "response": {
+                "canonical_uuid": "abc12345-6789-1234-5678-abcdef123456",
+                "confidence": 0.95,
+                "explanation": "Exact match found",
+                "platform_urls": {
+                    "gcd": "https://www.comics.org/issue/12345/",
+                },
+                "platform_status": {
+                    "gcd": "found",
+                    "locg": "not_found",
+                },
+            }
+        }
+
+        _display_table(data, console, verbose=True)
+        output = console.file.getvalue()
+
+        assert "Exact match found" in output
+        assert "Cross-Platform Search" not in output
+        assert "Platform Status" not in output
 
     def test_display_table_multiple_urls(self, console):
         """Test table with multiple platform URLs."""
@@ -679,6 +710,86 @@ class TestDisplayUrls:
         captured = capsys.readouterr()
 
         assert captured.out.strip() == "https://www.comics.org/issue/12345/"
+
+
+class TestDisplayPlatformTimeline:
+    """Test persisted platform event timeline output."""
+
+    def test_build_platform_timeline_merges_events_into_platform_rows(self):
+        """Test verbose timeline summarizes each platform once."""
+        data = {
+            "response": {
+                "platform_urls": {
+                    "aa": "https://atomicavenue.com/item/1",
+                },
+                "platform_status": {
+                    "gcd": "found",
+                    "locg": "not_found",
+                    "aa": "found",
+                    "ccl": "not_found",
+                    "cpg": "not_found",
+                    "hip": "not_found",
+                },
+                "platform_events": [
+                    {"platform": "gcd", "status": "found", "timestamp": 100.0, "reason": "source_mapping"},
+                    {"platform": "locg", "status": "searching", "timestamp": 100.0},
+                    {"platform": "aa", "status": "searching", "timestamp": 100.0},
+                    {"platform": "aa", "status": "found", "timestamp": 101.2, "reason": "match_found"},
+                    {"platform": "locg", "status": "not_found", "timestamp": 103.4, "reason": "timeout", "detail": "hit 12.0s platform timeout"},
+                ]
+            }
+        }
+
+        timeline = _build_platform_timeline(data)
+
+        aa = next(entry for entry in timeline if entry["platform"] == "aa")
+        locg = next(entry for entry in timeline if entry["platform"] == "locg")
+
+        assert aa["status"] == "found"
+        assert aa["started_at"] == "+0.0s"
+        assert aa["finished_at"] == "+1.2s"
+        assert aa["duration"] == "1.2s"
+        assert aa["url"] == "https://atomicavenue.com/item/1"
+        assert aa["details"] == "match found"
+        assert locg["status"] == "not_found"
+        assert locg["finished_at"] == "+3.4s"
+        assert "platform timeout" in locg["details"]
+
+    def test_display_platform_timeline_renders_parallel_summary(self, console):
+        """Test verbose timeline output is durable and easier to scan."""
+        data = {
+            "response": {
+                "platform_urls": {
+                    "aa": "https://atomicavenue.com/item/1",
+                },
+                "platform_status": {
+                    "gcd": "found",
+                    "locg": "not_found",
+                    "aa": "found",
+                    "ccl": "not_found",
+                    "cpg": "not_found",
+                    "hip": "not_found",
+                },
+                "platform_events": [
+                    {"platform": "gcd", "status": "found", "timestamp": 100.0, "reason": "source_mapping"},
+                    {"platform": "locg", "status": "searching", "timestamp": 100.0},
+                    {"platform": "aa", "status": "searching", "timestamp": 100.0},
+                    {"platform": "aa", "status": "found", "timestamp": 101.2, "reason": "match_found"},
+                    {"platform": "locg", "status": "not_found", "timestamp": 103.4, "reason": "timeout", "detail": "hit 12.0s platform timeout"},
+                ]
+            }
+        }
+
+        _display_platform_timeline(data, console)
+        output = console.file.getvalue()
+
+        assert "Cross-Platform Timeline" in output
+        assert "Atomic Avenue" in output
+        assert "League of Comic Geeks" in output
+        assert "+0.0s" in output
+        assert "+1.2s" in output
+        assert "not_found" in output
+        assert "timeout" in output
 
 
 class TestStatusMessage:

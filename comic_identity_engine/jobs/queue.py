@@ -43,6 +43,7 @@ class JobQueue:
         self._redis_init_lock = asyncio.Lock()
         settings = get_settings()
         self._redis_settings = ArqRedisSettings.from_dsn(settings.arq.queue_url)
+        self._queue_name = settings.arq.arq_queue_name
 
     async def _get_pool(self) -> Any:
         """Get or create the Redis connection pool.
@@ -57,8 +58,14 @@ class JobQueue:
             async with self._redis_init_lock:
                 if self._redis_pool is None:
                     try:
-                        self._redis_pool = await create_pool(self._redis_settings)
-                        logger.debug("Created Redis connection pool for job queue")
+                        self._redis_pool = await create_pool(
+                            self._redis_settings,
+                            default_queue_name=self._queue_name,
+                        )
+                        logger.debug(
+                            "Created Redis connection pool for job queue",
+                            queue_name=self._queue_name,
+                        )
                     except (ConnectionError, TimeoutError, OSError) as e:
                         logger.error("Failed to connect to Redis", error=str(e))
                         raise ConnectionError(f"Failed to connect to Redis: {e}") from e

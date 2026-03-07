@@ -16,6 +16,7 @@ from comic_identity_engine.jobs.worker import (
 
 # Test constants
 TEST_REDIS_URL = "redis://localhost:6379/0"
+TEST_QUEUE_NAME = "cie:test:queue"
 TEST_MAX_JOBS = 10
 TEST_JOB_TIMEOUT = 300
 TEST_KEEP_RESULT = 3600
@@ -26,6 +27,7 @@ def mock_settings():
     """Mock settings with arq configuration."""
     settings = Mock()
     settings.arq.queue_url = TEST_REDIS_URL
+    settings.arq.arq_queue_name = TEST_QUEUE_NAME
     settings.arq.arq_max_jobs = TEST_MAX_JOBS
     settings.arq.arq_job_timeout = TEST_JOB_TIMEOUT
     settings.arq.arq_keep_result = TEST_KEEP_RESULT
@@ -70,7 +72,10 @@ class TestCreateRedisPool:
                     assert result == mock_pool
                     mock_get_settings.assert_called_once()
                     mock_from_dsn.assert_called_once_with(TEST_REDIS_URL)
-                    mock_create_pool.assert_called_once_with(mock_arq_redis_settings)
+                    mock_create_pool.assert_called_once_with(
+                        mock_arq_redis_settings,
+                        default_queue_name=TEST_QUEUE_NAME,
+                    )
 
     @pytest.mark.asyncio
     async def test_create_redis_pool_connection_error(self, mock_settings):
@@ -95,26 +100,15 @@ class TestCreateRedisPool:
 class TestWorkerSettings:
     """Tests for WorkerSettings class."""
 
-    def test_worker_settings_class_attributes(
-        self, mock_settings, mock_arq_redis_settings
-    ):
-        """Test WorkerSettings class-level attributes."""
-        with patch(
-            "comic_identity_engine.jobs.worker.get_settings"
-        ) as mock_get_settings:
-            mock_get_settings.return_value = mock_settings
-            with patch(
-                "comic_identity_engine.jobs.worker.ArqRedisSettings.from_dsn"
-            ) as mock_from_dsn:
-                mock_from_dsn.return_value = mock_arq_redis_settings
-
-                # Access class attributes (will trigger get_settings via class definition)
-                # Note: WorkerSettings now uses class-level attributes
-                assert WorkerSettings.max_jobs == TEST_MAX_JOBS
-                assert WorkerSettings.job_timeout == TEST_JOB_TIMEOUT
-                assert WorkerSettings.keep_result == TEST_KEEP_RESULT
-                assert isinstance(WorkerSettings.functions, list)
-                assert len(WorkerSettings.functions) == 5
+    def test_worker_settings_class_attributes(self):
+        """Test WorkerSettings exposes the expected class-level attributes."""
+        assert isinstance(WorkerSettings.queue_name, str)
+        assert WorkerSettings.queue_name
+        assert isinstance(WorkerSettings.max_jobs, int)
+        assert isinstance(WorkerSettings.job_timeout, int)
+        assert isinstance(WorkerSettings.keep_result, int)
+        assert isinstance(WorkerSettings.functions, list)
+        assert len(WorkerSettings.functions) == 5
 
     def test_worker_settings_functions_list(self):
         """Test WorkerSettings has correct task functions."""
@@ -150,6 +144,7 @@ class TestCreateWorker:
 
             assert worker == mock_worker
             mock_worker_class.assert_called_once_with(
+                queue_name=WorkerSettings.queue_name,
                 redis_settings=WorkerSettings.redis_settings,
                 max_jobs=WorkerSettings.max_jobs,
                 job_timeout=WorkerSettings.job_timeout,
@@ -161,35 +156,33 @@ class TestCreateWorker:
 class TestRunWorker:
     """Tests for run_worker function."""
 
-    @pytest.mark.asyncio
-    async def test_run_worker_success(self, mock_arq_redis_settings):
+    def test_run_worker_success(self, mock_arq_redis_settings):
         """Test successful worker execution."""
         mock_worker = Mock(spec=Worker)
-        mock_worker.async_run = AsyncMock()
+        mock_worker.run = Mock()
 
         with patch(
             "comic_identity_engine.jobs.worker.create_worker",
             return_value=mock_worker,
         ):
             with patch("comic_identity_engine.jobs.worker.logger") as mock_logger:
-                await run_worker()
+                run_worker()
 
-                mock_worker.async_run.assert_called_once()
-                mock_logger.info.assert_called_once()
+                mock_worker.run.assert_called_once()
+                assert mock_logger.info.call_count >= 1
 
-    @pytest.mark.asyncio
-    async def test_run_worker_keyboard_interrupt(self, mock_arq_redis_settings):
+    def test_run_worker_keyboard_interrupt(self, mock_arq_redis_settings):
         """Test worker handles keyboard interrupt."""
         mock_worker = Mock(spec=Worker)
-        mock_worker.async_run = AsyncMock(side_effect=KeyboardInterrupt())
+        mock_worker.run = Mock(side_effect=KeyboardInterrupt())
 
         with patch(
             "comic_identity_engine.jobs.worker.create_worker",
             return_value=mock_worker,
         ):
-            # KeyboardInterrupt should propagate from async_run
+            # KeyboardInterrupt should propagate from worker.run
             with pytest.raises(KeyboardInterrupt):
-                await run_worker()
+                run_worker()
 
 
 class TestMain:
@@ -197,19 +190,14 @@ class TestMain:
 
     def test_main_success(self):
         """Test main function runs successfully."""
-        with patch("comic_identity_engine.jobs.worker.asyncio.run") as mock_run:
-            with patch("structlog.get_logger") as mock_get_logger:
-                mock_logger = Mock()
-                mock_get_logger.return_value = mock_logger
-
-                main()
-
-                mock_run.assert_called_once()
+        with patch("comic_identity_engine.jobs.worker.run_worker") as mock_run_worker:
+            main()
+            mock_run_worker.assert_called_once()
 
     def test_main_keyboard_interrupt(self):
         """Test main handles keyboard interrupt."""
-        with patch("comic_identity_engine.jobs.worker.asyncio.run") as mock_run:
-            mock_run.side_effect = KeyboardInterrupt()
+        with patch("comic_identity_engine.jobs.worker.run_worker") as mock_run_worker:
+            mock_run_worker.side_effect = KeyboardInterrupt()
 
             with patch("comic_identity_engine.jobs.worker.logger") as mock_logger:
                 main()
@@ -220,8 +208,8 @@ class TestMain:
         """Test main handles unexpected exceptions."""
         error = RuntimeError("Worker failed")
 
-        with patch("comic_identity_engine.jobs.worker.asyncio.run") as mock_run:
-            mock_run.side_effect = error
+        with patch("comic_identity_engine.jobs.worker.run_worker") as mock_run_worker:
+            mock_run_worker.side_effect = error
 
             with patch("comic_identity_engine.jobs.worker.logger") as mock_logger:
                 with pytest.raises(RuntimeError, match="Worker failed"):

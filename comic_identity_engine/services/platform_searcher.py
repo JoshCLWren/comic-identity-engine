@@ -37,9 +37,8 @@ from uuid import UUID
 import jellyfish
 import structlog
 
+from comic_identity_engine.config import get_adapter_settings
 from comic_identity_engine.database.connection import AsyncSessionLocal
-from comic_identity_engine.database.repositories import ExternalMappingRepository
-from comic_identity_engine.errors import DuplicateEntityError
 from comic_identity_engine.errors import NetworkError
 from comic_identity_engine.services.operations import OperationsManager
 
@@ -62,7 +61,6 @@ def _prefer_workspace_comic_search_lib() -> None:
 PLATFORM_SEARCH_CONFIG = {
     "gcd": {
         "max_retries": 2,
-        "max_duration_sec": 12,
         "request_timeout_sec": 6,
         "strategies": ["exact", "no_year", "normalized_title"],
         "retry_delay_sec": 1,
@@ -70,7 +68,6 @@ PLATFORM_SEARCH_CONFIG = {
     },
     "locg": {
         "max_retries": 3,
-        "max_duration_sec": 12,
         "request_timeout_sec": 6,
         "strategies": ["exact", "no_year", "normalized_title", "fuzzy_title"],
         "retry_delay_sec": 2,
@@ -78,7 +75,6 @@ PLATFORM_SEARCH_CONFIG = {
     },
     "aa": {
         "max_retries": 3,
-        "max_duration_sec": 12,
         "request_timeout_sec": 6,
         "strategies": [
             "exact",
@@ -92,7 +88,6 @@ PLATFORM_SEARCH_CONFIG = {
     },
     "ccl": {
         "max_retries": 3,
-        "max_duration_sec": 12,
         "request_timeout_sec": 6,
         "strategies": [
             "exact",
@@ -106,7 +101,6 @@ PLATFORM_SEARCH_CONFIG = {
     },
     "cpg": {
         "max_retries": 2,
-        "max_duration_sec": 8,
         "request_timeout_sec": 5,
         "strategies": ["exact", "no_year"],
         "retry_delay_sec": 1,
@@ -114,7 +108,6 @@ PLATFORM_SEARCH_CONFIG = {
     },
     "hip": {
         "max_retries": 2,
-        "max_duration_sec": 12,
         "request_timeout_sec": 6,
         "strategies": ["exact", "no_year", "normalized_title", "fuzzy_title"],
         "retry_delay_sec": 2,
@@ -186,7 +179,12 @@ class PlatformSearcher:
         all_platforms = ["gcd", "locg", "aa", "ccl", "cpg", "hip"]
 
         # Mark source platform as found immediately
-        platform_status = {source_platform: "found"}
+        platform_status: dict[str, Any] = {
+            source_platform: {
+                "status": "found",
+                "reason": "source_mapping",
+            }
+        }
 
         # Create tasks for all other platforms
         tasks: list[asyncio.Task[tuple[str, Optional[str]]]] = []
@@ -194,7 +192,7 @@ class PlatformSearcher:
             if platform == source_platform:
                 continue
 
-            platform_status[platform] = "searching"
+            platform_status[platform] = {"status": "searching"}
             task = asyncio.create_task(
                 self._run_platform_search_task(
                     platform=platform,
@@ -210,10 +208,24 @@ class PlatformSearcher:
 
         # Persist the initial snapshot before any platform finishes so the CLI can
         # show that the full parallel search fan-out has started.
+        initial_events = [
+            self._build_platform_event(
+                source_platform,
+                "found",
+                reason="source_mapping",
+            ),
+            *[
+                self._build_platform_event(platform, "searching")
+                for platform in all_platforms
+                if platform != source_platform
+            ],
+        ]
         await self._persist_operation_progress(
             operation_id=operation_id,
             platform_status=dict(platform_status),
+            new_events=initial_events,
         )
+        event_log = list(initial_events)
 
         found_urls = {}
         for completed_task in asyncio.as_completed(tasks):
@@ -221,24 +233,52 @@ class PlatformSearcher:
                 platform, result = await completed_task
             except Exception as e:
                 platform = getattr(e, "platform", "unknown")
-                platform_status[platform] = "failed"
+                platform_status[platform] = {
+                    "status": "failed",
+                    "reason": "task_crashed",
+                    "detail": str(e),
+                }
                 logger.warning(
                     "Platform search failed",
                     platform=platform,
                     error=str(e),
                 )
             else:
-                if result:
-                    found_urls[platform] = result
-                    platform_status[platform] = "found"
+                if result["url"]:
+                    found_urls[platform] = result["url"]
+                    platform_status[platform] = self._build_platform_entry(
+                        status="found",
+                        strategy=result.get("strategy"),
+                        retry=result.get("retry"),
+                        reason=result.get("reason"),
+                        detail=result.get("detail"),
+                    )
                 else:
-                    platform_status[platform] = "not_found"
+                    platform_status[platform] = self._build_platform_entry(
+                        status=result.get("status", "not_found"),
+                        strategy=result.get("strategy"),
+                        retry=result.get("retry"),
+                        reason=result.get("reason"),
+                        detail=result.get("detail"),
+                    )
 
             # Update operation with current platform_status for real-time progress
             try:
+                new_events = [
+                    self._build_platform_event(
+                        platform,
+                        platform_status[platform]["status"],
+                        strategy=platform_status[platform].get("strategy"),
+                        retry=platform_status[platform].get("retry"),
+                        reason=platform_status[platform].get("reason"),
+                        detail=platform_status[platform].get("detail"),
+                    )
+                ]
+                event_log.extend(new_events)
                 await self._persist_operation_progress(
                     operation_id=operation_id,
                     platform_status=dict(platform_status),
+                    new_events=new_events,
                 )
             except Exception as e:
                 logger.warning(
@@ -251,6 +291,7 @@ class PlatformSearcher:
         return {
             "urls": found_urls,
             "status": platform_status,
+            "events": event_log,
         }
 
     async def _run_platform_search_task(
@@ -262,7 +303,7 @@ class PlatformSearcher:
         year: Optional[int],
         publisher: Optional[str],
         operation_id: UUID,
-    ) -> tuple[str, Optional[str]]:
+    ) -> tuple[str, dict[str, Any]]:
         """Return the platform alongside the search result for as_completed()."""
         result = await self._run_platform_search_with_timeout(
             platform=platform,
@@ -284,9 +325,20 @@ class PlatformSearcher:
         year: Optional[int],
         publisher: Optional[str],
         operation_id: UUID,
-    ) -> Optional[str]:
-        """Run a single platform search with a hard wall-clock timeout."""
-        timeout_seconds = PLATFORM_SEARCH_CONFIG[platform]["max_duration_sec"]
+    ) -> dict[str, Any]:
+        """Run a single platform search with an optional hard wall-clock timeout."""
+        timeout_seconds = self._get_platform_timeout_seconds()
+        if timeout_seconds is None:
+            return await self._search_single_platform_with_strategies(
+                platform=platform,
+                issue_id=issue_id,
+                series_title=series_title,
+                issue_number=issue_number,
+                year=year,
+                publisher=publisher,
+                operation_id=operation_id,
+            )
+
         try:
             return await asyncio.wait_for(
                 self._search_single_platform_with_strategies(
@@ -306,7 +358,12 @@ class PlatformSearcher:
                 platform=platform,
                 duration_sec=timeout_seconds,
             )
-            return None
+            return {
+                "url": None,
+                "status": "not_found",
+                "reason": "timeout",
+                "detail": f"hit {timeout_seconds:.1f}s platform timeout",
+            }
 
     async def _search_single_platform_with_strategies(
         self,
@@ -317,7 +374,7 @@ class PlatformSearcher:
         year: Optional[int],
         publisher: Optional[str],
         operation_id: UUID,
-    ) -> Optional[str]:
+    ) -> dict[str, Any]:
         """Search a single platform using multiple strategies with retries.
 
         Args:
@@ -340,9 +397,13 @@ class PlatformSearcher:
             return None
 
         start_time = time.time()
+        attempted_strategies: list[str] = []
+        attempts = 0
+        last_error: str | None = None
 
         # Try each strategy in order
         for strategy in config["strategies"]:
+            attempted_strategies.append(strategy)
             # Update status to show current strategy
             status_key = f"searching_{strategy}" if strategy != "exact" else "searching"
             await self._update_platform_status(
@@ -351,15 +412,29 @@ class PlatformSearcher:
 
             # Retry with exponential backoff
             for attempt in range(config["max_retries"]):
+                attempts += 1
                 try:
-                    # Check timeout
-                    if time.time() - start_time > config["max_duration_sec"]:
+                    timeout_seconds = self._get_platform_timeout_seconds()
+                    if (
+                        timeout_seconds is not None
+                        and time.time() - start_time > timeout_seconds
+                    ):
                         logger.warning(
                             "Platform search timeout",
                             platform=platform,
-                            duration_sec=config["max_duration_sec"],
+                            duration_sec=timeout_seconds,
                         )
-                        return None
+                        return {
+                            "url": None,
+                            "status": "not_found",
+                            "strategy": strategy,
+                            "retry": attempt + 1,
+                            "reason": "timeout",
+                            "detail": (
+                                f"exceeded {timeout_seconds:.1f}s while "
+                                f"running strategy={strategy}"
+                            ),
+                        }
 
                     # Execute search with this strategy
                     result = await self._execute_strategy(
@@ -371,29 +446,37 @@ class PlatformSearcher:
                         publisher=publisher,
                     )
 
-                    if result and result.has_results:
-                        # FOUND! Create mapping immediately and return URL
+                    candidate_url, candidate_detail = self._select_candidate_url(
+                        platform=platform,
+                        result=result,
+                        series_title=series_title,
+                        issue_number=issue_number,
+                    )
+                    if candidate_url:
+                        # FOUND! Return the exact discovered URL.
                         url = await self._create_mapping_from_search_result(
                             platform=platform,
                             issue_id=issue_id,
                             result=result,
+                            selected_url=candidate_url,
                         )
-                        return url
+                        return {
+                            "url": url,
+                            "status": "found",
+                            "strategy": strategy,
+                            "retry": attempt + 1,
+                            "reason": "match_found",
+                            "detail": candidate_detail or f"matched via strategy={strategy}",
+                        }
 
-                    # No results - retry if not last attempt
-                    if attempt < config["max_retries"] - 1:
-                        # Update status to show retry
-                        await self._update_platform_status(
-                            operation_id,
-                            platform,
-                            f"searching_retry_{attempt + 1}",
-                            strategy=strategy,
-                            retry=attempt + 2,
-                        )
-                        # Exponential backoff
-                        await asyncio.sleep(config["retry_delay_sec"] * (2**attempt))
+                    # Clean empty or mismatched results should move to the next
+                    # strategy, not be retried as if they were transient failures.
+                    if candidate_detail:
+                        last_error = candidate_detail
+                    break
 
                 except NetworkError as e:
+                    last_error = str(e)
                     if attempt < config["max_retries"] - 1:
                         await asyncio.sleep(config["retry_delay_sec"] * (2**attempt))
                     else:
@@ -402,8 +485,16 @@ class PlatformSearcher:
                             platform=platform,
                             error=str(e),
                         )
-                        raise
+                        return {
+                            "url": None,
+                            "status": "failed",
+                            "strategy": strategy,
+                            "retry": attempt + 1,
+                            "reason": "network_error",
+                            "detail": f"network error after retries: {e}",
+                        }
                 except Exception as e:
+                    last_error = str(e)
                     logger.error(
                         "Strategy failed",
                         platform=platform,
@@ -414,7 +505,20 @@ class PlatformSearcher:
                     break
 
         # All strategies exhausted
-        return None
+        reason = "no_match"
+        detail = (
+            f"no match after {attempts} attempts across "
+            f"{', '.join(attempted_strategies)}"
+        )
+        if last_error:
+            reason = "no_match_after_errors"
+            detail = f"{detail}; last_error={last_error}"
+        return {
+            "url": None,
+            "status": "not_found",
+            "reason": reason,
+            "detail": detail,
+        }
 
     async def _execute_strategy(
         self,
@@ -551,13 +655,155 @@ class PlatformSearcher:
 
         return None
 
+    def _select_candidate_url(
+        self,
+        platform: str,
+        result: Optional[Any],
+        series_title: str,
+        issue_number: str,
+    ) -> tuple[Optional[str], Optional[str]]:
+        """Select a matching candidate URL from a scraper result.
+
+        The cross-platform search used to treat any result as a match and then
+        take the first listing URL. That produced false positives such as Hip
+        listings for the wrong issue and Atomic Avenue series pages standing in
+        for issue pages. This method only accepts URLs that match the requested
+        title/issue pair closely enough to be credible.
+        """
+        if not result:
+            return None, None
+
+        if platform == "aa":
+            direct_url = getattr(result, "url", None)
+            if direct_url and "/item/" in direct_url:
+                return direct_url, "matched issue page via strategy result"
+            return None, "result did not identify an issue page"
+
+        listings = getattr(result, "listings", None) or []
+        for listing in listings:
+            if self._listing_matches_target(
+                platform=platform,
+                listing=listing,
+                series_title=series_title,
+                issue_number=issue_number,
+            ):
+                return listing.url, "matched listing title and issue"
+
+        direct_url = getattr(result, "url", None)
+        if direct_url and self._url_matches_target(platform, direct_url, issue_number):
+            return direct_url, "matched direct result URL"
+
+        return None, "results did not match the requested issue"
+
+    def _listing_matches_target(
+        self,
+        platform: str,
+        listing: Any,
+        series_title: str,
+        issue_number: str,
+    ) -> bool:
+        """Return True when a scraper listing credibly matches the target issue."""
+        url = getattr(listing, "url", None)
+        if not url:
+            return False
+
+        title = getattr(listing, "title", "") or ""
+        if title and not self._title_matches_target(series_title, title):
+            return False
+
+        extracted_issue = self._extract_issue_from_text(title)
+        if extracted_issue is None:
+            extracted_issue = self._extract_issue_from_url(platform, url)
+
+        if extracted_issue is None:
+            return False
+
+        return extracted_issue == self._normalize_issue(issue_number)
+
+    def _title_matches_target(self, series_title: str, listing_title: str) -> bool:
+        """Check whether a listing title looks like the requested series."""
+        target = self._normalize_title(series_title)
+        listing = self._normalize_title(listing_title)
+        if not target or not listing:
+            return False
+        return target in listing or listing in target
+
+    def _normalize_title(self, text: str) -> str:
+        """Normalize comic titles for loose comparison."""
+        normalized = text.lower()
+        normalized = re.sub(r"\(\d{4}\)", "", normalized)
+        normalized = re.sub(r"#[^\s]+", "", normalized)
+        normalized = re.sub(r"[^a-z0-9\s-]", " ", normalized)
+        normalized = normalized.replace("-", " ")
+        normalized = re.sub(r"\s+", " ", normalized).strip()
+        return normalized
+
+    def _extract_issue_from_text(self, text: str) -> Optional[str]:
+        """Extract an issue number from listing text."""
+        if not text:
+            return None
+
+        hash_match = re.search(r"#\s*([-\w./]+)", text)
+        if hash_match:
+            return self._normalize_issue_token(hash_match.group(1))
+
+        year_paren_match = re.search(r"\(\d{4}\)\s+([-\w./]+)", text)
+        if year_paren_match:
+            return self._normalize_issue_token(year_paren_match.group(1))
+
+        trailing_match = re.search(r"\b([-\d]+(?:[-/][A-Za-z0-9]+)?)\b", text)
+        if trailing_match:
+            return self._normalize_issue_token(trailing_match.group(1))
+
+        return None
+
+    def _extract_issue_from_url(self, platform: str, url: str) -> Optional[str]:
+        """Extract an issue number from a platform URL when possible."""
+        if platform == "cpg":
+            match = re.search(r"/titles/[^/]+/([^/]+)/[^/]+/?$", url)
+            if match:
+                return self._normalize_issue_token(match.group(1))
+        return None
+
+    def _url_matches_target(
+        self,
+        platform: str,
+        url: str,
+        issue_number: str,
+    ) -> bool:
+        """Check whether a direct result URL identifies the target issue."""
+        extracted_issue = self._extract_issue_from_url(platform, url)
+        if extracted_issue is None:
+            if platform == "aa":
+                return "/item/" in url
+            return False
+        return extracted_issue == self._normalize_issue(issue_number)
+
+    def _normalize_issue_token(self, token: str) -> Optional[str]:
+        """Normalize issue text extracted from listings or URLs."""
+        cleaned = token.lower().strip()
+        cleaned = cleaned.lstrip("#")
+        cleaned = cleaned.rstrip(".,:;)")
+        cleaned = cleaned.strip()
+        if not cleaned:
+            return None
+
+        if re.fullmatch(r"-?\d+(?:\.\d+)?", cleaned):
+            return cleaned
+        if re.fullmatch(r"-?\d+(?:[-/][a-z0-9]+)+", cleaned):
+            return re.match(r"-?\d+(?:\.\d+)?", cleaned).group(0)
+        if cleaned == "1/2":
+            return cleaned
+        return None
+
     async def _create_mapping_from_search_result(
         self,
         platform: str,
         issue_id: UUID,
         result,
+        selected_url: str,
     ) -> str:
-        """Create external mapping from search result and return URL.
+        """Return the exact discovered URL without persisting inferred mappings.
 
         Args:
             platform: Platform code
@@ -567,112 +813,30 @@ class PlatformSearcher:
         Returns:
             Platform URL for the found issue
         """
-        url = None
-        if getattr(result, "listings", None):
-            best_listing = result.listings[0]
-            url = best_listing.url
-        if not url:
-            url = getattr(result, "url", None)
-        if not url:
-            raise ValueError(
-                f"Search result for platform {platform} had no usable listing URL"
-            )
-
-        # Extract source IDs from URL
-        source_issue_id, source_series_id = self._extract_ids_from_url(platform, url)
-
-        async with AsyncSessionLocal() as session:
-            mapping_repo = ExternalMappingRepository(session)
-            existing = await mapping_repo.find_by_source(platform, source_issue_id)
-
-            if existing is None:
-                await mapping_repo.create_mapping(
-                    issue_id=issue_id,
-                    source=platform,
-                    source_issue_id=source_issue_id,
-                    source_series_id=source_series_id,
-                )
-                await session.commit()
-            elif existing.issue_id == issue_id:
-                logger.info(
-                    "Reused existing external mapping from search result",
-                    platform=platform,
-                    issue_id=str(issue_id),
-                    source_issue_id=source_issue_id,
-                    url=url,
-                )
-            else:
-                raise DuplicateEntityError(
-                    f"External mapping with source={platform} and "
-                    f"source_issue_id={source_issue_id} already exists",
-                    entity_type="ExternalMapping",
-                    existing_id=str(existing.id),
-                )
-
         logger.info(
-            "Created external mapping from search result",
+            "Using transient platform URL from search result",
             platform=platform,
             issue_id=str(issue_id),
-            source_issue_id=source_issue_id,
-            url=url,
+            url=selected_url,
         )
 
-        return url
+        return selected_url
 
     def _extract_ids_from_url(
         self, platform: str, url: str
     ) -> tuple[str, Optional[str]]:
-        """Extract source_issue_id and source_series_id from platform URL.
+        """Reject URL-derived ID inference until mappings store source_url.
 
-        Args:
-            platform: Platform code
-            url: Platform URL
-
-        Returns:
-            Tuple of (source_issue_id, source_series_id)
+        This code path used to reverse-engineer platform IDs from scraped URLs
+        and write them into the database. That violates the implementation plan:
+        the exact discovered URL should be stored authoritatively on the mapping,
+        not repeatedly inferred into new IDs with platform-specific regexes.
         """
-        if platform == "aa":
-            # /item/{source_issue_id}/1/details
-            match = re.search(r"/item/(\d+)/", url)
-            if match:
-                return match.group(1), None
-
-        elif platform == "ccl":
-            # /issue/{source_series_id}/{source_issue_id}
-            match = re.search(r"/issue/([^/]+)/([^/]+)", url)
-            if match:
-                return match.group(2), match.group(1)
-
-        elif platform == "hip":
-            # /comic/{source_series_id}/{source_issue_id}/
-            match = re.search(r"/comic/([^/]+)/([^/]+)/", url)
-            if match:
-                return match.group(2), match.group(1)
-
-        elif platform == "cpg":
-            # /titles/{title}/{series_id}/{issue_id}
-            match = re.search(r"/titles/([^/]+)/(\d+)/([^/]+)", url)
-            if match:
-                return match.group(3), match.group(2)
-
-        elif platform == "gcd":
-            # /issue/{source_issue_id}/
-            match = re.search(r"/issue/(\d+)/", url)
-            if match:
-                return match.group(1), None
-
-        elif platform == "locg":
-            # /item/{source_issue_id}
-            match = re.search(r"/item/([^/]+)", url)
-            if match:
-                return match.group(1), None
-
-        # Fallback: extract last numeric part
-        numbers = re.findall(r"\d+", url)
-        if numbers:
-            return numbers[-1], None
-
-        raise ValueError(f"Could not extract IDs from URL: {url}")
+        raise NotImplementedError(
+            "URL-derived mapping inference has been removed. Persist the exact "
+            "source_url on external mappings and derive identifiers from adapter "
+            "payloads instead of scraping them back out of URLs."
+        )
 
     async def _call_scraper(
         self,
@@ -734,6 +898,13 @@ class PlatformSearcher:
         name = name.strip()
 
         return name
+
+    def _get_platform_timeout_seconds(self) -> float | None:
+        """Return the optional hard timeout for platform searches."""
+        configured_timeout = get_adapter_settings().platform_search_timeout
+        if configured_timeout is None:
+            return None
+        return float(configured_timeout)
 
     def _normalize_issue(self, issue: str) -> str:
         """Normalize issue number for comparison.
@@ -797,6 +968,8 @@ class PlatformSearcher:
         status: str,
         strategy: Optional[str] = None,
         retry: Optional[int] = None,
+        reason: Optional[str] = None,
+        detail: Optional[str] = None,
     ) -> None:
         """Update platform status in operation metadata.
 
@@ -808,11 +981,13 @@ class PlatformSearcher:
             retry: Current retry number (1-indexed)
         """
         try:
-            platform_entry: dict[str, Any] = {"status": status}
-            if strategy:
-                platform_entry["strategy"] = strategy
-            if retry is not None:
-                platform_entry["retry"] = retry
+            platform_entry = self._build_platform_entry(
+                status=status,
+                strategy=strategy,
+                retry=retry,
+                reason=reason,
+                detail=detail,
+            )
 
             async with self._progress_lock:
                 async with AsyncSessionLocal() as session:
@@ -824,6 +999,16 @@ class PlatformSearcher:
                         platform_status = current_result.get("platform_status", {})
                         platform_status[platform] = platform_entry
                         current_result["platform_status"] = platform_status
+                        current_result.setdefault("platform_events", []).append(
+                            self._build_platform_event(
+                                platform=platform,
+                                status=status,
+                                strategy=strategy,
+                                retry=retry,
+                                reason=reason,
+                                detail=detail,
+                            )
+                        )
 
                         await ops_manager.update_operation(
                             operation_id,
@@ -844,6 +1029,7 @@ class PlatformSearcher:
         self,
         operation_id: UUID,
         platform_status: dict[str, Any],
+        new_events: Optional[list[dict[str, Any]]] = None,
     ) -> None:
         """Persist aggregated platform progress using an isolated session."""
         async with self._progress_lock:
@@ -854,9 +1040,58 @@ class PlatformSearcher:
                 if operation:
                     current_result = operation.result or {}
                     current_result["platform_status"] = platform_status
+                    if new_events:
+                        current_result.setdefault("platform_events", []).extend(
+                            new_events
+                        )
                     await ops_manager.update_operation(
                         operation_id,
                         "running",
                         result=current_result,
                     )
                     await session.commit()
+
+    def _build_platform_event(
+        self,
+        platform: str,
+        status: str,
+        strategy: Optional[str] = None,
+        retry: Optional[int] = None,
+        reason: Optional[str] = None,
+        detail: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Build a persisted platform event for later CLI inspection."""
+        event: dict[str, Any] = {
+            "platform": platform,
+            "status": status,
+            "timestamp": round(time.time(), 3),
+        }
+        if strategy:
+            event["strategy"] = strategy
+        if retry is not None:
+            event["retry"] = retry
+        if reason:
+            event["reason"] = reason
+        if detail:
+            event["detail"] = detail
+        return event
+
+    def _build_platform_entry(
+        self,
+        status: str,
+        strategy: Optional[str] = None,
+        retry: Optional[int] = None,
+        reason: Optional[str] = None,
+        detail: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Build a persisted platform-status payload for operation results."""
+        entry: dict[str, Any] = {"status": status}
+        if strategy:
+            entry["strategy"] = strategy
+        if retry is not None:
+            entry["retry"] = retry
+        if reason:
+            entry["reason"] = reason
+        if detail:
+            entry["detail"] = detail
+        return entry
