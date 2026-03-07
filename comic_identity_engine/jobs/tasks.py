@@ -187,44 +187,44 @@ async def resolve_identity_task(
 
                 if issue and series:
                     try:
-                         from comic_identity_engine.services.platform_searcher import (
-                             PlatformSearcher,
-                         )
+                        from comic_identity_engine.services.platform_searcher import (
+                            PlatformSearcher,
+                        )
 
-                         searcher = PlatformSearcher(session)
-                         cross_platform_result = await searcher.search_all_platforms(
-                             issue_id=existing.issue_id,
-                             series_title=series.title,
-                             issue_number=issue.issue_number,
-                             year=issue.cover_date.year if issue.cover_date else None,
-                             publisher=series.publisher,
-                             operation_id=operation_uuid,
-                             source_platform=parsed_url.platform,
-                         )
-                         cross_platform_urls = cross_platform_result.get("urls", {})
+                        searcher = PlatformSearcher(session)
+                        cross_platform_result = await searcher.search_all_platforms(
+                            issue_id=existing.issue_id,
+                            series_title=series.title,
+                            issue_number=issue.issue_number,
+                            year=issue.cover_date.year if issue.cover_date else None,
+                            publisher=series.publisher,
+                            operation_id=operation_uuid,
+                            source_platform=parsed_url.platform,
+                        )
+                        cross_platform_urls = cross_platform_result.get("urls", {})
 
-                         # Merge platform_status - source platform stays "found"
-                         for platform, status in cross_platform_result.get(
-                             "status", {}
-                         ).items():
-                             if platform not in platform_status:
-                                 platform_status[platform] = status
+                        # Merge platform_status - source platform stays "found"
+                        for platform, status in cross_platform_result.get(
+                            "status", {}
+                        ).items():
+                            if platform not in platform_status:
+                                platform_status[platform] = status
 
-                         logger.info(
-                             "Cross-platform search completed",
-                             operation_id=operation_id,
-                             issue_id=str(existing.issue_id),
-                             found_platforms=list(cross_platform_urls.keys()),
-                             platform_status=cross_platform_result.get("status", {}),
-                         )
-                     except Exception as e:
-                         logger.warning(
-                             "Cross-platform search failed, continuing without it",
-                             operation_id=operation_id,
-                             issue_id=str(existing.issue_id),
-                             error=str(e),
-                         )
-                         cross_platform_urls = {}
+                        logger.info(
+                            "Cross-platform search completed",
+                            operation_id=operation_id,
+                            issue_id=str(existing.issue_id),
+                            found_platforms=list(cross_platform_urls.keys()),
+                            platform_status=cross_platform_result.get("status", {}),
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            "Cross-platform search failed, continuing without it",
+                            operation_id=operation_id,
+                            issue_id=str(existing.issue_id),
+                            error=str(e),
+                        )
+                        cross_platform_urls = {}
 
                 urls = cross_platform_urls.copy()
                 existing_mappings_urls = await build_urls(

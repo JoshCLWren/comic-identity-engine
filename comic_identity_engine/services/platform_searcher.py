@@ -327,65 +327,50 @@ class PlatformSearcher:
         Returns:
             SearchResult if found, None otherwise
         """
-        if strategy == "exact":
-            return await scraper.search_comic(
-                title=series_title,
-                issue=issue_number,
-                year=year,
-                publisher=publisher,
-            )
+        # Determine search params based on strategy
+        search_title = series_title
+        search_issue = issue_number
+        search_year = year
+        search_publisher = publisher
 
-        elif strategy == "no_year":
-            return await scraper.search_comic(
-                title=series_title,
-                issue=issue_number,
-                year=None,  # Drop year
-                publisher=publisher,
-            )
-
+        if strategy == "no_year":
+            search_year = None
         elif strategy == "normalized_title":
-            normalized = self._normalize_series_name(series_title)
-            return await scraper.search_comic(
-                title=normalized,
-                issue=issue_number,
-                year=year,
-                publisher=publisher,
-            )
-
+            search_title = self._normalize_series_name(series_title)
         elif strategy == "fuzzy_title":
             return await self._fuzzy_search(
                 scraper=scraper,
-                title=series_title,
-                issue=issue_number,
-                year=year,
-                publisher=publisher,
+                title=search_title,
+                issue=search_issue,
+                year=search_year,
+                publisher=search_publisher,
             )
-
         elif strategy == "alt_issue_format":
             alt_formats = self._get_alternate_issue_formats(issue_number)
             for alt_issue in alt_formats:
-                result = await scraper.search_comic(
-                    title=series_title,
+                result = await self._call_scraper(
+                    scraper=scraper,
+                    title=search_title,
                     issue=alt_issue,
-                    year=year,
-                    publisher=publisher,
+                    year=search_year,
+                    publisher=search_publisher,
                 )
                 if result and result.has_results:
                     return result
             return None
-
         elif strategy == "simplified_tokens":
             tokens = self._tokenize(series_title)
-            simplified = " ".join(tokens)
-            return await scraper.search_comic(
-                title=simplified,
-                issue=issue_number,
-                year=year,
-                publisher=publisher,
-            )
-
-        else:
+            search_title = " ".join(tokens)
+        elif strategy not in ("exact",):
             raise ValueError(f"Unknown strategy: {strategy}")
+
+        return await self._call_scraper(
+            scraper=scraper,
+            title=search_title,
+            issue=search_issue,
+            year=search_year,
+            publisher=search_publisher,
+        )
 
     async def _fuzzy_search(
         self,
@@ -408,23 +393,31 @@ class PlatformSearcher:
             SearchResult with best match, None if no good match
         """
         # Get broad results (search without issue to get all issues in series)
-        broad_result = await scraper.search_comic(
+        broad_result = await self._call_scraper(
+            scraper=scraper,
             title=title,
-            issue=None,  # Get all issues
+            issue="",  # Empty string to get broader results
             year=year,
             publisher=publisher,
         )
 
-        if not broad_result or not broad_result.has_results:
+        if not broad_result or not broad_result.listings:
             return None
 
         # Find best match using Jaro-Winkler
+        from comic_search_lib.models import Comic, SearchResult
+
         normalized_issue = self._normalize_issue(issue)
         best_match = None
         best_score = 0.0
 
         for listing in broad_result.listings:
-            listing_issue = self._normalize_issue(listing.issue)
+            # Extract issue from listing title or metadata
+            listing_issue = issue
+            if hasattr(listing, "title") and "#" in listing.title:
+                listing_issue = listing.title.split("#")[-1].split()[0]
+
+            listing_issue = self._normalize_issue(listing_issue)
             score = jellyfish.jaro_winkler_similarity(
                 normalized_issue,
                 listing_issue,
@@ -435,9 +428,15 @@ class PlatformSearcher:
                 best_score = score
 
         if best_match:
-            from comic_search_lib.models import SearchResult
-
-            return SearchResult(has_results=True, listings=[best_match])
+            # Create SearchResult with the best match
+            comic = Comic(
+                id="fuzzy-search",
+                title=title,
+                issue=issue,
+                year=year,
+                publisher=publisher,
+            )
+            return SearchResult(comic=comic, listings=[best_match], prices=[])
 
         return None
 
@@ -531,13 +530,53 @@ class PlatformSearcher:
                 return match.group(1), None
 
         # Fallback: extract last numeric part
-        import re
-
         numbers = re.findall(r"\d+", url)
         if numbers:
             return numbers[-1], None
 
         raise ValueError(f"Could not extract IDs from URL: {url}")
+
+    async def _call_scraper(
+        self,
+        scraper,
+        title: str,
+        issue: str,
+        year: Optional[int],
+        publisher: Optional[str],
+    ) -> Optional[Any]:
+        """Call scraper with correct arguments based on its signature.
+
+        Args:
+            scraper: Platform scraper instance
+            title: Series title
+            issue: Issue number
+            year: Publication year (optional)
+            publisher: Publisher name (optional)
+
+        Returns:
+            SearchResult if found, None otherwise
+        """
+        # Determine scraper type by class name
+        scraper_class = scraper.__class__.__name__
+
+        # Scrapers that accept Comic object or dict
+        if scraper_class in ("LoCGScraper", "CCLScraper", "HipScraper"):
+            comic_dict = {
+                "title": title,
+                "issue": issue,
+                "year": year,
+                "publisher": publisher,
+            }
+            return await scraper.search_comic(comic_dict)
+
+        # Scrapers that accept individual parameters
+        # GCDScraper, CPGScraper, AtomicAvenueScraper
+        return await scraper.search_comic(
+            title=title,
+            issue=issue,
+            year=year,
+            publisher=publisher,
+        )
 
     def _normalize_series_name(self, name: str) -> str:
         """Normalize series name for fuzzy matching.
