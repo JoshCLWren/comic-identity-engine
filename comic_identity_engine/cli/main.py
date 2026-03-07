@@ -13,6 +13,7 @@ ENTRY POINTS:
 """
 
 import json
+import re
 import sys
 import time
 from typing import Any
@@ -20,6 +21,7 @@ from typing import Any
 import click
 import httpx
 from rich.console import Console
+from rich.live import Live
 from rich.table import Table
 
 
@@ -40,6 +42,198 @@ def _extract_operation_id(name: str) -> str:
     return name.split("/", 1)[1]
 
 
+def _build_progress_table(
+    platform_status: dict[str, Any],
+    found_count: int,
+    total_platforms: int,
+    elapsed_time: float,
+) -> Table:
+    """Build a progress table showing platform search status.
+
+    Args:
+        platform_status: Dictionary mapping platform -> status info
+        found_count: Number of platforms found so far
+        total_platforms: Total number of platforms being searched
+        elapsed_time: Time elapsed since search started
+
+    Returns:
+        Rich Table displaying current progress
+    """
+    table = Table(
+        title=f"Cross-Platform Search Progress ({found_count}/{total_platforms} found)",
+        show_header=True,
+    )
+    table.add_column("Platform", style="cyan", no_wrap=True)
+    table.add_column("Status", style="white")
+    table.add_column("Details", style="dim")
+
+    platform_names = {
+        "gcd": "Grand Comics Database",
+        "locg": "League of Comic Geeks",
+        "aa": "Atomic Avenue",
+        "ccl": "Comic Collector Live",
+        "cpg": "ComicPriceGuide",
+        "hip": "HipComic",
+    }
+
+    status_colors = {
+        "found": "green",
+        "not_found": "yellow",
+        "failed": "red",
+        "searching": "blue",
+        "searching_retry_1": "cyan",
+        "searching_retry_2": "magenta",
+        "searching_retry_3": "bright_magenta",
+    }
+
+    status_labels = {
+        "searching": "Searching...",
+        "searching_exact": "Exact match",
+        "searching_no_year": "No year filter",
+        "searching_normalized_title": "Normalized title",
+        "searching_fuzzy_title": "Fuzzy title match",
+        "searching_simplified_tokens": "Simplified tokens",
+        "searching_alt_issue_format": "Alt issue format",
+        "searching_retry_1": "Retry 1",
+        "searching_retry_2": "Retry 2",
+        "searching_retry_3": "Retry 3",
+        "found": "[green]✓[/green] Found",
+        "not_found": "[yellow]✗[/yellow] Not found",
+        "failed": "[red]✗[/red] Failed",
+    }
+
+    sorted_platforms = sorted(platform_status.keys())
+    for platform in sorted_platforms:
+        info = platform_status[platform]
+
+        if isinstance(info, dict):
+            status = info.get("status", "unknown")
+            strategy = info.get("strategy")
+            retry = info.get("retry")
+        else:
+            status = info
+            strategy = None
+            retry = None
+
+        display_name = platform_names.get(platform, platform.upper())
+        status_display = status_labels.get(status, status)
+
+        details = []
+        if strategy and strategy != "exact":
+            strategy_label = status_labels.get(f"searching_{strategy}", strategy)
+            details.append(strategy_label)
+        if retry:
+            details.append(f"Attempt {retry}")
+
+        detail_text = " | ".join(details) if details else ""
+
+        color = status_colors.get(status, "white")
+        table.add_row(
+            display_name,
+            f"[{color}]{status_display}[/{color}]",
+            detail_text,
+        )
+
+    table.add_row("", "", "")
+    table.add_row("", f"[dim]Elapsed: {elapsed_time:.1f}s[/dim]", "")
+
+    return table
+
+
+def _build_status_message(status: str, elapsed_time: float) -> str:
+    """Build a compact single-line status message for pre-progress polling."""
+    return f"[dim]Status: {status} | elapsed={elapsed_time:.1f}s[/dim]"
+
+
+def _normalize_platform_entry(entry: Any) -> tuple[str, str]:
+    """Normalize a platform status entry into status and detail text."""
+    if isinstance(entry, dict):
+        status = entry.get("status", "unknown")
+        detail_parts = []
+        strategy = entry.get("strategy")
+        retry = entry.get("retry")
+        if strategy and strategy != "exact":
+            detail_parts.append(strategy)
+        if retry:
+            detail_parts.append(f"attempt={retry}")
+        return status, ", ".join(detail_parts)
+
+    return str(entry), ""
+
+
+def _summarize_platform_status(platform_status: dict[str, Any]) -> str:
+    """Render compact platform status text for errors and timeouts."""
+    parts = []
+    for platform in sorted(platform_status):
+        status, detail = _normalize_platform_entry(platform_status[platform])
+        if detail:
+            parts.append(f"{platform}={status} ({detail})")
+        else:
+            parts.append(f"{platform}={status}")
+    return ", ".join(parts)
+
+
+def _extract_duplicate_mapping_hint(
+    error_message: str,
+    response_context: dict[str, Any],
+    url: str | None,
+) -> str | None:
+    """Build a remediation hint for duplicate mapping failures."""
+    source = response_context.get("source")
+    source_issue_id = response_context.get("source_issue_id")
+
+    if not source or not source_issue_id:
+        match = re.search(
+            r"source=(?P<source>[a-z0-9_]+)\s+and\s+source_issue_id=(?P<source_issue_id>[^\s]+)",
+            error_message,
+            flags=re.IGNORECASE,
+        )
+        if match:
+            source = match.group("source")
+            source_issue_id = match.group("source_issue_id")
+
+    if not source_issue_id:
+        return None
+
+    hint_parts = [f"retry with `--clear-mappings {source_issue_id}`"]
+    if url:
+        hint_parts.append(f"`cie-find {url} --force --clear-mappings {source_issue_id} --verbose`")
+
+    if "DuplicateEntityError" in error_message:
+        hint_parts.append("if you already patched the code, restart the API and worker so they stop running stale task code")
+
+    return "; ".join(hint_parts)
+
+
+def _format_failure_message(
+    error: dict[str, Any],
+    response_context: dict[str, Any],
+    request_url: str | None = None,
+) -> str:
+    """Format a concise but actionable operation failure message."""
+    failure_parts = [f"Operation failed: {error.get('message', 'Unknown error')}"]
+    error_type = response_context.get("error_type")
+    exception_type = response_context.get("exception_type")
+    if error_type:
+        failure_parts.append(f"type={error_type}")
+    if exception_type:
+        failure_parts.append(f"exception={exception_type}")
+
+    platform_status = response_context.get("platform_status")
+    if platform_status:
+        failure_parts.append(f"platforms={_summarize_platform_status(platform_status)}")
+
+    hint = _extract_duplicate_mapping_hint(
+        error_message=error.get("message", ""),
+        response_context=response_context,
+        url=request_url,
+    )
+    if hint:
+        failure_parts.append(f"hint={hint}")
+
+    return " | ".join(failure_parts)
+
+
 def _poll_operation(
     client: httpx.Client,
     api_url: str,
@@ -47,8 +241,9 @@ def _poll_operation(
     timeout: int,
     verbose: bool,
     console: Console,
+    request_url: str | None = None,
 ) -> dict[str, Any]:
-    """Poll for operation completion.
+    """Poll for operation completion with real-time progress display.
 
     Args:
         client: HTTP client for making requests
@@ -66,32 +261,75 @@ def _poll_operation(
         RuntimeError: If operation fails or returns an error
     """
     start_time = time.time()
-    poll_interval = 1.0
+    poll_interval = 0.1
+
+    all_platforms = ["gcd", "locg", "aa", "ccl", "cpg", "hip"]
+    total_platforms = len(all_platforms)
 
     if verbose:
         console.print(f"[dim]Polling operation {operation_id}...[/dim]")
+        console.print(
+            "[dim]Cross-platform fan-out: gcd, locg, aa, ccl, cpg, hip[/dim]"
+        )
 
-    while time.time() - start_time < timeout:
-        response = client.get(f"{api_url}/api/v1/identity/resolve/{operation_id}")
-        response.raise_for_status()
-        data = response.json()
+    last_metadata: dict[str, Any] = {}
+    last_platform_status: dict[str, Any] = {}
 
-        if data.get("done"):
-            if data.get("error"):
-                error = data["error"]
-                raise RuntimeError(
-                    f"Operation failed: {error.get('message', 'Unknown error')}"
+    with Live(console=console, refresh_per_second=10, transient=True) as live:
+        while time.time() - start_time < timeout:
+            response = client.get(f"{api_url}/api/v1/identity/resolve/{operation_id}")
+            response.raise_for_status()
+            data = response.json()
+            last_metadata = data.get("metadata", {}) or {}
+            elapsed = time.time() - start_time
+
+            response_obj = data.get("response") or {}
+            platform_status = (
+                response_obj.get("platform_status", {}) if response_obj else {}
+            )
+            if platform_status:
+                last_platform_status = platform_status
+
+            if verbose and platform_status:
+                found_count = sum(
+                    1
+                    for p in platform_status.values()
+                    if (p.get("status") if isinstance(p, dict) else p) == "found"
                 )
-            return data
 
-        if verbose:
-            metadata = data.get("metadata", {})
-            status = metadata.get("status", "unknown")
-            console.print(f"[dim]  Status: {status}...[/dim]")
+                progress_table = _build_progress_table(
+                    platform_status=platform_status,
+                    found_count=found_count,
+                    total_platforms=total_platforms,
+                    elapsed_time=elapsed,
+                )
 
-        time.sleep(poll_interval)
+                live.update(progress_table)
+            elif verbose:
+                status = last_metadata.get("status", "unknown")
+                live.update(_build_status_message(status, elapsed))
 
-    raise TimeoutError(f"Operation did not complete within {timeout} seconds")
+            if data.get("done"):
+                if data.get("error"):
+                    raise RuntimeError(
+                        _format_failure_message(
+                            error=data["error"],
+                            response_context=data.get("response") or {},
+                            request_url=request_url,
+                        )
+                    )
+                return data
+
+            time.sleep(poll_interval)
+
+    timeout_parts = [f"Operation did not complete within {timeout} seconds"]
+    if last_metadata.get("status"):
+        timeout_parts.append(f"last_status={last_metadata['status']}")
+    if last_platform_status:
+        timeout_parts.append(
+            f"platforms={_summarize_platform_status(last_platform_status)}"
+        )
+    raise TimeoutError(" | ".join(timeout_parts))
 
 
 def _display_json(data: dict[str, Any]) -> None:
@@ -110,7 +348,7 @@ def _display_table(data: dict[str, Any], console: Console) -> None:
         data: The operation response data containing the result
         console: Rich console for output
     """
-    result = data.get("response", {})
+    result = data.get("response") or {}
 
     if not result:
         console.print("[red]No results found[/red]")
@@ -119,8 +357,27 @@ def _display_table(data: dict[str, Any], console: Console) -> None:
     canonical_uuid = result.get("canonical_uuid", "N/A")
     confidence = result.get("confidence", 0.0)
     explanation = result.get("explanation", "N/A")
-    platform_urls = result.get("platform_urls", {})
+    platform_urls = {
+        platform: url
+        for platform, url in (result.get("platform_urls", {}) or {}).items()
+        if url
+    }
     platform_status = result.get("platform_status", {})
+    found_count = 0
+    not_found_count = 0
+    failed_count = 0
+    searching_count = 0
+    if platform_status:
+        for raw_status in platform_status.values():
+            status, _ = _normalize_platform_entry(raw_status)
+            if status == "found":
+                found_count += 1
+            elif status == "not_found":
+                not_found_count += 1
+            elif status == "failed":
+                failed_count += 1
+            elif status.startswith("searching"):
+                searching_count += 1
 
     table = Table(title="Identity Resolution Results")
     table.add_column("Field", style="cyan", no_wrap=True)
@@ -129,6 +386,15 @@ def _display_table(data: dict[str, Any], console: Console) -> None:
     table.add_row("Canonical UUID", str(canonical_uuid))
     table.add_row("Confidence", f"{confidence:.2%}")
     table.add_row("Explanation", explanation)
+    if platform_status:
+        table.add_row(
+            "Cross-Platform Search",
+            (
+                f"checked={len(platform_status)} in parallel | "
+                f"found={found_count} | not_found={not_found_count} | "
+                f"failed={failed_count} | in_progress={searching_count}"
+            ),
+        )
 
     if platform_urls:
         url_lines = "\n".join(
@@ -143,11 +409,15 @@ def _display_table(data: dict[str, Any], console: Console) -> None:
             "failed": "red",
             "searching": "blue",
         }
-        status_lines = "\n".join(
-            f"[{status_colors.get(status, 'white')}]{platform}: {status}[/{status_colors.get(status, 'white')}]"
-            for platform, status in sorted(platform_status.items())
-        )
-        table.add_row("Platform Status", status_lines)
+        status_lines = []
+        for platform, raw_status in sorted(platform_status.items()):
+            status, detail = _normalize_platform_entry(raw_status)
+            color = status_colors.get(status, "white")
+            line = f"[{color}]{platform}: {status}[/{color}]"
+            if detail:
+                line = f"{line} ({detail})"
+            status_lines.append(line)
+        table.add_row("Platform Status", "\n".join(status_lines))
 
     console.print(table)
 
@@ -158,8 +428,12 @@ def _display_urls(data: dict[str, Any]) -> None:
     Args:
         data: The operation response data containing the result
     """
-    result = data.get("response", {})
-    platform_urls = result.get("platform_urls", {})
+    result = data.get("response") or {}
+    platform_urls = {
+        platform: url
+        for platform, url in (result.get("platform_urls", {}) or {}).items()
+        if url
+    }
 
     for url in platform_urls.values():
         click.echo(url)
@@ -181,7 +455,7 @@ def _display_urls(data: dict[str, Any]) -> None:
 )
 @click.option(
     "--timeout",
-    default=60,
+    default=180,
     type=int,
     help="Timeout in seconds for waiting",
     show_default=True,
@@ -198,7 +472,28 @@ def _display_urls(data: dict[str, Any]) -> None:
     "--verbose",
     "-v",
     is_flag=True,
-    help="Enable verbose output",
+    help="Enable verbose output (INFO level logging)",
+)
+@click.option(
+    "--debug",
+    is_flag=True,
+    help="Enable DEBUG level logging with full stack traces",
+)
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Skip idempotency check and re-search even if mapping exists",
+)
+@click.option(
+    "--clear-mappings",
+    type=str,
+    metavar="SOURCE_ISSUE_ID",
+    help="Delete all external mappings for this source_issue_id before searching",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Show what would happen without executing the search",
 )
 def cli_find(
     url: str,
@@ -207,6 +502,10 @@ def cli_find(
     timeout: int,
     output: str,
     verbose: bool,
+    debug: bool,
+    force: bool,
+    clear_mappings: str | None,
+    dry_run: bool,
 ) -> None:
     """Resolve a comic identity from a URL.
 
@@ -219,21 +518,42 @@ def cli_find(
         cie-find https://leagueofcomicgeeks.com/comic/12345678/x-men-1 -v
         cie-find https://www.comics.org/issue/12345/ -o json
         cie-find https://www.comics.org/issue/12345/ --no-wait
+        cie-find https://www.comics.org/issue/12345/ --force
+        cie-find https://www.comics.org/issue/12345/ --debug
+        cie-find https://www.comics.org/issue/12345/ --clear-mappings 12345
+        cie-find https://www.comics.org/issue/12345/ --dry-run
     """
-    console = Console(stderr=True if output == "json" else None)
+    console = Console(stderr=True if output == "json" else False)
 
-    if verbose:
+    if verbose or debug:
         console.print(f"[dim]Resolving URL: {url}[/dim]")
         console.print(f"[dim]API endpoint: {api_url}[/dim]")
 
+    if dry_run:
+        console.print(
+            "[yellow]DRY RUN MODE - No actual search will be performed[/yellow]"
+        )
+        console.print(f"[dim]Would resolve: {url}[/dim]")
+        if force:
+            console.print("[dim]Would skip idempotency check (--force)[/dim]")
+        if clear_mappings:
+            console.print(f"[dim]Would clear mappings for: {clear_mappings}[/dim]")
+        return
+
     try:
         with httpx.Client(timeout=30.0) as client:
-            if verbose:
+            if verbose or debug:
                 console.print("[dim]Submitting URL to API...[/dim]")
+
+            request_body: dict[str, Any] = {"url": url}
+            if force:
+                request_body["force"] = True
+            if clear_mappings:
+                request_body["clear_mappings"] = clear_mappings
 
             response = client.post(
                 f"{api_url}/api/v1/identity/resolve",
-                json={"url": url},
+                json=request_body,
             )
             response.raise_for_status()
             data = response.json()
@@ -244,7 +564,7 @@ def cli_find(
 
             operation_id = _extract_operation_id(operation_name)
 
-            if verbose:
+            if verbose or debug:
                 console.print(f"[dim]Operation ID: {operation_id}[/dim]")
 
             if not wait:
@@ -258,6 +578,7 @@ def cli_find(
                 timeout=timeout,
                 verbose=verbose,
                 console=console,
+                request_url=url,
             )
 
             if output == "json":
@@ -280,18 +601,38 @@ def cli_find(
         except Exception:
             pass
         console.print(f"[red]{error_msg}[/red]")
+        if debug:
+            import traceback
+
+            console.print("[red]Stack trace:[/red]")
+            console.print(traceback.format_exc())
         sys.exit(1)
     except httpx.RequestError as e:
         console.print(f"[red]Request error: {e}[/red]")
+        if debug:
+            import traceback
+
+            console.print("[red]Stack trace:[/red]")
+            console.print(traceback.format_exc())
         sys.exit(1)
     except TimeoutError as e:
         console.print(f"[red]Timeout: {e}[/red]")
         sys.exit(1)
     except RuntimeError as e:
         console.print(f"[red]Error: {e}[/red]")
+        if debug:
+            import traceback
+
+            console.print("[red]Stack trace:[/red]")
+            console.print(traceback.format_exc())
         sys.exit(1)
     except Exception as e:
         console.print(f"[red]Unexpected error: {e}[/red]")
+        if debug:
+            import traceback
+
+            console.print("[red]Stack trace:[/red]")
+            console.print(traceback.format_exc())
         sys.exit(1)
 
 

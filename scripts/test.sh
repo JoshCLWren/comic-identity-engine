@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Ensure we're using the project's virtual environment
-export VIRTUAL_ENV="$PWD/.venv"
-export PATH="$PWD/.venv/bin:$PATH"
+source "$PWD/scripts/ensure-local-venv.sh"
+cie_ensure_local_venv "$PWD"
 
-uv run pytest --cov=comic_identity_engine --cov-report=xml --cov-report=term-missing
+"$PWD/.venv/bin/pytest" --cov=comic_identity_engine --cov-report=xml --cov-report=term-missing

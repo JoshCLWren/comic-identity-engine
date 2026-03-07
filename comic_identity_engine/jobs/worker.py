@@ -32,6 +32,30 @@ from comic_identity_engine.jobs.tasks import (
     resolve_identity_task,
 )
 
+
+def _configure_logging() -> None:
+    """Configure structlog for console output.
+
+    This must be called before any loggers are created to ensure
+    log messages appear in console output.
+    """
+    structlog.configure(
+        processors=[
+            structlog.stdlib.add_log_level,
+            structlog.stdlib.add_logger_name,
+            structlog.processors.TimeStamper(fmt="iso"),
+            structlog.processors.StackInfoRenderer(),
+            structlog.processors.format_exc_info,
+            structlog.processors.UnicodeDecoder(),
+            structlog.dev.ConsoleRenderer(),
+        ],
+        context_class=dict,
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        wrapper_class=structlog.stdlib.BoundLogger,
+        cache_logger_on_first_use=True,
+    )
+
+
 logger = structlog.get_logger(__name__)
 
 _received_signals = []
@@ -155,6 +179,8 @@ def main() -> None:
 
     This function is called by the cie-worker CLI command.
     """
+    _configure_logging()
+
     try:
         run_worker()
     except KeyboardInterrupt:

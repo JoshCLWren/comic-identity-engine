@@ -4,9 +4,8 @@
 
 # Project root
 export CIE_PROJECT_ROOT="${0:A:h}"
-
-# Add uv-managed binaries to PATH
-export PATH="$CIE_PROJECT_ROOT/.venv/bin:$PATH"
+source "$CIE_PROJECT_ROOT/scripts/ensure-local-venv.sh"
+cie_ensure_local_venv "$CIE_PROJECT_ROOT" || return 1
 
 # Direnv setup (eval once per shell session)
 if command -v direnv &> /dev/null; then
@@ -15,24 +14,39 @@ fi
 
 # Aliases for common operations
 alias cie='cd $CIE_PROJECT_ROOT'
-alias pytest='uv run pytest'
-alias py='uv run python'
-alias pip='uv pip'
 
 # Helper functions
+pytest() {
+    cie_ensure_local_venv "$CIE_PROJECT_ROOT" || return 1
+    "$CIE_PROJECT_ROOT/.venv/bin/pytest" "$@"
+}
+
+py() {
+    cie_ensure_local_venv "$CIE_PROJECT_ROOT" || return 1
+    "$CIE_PROJECT_ROOT/.venv/bin/python" "$@"
+}
+
+pip() {
+    cie_ensure_local_venv "$CIE_PROJECT_ROOT" || return 1
+    "$CIE_PROJECT_ROOT/.venv/bin/python" -m pip "$@"
+}
+
 cie-test() {
     cd $CIE_PROJECT_ROOT
-    uv run pytest "$@"
+    cie_ensure_local_venv "$CIE_PROJECT_ROOT" || return 1
+    "$CIE_PROJECT_ROOT/.venv/bin/pytest" "$@"
 }
 
 cie-run() {
     cd $CIE_PROJECT_ROOT
-    uv run python "$@"
+    cie_ensure_local_venv "$CIE_PROJECT_ROOT" || return 1
+    "$CIE_PROJECT_ROOT/.venv/bin/python" "$@"
 }
 
 cie-repl() {
     cd $CIE_PROJECT_ROOT
-    uv run python
+    cie_ensure_local_venv "$CIE_PROJECT_ROOT" || return 1
+    "$CIE_PROJECT_ROOT/.venv/bin/python"
 }
 
 # Show project status
@@ -42,8 +56,9 @@ cie-status() {
     echo "======================================"
     echo
     echo "Project: $CIE_PROJECT_ROOT"
-    echo "Python: $(uv run python --version 2>&1)"
-    echo "Tests: $(uv run pytest --collect-only -q 2>/dev/null | tail -n 1 || echo 'N/A')"
+    cie_ensure_local_venv "$CIE_PROJECT_ROOT" || return 1
+    echo "Python: $("$CIE_PROJECT_ROOT/.venv/bin/python" --version 2>&1)"
+    echo "Tests: $("$CIE_PROJECT_ROOT/.venv/bin/pytest" --collect-only -q 2>/dev/null | tail -n 1 || echo 'N/A')"
     echo "Git: $(git branch --show-current 2>/dev/null || echo 'Not a git repo')"
     echo
     echo "Quick commands:"

@@ -374,6 +374,173 @@ class TestResolveIdentityTask:
 
         assert result["confidence"] == 1.0  # Default when no best_match
 
+    @pytest.mark.asyncio
+    async def test_resolve_identity_task_force_reuses_existing_source_mapping(
+        self, mock_async_session_local, mock_session
+    ):
+        """Test force mode does not re-insert an identical source mapping."""
+        with patch(
+            "comic_identity_engine.jobs.tasks.OperationsManager"
+        ) as mock_ops_manager_class:
+            mock_ops_manager = Mock()
+            mock_ops_manager.mark_running = AsyncMock()
+            mock_ops_manager.mark_completed = AsyncMock()
+            mock_ops_manager_class.return_value = mock_ops_manager
+
+            with patch("comic_identity_engine.jobs.tasks.parse_url") as mock_parse:
+                mock_parse.return_value = Mock(
+                    platform="gcd", issue_id="123", source_issue_id="123"
+                )
+
+                with patch(
+                    "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
+                ) as mock_mapping_repo_class:
+                    mock_mapping_repo = Mock()
+                    mock_mapping_repo.find_by_source = AsyncMock(
+                        side_effect=[Mock(issue_id=TEST_ISSUE_ID)]
+                    )
+                    mock_mapping_repo.create_mapping = AsyncMock()
+                    mock_mapping_repo_class.return_value = mock_mapping_repo
+
+                    with patch(
+                        "comic_identity_engine.jobs.tasks.get_adapter"
+                    ) as mock_get_adapter:
+                        mock_adapter = Mock()
+                        mock_candidate = Mock()
+                        mock_candidate.upc = "123456789012"
+                        mock_candidate.series_title = "Test Series"
+                        mock_candidate.series_start_year = 2020
+                        mock_candidate.issue_number = "1"
+                        mock_candidate.cover_date = None
+                        mock_candidate.source_series_id = "456"
+                        mock_adapter.fetch_issue = AsyncMock(
+                            return_value=mock_candidate
+                        )
+                        mock_get_adapter.return_value = mock_adapter
+
+                        with patch(
+                            "comic_identity_engine.jobs.tasks.IdentityResolver"
+                        ) as mock_resolver_class:
+                            mock_resolver = Mock()
+                            mock_result = Mock()
+                            mock_result.issue_id = TEST_ISSUE_ID
+                            mock_result.created_new = False
+                            mock_result.explanation = "Matched on issue number"
+                            mock_result.best_match = Mock(overall_confidence=0.95)
+                            mock_resolver.resolve_issue = AsyncMock(
+                                return_value=mock_result
+                            )
+                            mock_resolver_class.return_value = mock_resolver
+
+                            with (
+                                patch(
+                                    "comic_identity_engine.jobs.tasks.build_urls"
+                                ) as mock_build,
+                                patch(
+                                    "comic_identity_engine.services.platform_searcher.PlatformSearcher"
+                                ) as mock_searcher_class,
+                            ):
+                                mock_build.return_value = {"gcd": "https://test.com"}
+                                mock_searcher = Mock()
+                                mock_searcher.search_all_platforms = AsyncMock(
+                                    return_value={"urls": {}, "status": {}}
+                                )
+                                mock_searcher_class.return_value = mock_searcher
+
+                                result = await resolve_identity_task(
+                                    {},
+                                    "https://www.comics.org/issue/123/",
+                                    str(TEST_OPERATION_ID),
+                                    force=True,
+                                )
+
+        assert result["canonical_uuid"] == str(TEST_ISSUE_ID)
+        mock_mapping_repo.create_mapping.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_resolve_identity_task_force_conflicting_source_mapping_fails(
+        self, mock_async_session_local, mock_session
+    ):
+        """Test force mode surfaces conflicting source mappings clearly."""
+        conflicting_issue_id = uuid.UUID("550e8400-e29b-41d4-a716-446655440099")
+
+        with patch(
+            "comic_identity_engine.jobs.tasks.OperationsManager"
+        ) as mock_ops_manager_class:
+            mock_ops_manager = Mock()
+            mock_ops_manager.mark_running = AsyncMock()
+            mock_ops_manager_class.return_value = mock_ops_manager
+
+            with patch("comic_identity_engine.jobs.tasks.parse_url") as mock_parse:
+                mock_parse.return_value = Mock(
+                    platform="gcd", issue_id="123", source_issue_id="123"
+                )
+
+                with patch(
+                    "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
+                ) as mock_mapping_repo_class:
+                    mock_mapping_repo = Mock()
+                    mock_mapping_repo.find_by_source = AsyncMock(
+                        side_effect=[Mock(issue_id=conflicting_issue_id)]
+                    )
+                    mock_mapping_repo.create_mapping = AsyncMock()
+                    mock_mapping_repo_class.return_value = mock_mapping_repo
+
+                    with patch(
+                        "comic_identity_engine.jobs.tasks.get_adapter"
+                    ) as mock_get_adapter:
+                        mock_adapter = Mock()
+                        mock_candidate = Mock()
+                        mock_candidate.upc = "123456789012"
+                        mock_candidate.series_title = "Test Series"
+                        mock_candidate.series_start_year = 2020
+                        mock_candidate.issue_number = "1"
+                        mock_candidate.cover_date = None
+                        mock_candidate.source_series_id = "456"
+                        mock_adapter.fetch_issue = AsyncMock(
+                            return_value=mock_candidate
+                        )
+                        mock_get_adapter.return_value = mock_adapter
+
+                        with patch(
+                            "comic_identity_engine.jobs.tasks.IdentityResolver"
+                        ) as mock_resolver_class:
+                            mock_resolver = Mock()
+                            mock_result = Mock()
+                            mock_result.issue_id = TEST_ISSUE_ID
+                            mock_result.created_new = False
+                            mock_result.explanation = "Matched on issue number"
+                            mock_result.best_match = Mock(overall_confidence=0.95)
+                            mock_resolver.resolve_issue = AsyncMock(
+                                return_value=mock_result
+                            )
+                            mock_resolver_class.return_value = mock_resolver
+
+                            with (
+                                patch(
+                                    "comic_identity_engine.jobs.tasks._mark_failed_safe",
+                                    new_callable=AsyncMock,
+                                ),
+                                patch(
+                                    "comic_identity_engine.services.platform_searcher.PlatformSearcher"
+                                ) as mock_searcher_class,
+                            ):
+                                mock_searcher = Mock()
+                                mock_searcher.search_all_platforms = AsyncMock(
+                                    return_value={"urls": {}, "status": {}}
+                                )
+                                mock_searcher_class.return_value = mock_searcher
+
+                                result = await resolve_identity_task(
+                                    {},
+                                    "https://www.comics.org/issue/123/",
+                                    str(TEST_OPERATION_ID),
+                                    force=True,
+                                )
+
+        assert result["error_type"] == "validation_error"
+        assert "use --clear-mappings 123 to replace it" in result["error"]
+
 
 class TestBulkResolveTask:
     """Tests for bulk_resolve_task."""

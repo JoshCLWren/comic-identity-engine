@@ -120,6 +120,31 @@ class TestOperationsManager:
         assert result == sample_pending_operation
 
     @patch("comic_identity_engine.services.operations.OperationRepository")
+    async def test_update_operation_allows_running_progress_updates(
+        self, mock_repo_cls, mock_session, sample_running_operation
+    ):
+        """Test updating progress without changing running status."""
+        mock_repo = MagicMock()
+        mock_repo.get_operation = AsyncMock(return_value=sample_running_operation)
+        mock_repo.update_status = AsyncMock(return_value=sample_running_operation)
+        mock_repo_cls.return_value = mock_repo
+
+        manager = OperationsManager(mock_session)
+        result = await manager.update_operation(
+            sample_running_operation.id,
+            "running",
+            result={"platform_status": {"gcd": "found"}},
+        )
+
+        assert result == sample_running_operation
+        mock_repo.update_status.assert_awaited_once_with(
+            sample_running_operation,
+            status="running",
+            result={"platform_status": {"gcd": "found"}},
+            error_message=None,
+        )
+
+    @patch("comic_identity_engine.services.operations.OperationRepository")
     async def test_update_operation_invalid_status(self, mock_repo_cls, mock_session):
         """Test updating operation with invalid status raises ValueError."""
         mock_repo = MagicMock()

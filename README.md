@@ -167,10 +167,10 @@ uv sync
 direnv allow  # Loads .envrc automatically
 
 # Run tests
-uv run pytest
+pytest
 
 # Run with coverage
-uv run pytest --cov=comic_identity_engine
+pytest --cov=comic_identity_engine
 ```
 
 ### Docker-Based CI (Recommended)
@@ -181,9 +181,9 @@ docker compose build ci
 docker compose run --rm ci
 ```
 
-### Shell Aliases (Optional)
+### Shell Helpers (Optional)
 
-For convenience, add shell aliases to run commands without `uv run`:
+For convenience, add project-aware shell helpers:
 
 **Zsh** - Add to `~/.zshrc`:
 ```bash
@@ -202,18 +202,15 @@ See [SHELL.md](SHELL.md) for details.
 ### Command-Line Interface
 
 ```bash
-# Find an issue by UPC (cross-platform search)
-cie-find 75960601772099911
-
 # Find an issue by URL (auto-detects platform)
-cie-find https://www.comiccollectorlive.com/...
-cie-find https://leagueofcomicgeeks.com/...
+cie-find https://www.comics.org/issue/12345/
+
+# Start the API and worker from the project .venv
+cie-api --reload
+cie-worker
 
 # Import CLZ backup file
 cie-import-clz backup.clz
-
-# Run the job worker
-cie-worker
 
 # Admin commands
 cie-admin db migrate

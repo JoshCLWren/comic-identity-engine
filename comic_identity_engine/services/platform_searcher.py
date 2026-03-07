@@ -28,39 +28,58 @@ from __future__ import annotations
 
 import asyncio
 import re
+import sys
 import time
+from pathlib import Path
 from typing import Any, Optional
 from uuid import UUID
 
 import jellyfish
 import structlog
 
+from comic_identity_engine.database.connection import AsyncSessionLocal
 from comic_identity_engine.database.repositories import ExternalMappingRepository
+from comic_identity_engine.errors import DuplicateEntityError
 from comic_identity_engine.errors import NetworkError
 from comic_identity_engine.services.operations import OperationsManager
 
 logger = structlog.get_logger(__name__)
 
 
+def _prefer_workspace_comic_search_lib() -> None:
+    """Prefer the vendored comic-search-lib checkout over site-packages."""
+    workspace_lib = Path(__file__).resolve().parents[2] / "comic-search-lib"
+    if not workspace_lib.exists():
+        return
+
+    workspace_lib_str = str(workspace_lib)
+    if workspace_lib_str in sys.path:
+        sys.path.remove(workspace_lib_str)
+    sys.path.insert(0, workspace_lib_str)
+
+
 # Platform-specific search configurations
 PLATFORM_SEARCH_CONFIG = {
     "gcd": {
         "max_retries": 2,
-        "max_duration_sec": 60,
+        "max_duration_sec": 12,
+        "request_timeout_sec": 6,
         "strategies": ["exact", "no_year", "normalized_title"],
         "retry_delay_sec": 1,
         "notes": "Excellent search, authoritative source",
     },
     "locg": {
         "max_retries": 3,
-        "max_duration_sec": 90,
+        "max_duration_sec": 12,
+        "request_timeout_sec": 6,
         "strategies": ["exact", "no_year", "normalized_title", "fuzzy_title"],
         "retry_delay_sec": 2,
         "notes": "Good search but rate limited - need backoff",
     },
     "aa": {
         "max_retries": 3,
-        "max_duration_sec": 120,
+        "max_duration_sec": 12,
+        "request_timeout_sec": 6,
         "strategies": [
             "exact",
             "no_year",
@@ -73,7 +92,8 @@ PLATFORM_SEARCH_CONFIG = {
     },
     "ccl": {
         "max_retries": 3,
-        "max_duration_sec": 120,
+        "max_duration_sec": 12,
+        "request_timeout_sec": 6,
         "strategies": [
             "exact",
             "no_year",
@@ -86,14 +106,16 @@ PLATFORM_SEARCH_CONFIG = {
     },
     "cpg": {
         "max_retries": 2,
-        "max_duration_sec": 60,
+        "max_duration_sec": 8,
+        "request_timeout_sec": 5,
         "strategies": ["exact", "no_year"],
         "retry_delay_sec": 1,
         "notes": "Poor search functionality, don't waste time",
     },
     "hip": {
         "max_retries": 2,
-        "max_duration_sec": 90,
+        "max_duration_sec": 12,
+        "request_timeout_sec": 6,
         "strategies": ["exact", "no_year", "normalized_title", "fuzzy_title"],
         "retry_delay_sec": 2,
         "notes": "Occasional timeouts, needs retries",
@@ -108,12 +130,15 @@ class PlatformSearcher:
         """Initialize platform searcher.
 
         Args:
-            session: Database session for creating mappings
+            session: Database session from the caller. Cross-platform search does
+                not reuse it for progress writes or mapping inserts because each
+                platform runner operates concurrently.
         """
         self.session = session
-        self.mapping_repo = ExternalMappingRepository(session)
+        self._progress_lock = asyncio.Lock()
 
         # Import scrapers here to avoid circular imports
+        _prefer_workspace_comic_search_lib()
         from comic_search_lib.scrapers.atomic_avenue import AtomicAvenueScraper
         from comic_search_lib.scrapers.ccl import CCLScraper
         from comic_search_lib.scrapers.cpg import CPGScraper
@@ -122,12 +147,12 @@ class PlatformSearcher:
         from comic_search_lib.scrapers.locg import LoCGScraper
 
         self.scrapers = {
-            "gcd": GCDScraper(),
-            "locg": LoCGScraper(),
-            "aa": AtomicAvenueScraper(),
-            "ccl": CCLScraper(),
-            "cpg": CPGScraper(),
-            "hip": HipScraper(),
+            "gcd": GCDScraper(timeout=PLATFORM_SEARCH_CONFIG["gcd"]["request_timeout_sec"]),
+            "locg": LoCGScraper(timeout=PLATFORM_SEARCH_CONFIG["locg"]["request_timeout_sec"]),
+            "aa": AtomicAvenueScraper(timeout=PLATFORM_SEARCH_CONFIG["aa"]["request_timeout_sec"]),
+            "ccl": CCLScraper(timeout=PLATFORM_SEARCH_CONFIG["ccl"]["request_timeout_sec"]),
+            "cpg": CPGScraper(timeout=PLATFORM_SEARCH_CONFIG["cpg"]["request_timeout_sec"]),
+            "hip": HipScraper(timeout=PLATFORM_SEARCH_CONFIG["hip"]["request_timeout_sec"]),
         }
 
     async def search_all_platforms(
@@ -139,6 +164,7 @@ class PlatformSearcher:
         publisher: Optional[str],
         operation_id: UUID,
         source_platform: str,
+        operations_manager: OperationsManager,
     ) -> dict[str, Any]:
         """Search all platforms in parallel with multiple strategies.
 
@@ -150,6 +176,7 @@ class PlatformSearcher:
             publisher: Publisher name (optional)
             operation_id: Operation UUID for status updates
             source_platform: Platform we started from (already mapped)
+            operations_manager: OperationsManager for updating operation metadata
 
         Returns:
             Dict with:
@@ -162,46 +189,124 @@ class PlatformSearcher:
         platform_status = {source_platform: "found"}
 
         # Create tasks for all other platforms
-        tasks = {}
+        tasks: list[asyncio.Task[tuple[str, Optional[str]]]] = []
         for platform in all_platforms:
             if platform == source_platform:
                 continue
 
             platform_status[platform] = "searching"
-            task = self._search_single_platform_with_strategies(
-                platform=platform,
-                issue_id=issue_id,
-                series_title=series_title,
-                issue_number=issue_number,
-                year=year,
-                publisher=publisher,
-                operation_id=operation_id,
+            task = asyncio.create_task(
+                self._run_platform_search_task(
+                    platform=platform,
+                    issue_id=issue_id,
+                    series_title=series_title,
+                    issue_number=issue_number,
+                    year=year,
+                    publisher=publisher,
+                    operation_id=operation_id,
+                )
             )
-            tasks[platform] = task
+            tasks.append(task)
 
-        # Execute all searches in parallel
-        results = await asyncio.gather(*tasks.values(), return_exceptions=True)
+        # Persist the initial snapshot before any platform finishes so the CLI can
+        # show that the full parallel search fan-out has started.
+        await self._persist_operation_progress(
+            operation_id=operation_id,
+            platform_status=dict(platform_status),
+        )
 
-        # Process results
         found_urls = {}
-        for platform, result in zip(tasks.keys(), results):
-            if isinstance(result, Exception):
+        for completed_task in asyncio.as_completed(tasks):
+            try:
+                platform, result = await completed_task
+            except Exception as e:
+                platform = getattr(e, "platform", "unknown")
                 platform_status[platform] = "failed"
                 logger.warning(
                     "Platform search failed",
                     platform=platform,
-                    error=str(result),
+                    error=str(e),
                 )
-            elif result:
-                found_urls[platform] = result
-                platform_status[platform] = "found"
             else:
-                platform_status[platform] = "not_found"
+                if result:
+                    found_urls[platform] = result
+                    platform_status[platform] = "found"
+                else:
+                    platform_status[platform] = "not_found"
+
+            # Update operation with current platform_status for real-time progress
+            try:
+                await self._persist_operation_progress(
+                    operation_id=operation_id,
+                    platform_status=dict(platform_status),
+                )
+            except Exception as e:
+                logger.warning(
+                    "Failed to update operation progress",
+                    operation_id=str(operation_id),
+                    platform=platform,
+                    error=str(e),
+                )
 
         return {
             "urls": found_urls,
             "status": platform_status,
         }
+
+    async def _run_platform_search_task(
+        self,
+        platform: str,
+        issue_id: UUID,
+        series_title: str,
+        issue_number: str,
+        year: Optional[int],
+        publisher: Optional[str],
+        operation_id: UUID,
+    ) -> tuple[str, Optional[str]]:
+        """Return the platform alongside the search result for as_completed()."""
+        result = await self._run_platform_search_with_timeout(
+            platform=platform,
+            issue_id=issue_id,
+            series_title=series_title,
+            issue_number=issue_number,
+            year=year,
+            publisher=publisher,
+            operation_id=operation_id,
+        )
+        return platform, result
+
+    async def _run_platform_search_with_timeout(
+        self,
+        platform: str,
+        issue_id: UUID,
+        series_title: str,
+        issue_number: str,
+        year: Optional[int],
+        publisher: Optional[str],
+        operation_id: UUID,
+    ) -> Optional[str]:
+        """Run a single platform search with a hard wall-clock timeout."""
+        timeout_seconds = PLATFORM_SEARCH_CONFIG[platform]["max_duration_sec"]
+        try:
+            return await asyncio.wait_for(
+                self._search_single_platform_with_strategies(
+                    platform=platform,
+                    issue_id=issue_id,
+                    series_title=series_title,
+                    issue_number=issue_number,
+                    year=year,
+                    publisher=publisher,
+                    operation_id=operation_id,
+                ),
+                timeout=timeout_seconds,
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "Platform search hit hard timeout",
+                platform=platform,
+                duration_sec=timeout_seconds,
+            )
+            return None
 
     async def _search_single_platform_with_strategies(
         self,
@@ -240,7 +345,9 @@ class PlatformSearcher:
         for strategy in config["strategies"]:
             # Update status to show current strategy
             status_key = f"searching_{strategy}" if strategy != "exact" else "searching"
-            await self._update_platform_status(operation_id, platform, status_key)
+            await self._update_platform_status(
+                operation_id, platform, status_key, strategy=strategy, retry=1
+            )
 
             # Retry with exponential backoff
             for attempt in range(config["max_retries"]):
@@ -277,7 +384,11 @@ class PlatformSearcher:
                     if attempt < config["max_retries"] - 1:
                         # Update status to show retry
                         await self._update_platform_status(
-                            operation_id, platform, f"searching_retry_{attempt + 1}"
+                            operation_id,
+                            platform,
+                            f"searching_retry_{attempt + 1}",
+                            strategy=strategy,
+                            retry=attempt + 2,
                         )
                         # Exponential backoff
                         await asyncio.sleep(config["retry_delay_sec"] * (2**attempt))
@@ -456,20 +567,47 @@ class PlatformSearcher:
         Returns:
             Platform URL for the found issue
         """
-        # Select best listing from result
-        best_listing = result.listings[0]
-        url = best_listing.url
+        url = None
+        if getattr(result, "listings", None):
+            best_listing = result.listings[0]
+            url = best_listing.url
+        if not url:
+            url = getattr(result, "url", None)
+        if not url:
+            raise ValueError(
+                f"Search result for platform {platform} had no usable listing URL"
+            )
 
         # Extract source IDs from URL
         source_issue_id, source_series_id = self._extract_ids_from_url(platform, url)
 
-        # Create external mapping
-        await self.mapping_repo.create_mapping(
-            issue_id=issue_id,
-            source=platform,
-            source_issue_id=source_issue_id,
-            source_series_id=source_series_id,
-        )
+        async with AsyncSessionLocal() as session:
+            mapping_repo = ExternalMappingRepository(session)
+            existing = await mapping_repo.find_by_source(platform, source_issue_id)
+
+            if existing is None:
+                await mapping_repo.create_mapping(
+                    issue_id=issue_id,
+                    source=platform,
+                    source_issue_id=source_issue_id,
+                    source_series_id=source_series_id,
+                )
+                await session.commit()
+            elif existing.issue_id == issue_id:
+                logger.info(
+                    "Reused existing external mapping from search result",
+                    platform=platform,
+                    issue_id=str(issue_id),
+                    source_issue_id=source_issue_id,
+                    url=url,
+                )
+            else:
+                raise DuplicateEntityError(
+                    f"External mapping with source={platform} and "
+                    f"source_issue_id={source_issue_id} already exists",
+                    entity_type="ExternalMapping",
+                    existing_id=str(existing.id),
+                )
 
         logger.info(
             "Created external mapping from search result",
@@ -657,6 +795,8 @@ class PlatformSearcher:
         operation_id: UUID,
         platform: str,
         status: str,
+        strategy: Optional[str] = None,
+        retry: Optional[int] = None,
     ) -> None:
         """Update platform status in operation metadata.
 
@@ -664,12 +804,59 @@ class PlatformSearcher:
             operation_id: Operation UUID
             platform: Platform code
             status: Status string (searching, found, not_found, failed, etc.)
+            strategy: Current strategy being attempted
+            retry: Current retry number (1-indexed)
         """
-        # This is a placeholder - actual implementation would update operation metadata
-        # For now, we just log
-        logger.debug(
-            "Platform status update",
-            operation_id=str(operation_id),
-            platform=platform,
-            status=status,
-        )
+        try:
+            platform_entry: dict[str, Any] = {"status": status}
+            if strategy:
+                platform_entry["strategy"] = strategy
+            if retry is not None:
+                platform_entry["retry"] = retry
+
+            async with self._progress_lock:
+                async with AsyncSessionLocal() as session:
+                    ops_manager = OperationsManager(session)
+                    operation = await ops_manager.get_operation(operation_id)
+
+                    if operation:
+                        current_result = operation.result or {}
+                        platform_status = current_result.get("platform_status", {})
+                        platform_status[platform] = platform_entry
+                        current_result["platform_status"] = platform_status
+
+                        await ops_manager.update_operation(
+                            operation_id,
+                            "running",
+                            result=current_result,
+                        )
+                        await session.commit()
+        except Exception as e:
+            logger.warning(
+                "Failed to update platform status",
+                operation_id=str(operation_id),
+                platform=platform,
+                status=status,
+                error=str(e),
+            )
+
+    async def _persist_operation_progress(
+        self,
+        operation_id: UUID,
+        platform_status: dict[str, Any],
+    ) -> None:
+        """Persist aggregated platform progress using an isolated session."""
+        async with self._progress_lock:
+            async with AsyncSessionLocal() as session:
+                ops_manager = OperationsManager(session)
+                operation = await ops_manager.get_operation(operation_id)
+
+                if operation:
+                    current_result = operation.result or {}
+                    current_result["platform_status"] = platform_status
+                    await ops_manager.update_operation(
+                        operation_id,
+                        "running",
+                        result=current_result,
+                    )
+                    await session.commit()

@@ -1,13 +1,19 @@
 #!/usr/bin/env python
-"""Entry point for cie-api command."""
+"""Entry point for the local API server."""
+
+from __future__ import annotations
 
 import sys
+
 from uvicorn import main
 
-if __name__ == "__main__":
+
+def run() -> None:
+    """Run the API using the project environment's installed uvicorn."""
     sys.argv = [
         "uvicorn",
         "comic_identity_engine.api.main:create_app",
+        "--factory",
         "--host",
         "0.0.0.0",
         "--port",
@@ -15,3 +21,7 @@ if __name__ == "__main__":
         *sys.argv[1:],
     ]
     main()
+
+
+if __name__ == "__main__":
+    run()

@@ -68,12 +68,18 @@ class JobQueue:
         self,
         url: str,
         operation_id: uuid.UUID,
+        force: bool = False,
+        clear_mappings: str | None = None,
+        dry_run: bool = False,
     ) -> Job:
         """Enqueue an identity resolution job.
 
         Args:
             url: URL to resolve (e.g., GCD, LoCG, etc.)
             operation_id: UUID of the operation tracking this job
+            force: Skip existing mapping cache and always fetch from platform
+            clear_mappings: Delete all external mappings for this source_issue_id before searching
+            dry_run: Show what would happen without executing
 
         Returns:
             arq Job instance.
@@ -94,12 +100,18 @@ class JobQueue:
             "Enqueueing identity resolution job",
             url=url,
             operation_id=str(operation_id),
+            force=force,
+            clear_mappings=clear_mappings,
+            dry_run=dry_run,
         )
 
         return await pool.enqueue_job(
             "resolve_identity_task",
             url=url,
             operation_id=str(operation_id),
+            force=force,
+            clear_mappings=clear_mappings,
+            dry_run=dry_run,
         )
 
     async def enqueue_bulk_resolve(

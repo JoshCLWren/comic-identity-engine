@@ -73,6 +73,7 @@ async def resolve_identity(
         operation = await operations_manager.create_operation(
             operation_type="resolve",
             input_data={"url": request.url},
+            force=request.force,
         )
 
         # Only enqueue job if operation is not already completed
@@ -80,6 +81,9 @@ async def resolve_identity(
             await queue.enqueue_resolve(
                 url=request.url,
                 operation_id=operation.id,
+                force=request.force,
+                clear_mappings=request.clear_mappings,
+                dry_run=request.dry_run,
             )
 
         # Return operation response with correct done status
@@ -177,7 +181,7 @@ async def get_resolve_status(
         },
     )
 
-    if is_done and operation.status == "completed" and operation.result:
+    if operation.result:
         response.response = operation.result
 
     if operation.status == "failed" and operation.error_message:

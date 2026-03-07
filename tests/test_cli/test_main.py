@@ -18,10 +18,12 @@ from click.testing import CliRunner
 from rich.console import Console
 
 from comic_identity_engine.cli.main import (
+    _build_status_message,
     _display_json,
     _display_table,
     _display_urls,
     _extract_operation_id,
+    _format_failure_message,
     _poll_operation,
     cli_find,
 )
@@ -204,7 +206,13 @@ class TestPollOperation:
         incomplete_data = {
             "name": "operations/550e8400-e29b-41d4-a716-446655440000",
             "done": False,
-            "metadata": {"status": "processing"},
+            "metadata": {"status": "running"},
+            "response": {
+                "platform_status": {
+                    "gcd": "found",
+                    "locg": {"status": "searching", "strategy": "fuzzy_title"},
+                }
+            },
         }
 
         mock_client.get.return_value = MagicMock(json=lambda: incomplete_data)
@@ -222,7 +230,10 @@ class TestPollOperation:
                     console=console,
                 )
 
-        assert "did not complete within 3 seconds" in str(exc_info.value)
+        message = str(exc_info.value)
+        assert "did not complete within 3 seconds" in message
+        assert "last_status=running" in message
+        assert "gcd=found" in message
 
     def test_poll_operation_error(self, mock_client, console):
         """Test that operation error raises RuntimeError."""
@@ -248,6 +259,64 @@ class TestPollOperation:
 
         assert "Operation failed: Invalid input" in str(exc_info.value)
 
+    def test_poll_operation_duplicate_mapping_error_includes_hint(
+        self, mock_client, console
+    ):
+        """Test duplicate mapping failures include a concrete remediation hint."""
+        error_data = {
+            "name": "operations/550e8400-e29b-41d4-a716-446655440000",
+            "done": True,
+            "error": {
+                "message": (
+                    "Unexpected error during resolution: DuplicateEntityError : "
+                    "External mapping with source=gcd and source_issue_id=12345 already exists"
+                )
+            },
+            "response": {
+                "error_type": "unexpected_error",
+                "exception_type": "DuplicateEntityError",
+                "source": "gcd",
+                "source_issue_id": "12345",
+            },
+        }
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = error_data
+        mock_client.get.return_value = mock_response
+
+        with pytest.raises(RuntimeError) as exc_info:
+            _poll_operation(
+                client=mock_client,
+                api_url="http://localhost:8000",
+                operation_id="550e8400-e29b-41d4-a716-446655440000",
+                timeout=10,
+                verbose=False,
+                console=console,
+                request_url="https://www.comics.org/issue/12345/",
+            )
+
+        message = str(exc_info.value)
+        assert "--clear-mappings 12345" in message
+        assert "restart the API and worker" in message
+
+    def test_format_failure_message_summarizes_platforms(self):
+        """Test failure formatter renders platform status compactly."""
+        message = _format_failure_message(
+            error={"message": "Operation failed"},
+            response_context={
+                "error_type": "validation_error",
+                "platform_status": {
+                    "gcd": "found",
+                    "locg": {"status": "searching", "strategy": "fuzzy_title"},
+                },
+            },
+            request_url="https://www.comics.org/issue/12345/",
+        )
+
+        assert "type=validation_error" in message
+        assert "gcd=found" in message
+        assert "locg=searching (fuzzy_title)" in message
+
     def test_poll_operation_verbose_output(self, mock_client, console):
         """Test verbose output during polling."""
         completed_data = {
@@ -272,10 +341,11 @@ class TestPollOperation:
         assert result == completed_data
         output = console.file.getvalue()
         assert "Polling operation" in output
+        assert "Cross-platform fan-out" in output
         assert "550e8400-e29b-41d4-a716-446655440000" in output
 
     def test_poll_operation_verbose_with_status(self, mock_client, console):
-        """Test verbose output with status updates."""
+        """Test verbose polling does not leave stale status spam behind."""
         incomplete_data = {
             "name": "operations/550e8400-e29b-41d4-a716-446655440000",
             "done": False,
@@ -303,7 +373,8 @@ class TestPollOperation:
             )
 
         output = console.file.getvalue()
-        assert "Status: processing" in output
+        assert "Polling operation" in output
+        assert "Status: processing" not in output
 
     def test_poll_operation_http_error(self, mock_client, console):
         """Test handling of HTTP errors during polling."""
@@ -424,6 +495,10 @@ class TestDisplayTable:
                 "platform_urls": {
                     "gcd": "https://www.comics.org/issue/12345/",
                 },
+                "platform_status": {
+                    "gcd": "found",
+                    "locg": "not_found",
+                },
             }
         }
 
@@ -434,6 +509,7 @@ class TestDisplayTable:
         assert "95.00%" in output or "0.95" in output
         assert "Exact match found" in output
         assert "gcd" in output
+        assert "checked=2 in parallel" in output
 
     def test_display_table_multiple_urls(self, console):
         """Test table with multiple platform URLs."""
@@ -456,6 +532,28 @@ class TestDisplayTable:
         assert "gcd" in output
         assert "locg" in output
         assert "ccl" in output
+
+    def test_display_table_filters_empty_urls(self, console):
+        """Test table omits platforms with blank URLs."""
+        data = {
+            "response": {
+                "canonical_uuid": "abc12345-6789-1234-5678-abcdef123456",
+                "confidence": 0.85,
+                "explanation": "High confidence match",
+                "platform_urls": {
+                    "gcd": "https://www.comics.org/issue/12345/",
+                    "locg": "",
+                    "ccl": None,
+                },
+            }
+        }
+
+        _display_table(data, console)
+        output = console.file.getvalue()
+
+        assert "https://www.comics.org/issue/12345/" in output
+        assert "locg:" not in output
+        assert "ccl:" not in output
 
     def test_display_table_empty_result(self, console):
         """Test table with empty result."""
@@ -564,6 +662,34 @@ class TestDisplayUrls:
         captured = capsys.readouterr()
 
         assert captured.out.strip() == ""
+
+    def test_display_urls_filters_empty_values(self, capsys):
+        """Test URL output skips blank platform URL values."""
+        data = {
+            "response": {
+                "platform_urls": {
+                    "gcd": "https://www.comics.org/issue/12345/",
+                    "locg": "",
+                    "ccl": None,
+                }
+            }
+        }
+
+        _display_urls(data)
+        captured = capsys.readouterr()
+
+        assert captured.out.strip() == "https://www.comics.org/issue/12345/"
+
+
+class TestStatusMessage:
+    """Test compact polling status rendering."""
+
+    def test_build_status_message_includes_elapsed_time(self):
+        """Test status message is compact and includes elapsed time."""
+        message = _build_status_message("running", 12.34)
+
+        assert "Status: running" in message
+        assert "elapsed=12.3s" in message
 
     def test_display_urls_no_response(self, capsys):
         """Test output with no response key."""
@@ -866,6 +992,44 @@ class TestCliFind:
         mock_poll.assert_called_once()
         call_kwargs = mock_poll.call_args.kwargs
         assert call_kwargs["timeout"] == 120
+
+    def test_cli_find_default_timeout_matches_long_running_search(self, runner):
+        """Test command default timeout allows cross-platform searches to finish."""
+        submit_response = {
+            "name": "operations/550e8400-e29b-41d4-a716-446655440000",
+        }
+
+        with (
+            patch("httpx.Client") as mock_client_class,
+            patch("comic_identity_engine.cli.main._poll_operation") as mock_poll,
+        ):
+            mock_poll.return_value = {
+                "done": True,
+                "response": {
+                    "canonical_uuid": "abc12345-6789-1234-5678-abcdef123456",
+                    "platform_urls": {},
+                },
+            }
+
+            mock_client = MagicMock()
+            mock_client_class.return_value.__enter__ = MagicMock(
+                return_value=mock_client
+            )
+            mock_client_class.return_value.__exit__ = MagicMock(return_value=False)
+
+            mock_post_response = MagicMock()
+            mock_post_response.json.return_value = submit_response
+            mock_client.post.return_value = mock_post_response
+
+            result = runner.invoke(
+                cli_find,
+                ["https://www.comics.org/issue/12345/"],
+            )
+
+        assert result.exit_code == 0
+        mock_poll.assert_called_once()
+        call_kwargs = mock_poll.call_args.kwargs
+        assert call_kwargs["timeout"] == 180
 
     def test_cli_find_http_error(self, runner):
         """Test handling of HTTP errors."""

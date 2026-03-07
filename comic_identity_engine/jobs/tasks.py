@@ -50,12 +50,12 @@ from comic_identity_engine.database.repositories import (
     VariantRepository,
 )
 from comic_identity_engine.errors import (
+    DuplicateEntityError,
     NetworkError,
     ParseError,
     ResolutionError,
     ValidationError,
 )
-from comic_identity_engine.models import IssueCandidate
 from comic_identity_engine.services import (
     IdentityResolver,
     OperationsManager,
@@ -64,6 +64,55 @@ from comic_identity_engine.services import (
 )
 
 logger = structlog.get_logger(__name__)
+
+
+def _mapping_conflict_message(source: str, source_issue_id: str) -> str:
+    """Build a consistent user-facing message for source mapping conflicts."""
+    return (
+        "Existing external mapping points to a different canonical "
+        f"issue for {source}:{source_issue_id}; use --clear-mappings "
+        f"{source_issue_id} to replace it"
+    )
+
+
+async def _ensure_source_mapping(
+    mapping_repo: ExternalMappingRepository,
+    issue_id: uuid.UUID,
+    source: str,
+    source_issue_id: str,
+    source_series_id: str | None,
+) -> str:
+    """Ensure a source mapping exists and points at the resolved issue.
+
+    Returns:
+        "created" if a new mapping was inserted, "reused" if an existing mapping
+        already pointed at the same issue.
+
+    Raises:
+        ValidationError: If the existing mapping points at a different issue.
+    """
+    existing = await mapping_repo.find_by_source(source, source_issue_id)
+    if existing is not None:
+        if existing.issue_id == issue_id:
+            return "reused"
+        raise ValidationError(_mapping_conflict_message(source, source_issue_id))
+
+    try:
+        await mapping_repo.create_mapping(
+            issue_id=issue_id,
+            source=source,
+            source_issue_id=source_issue_id,
+            source_series_id=source_series_id,
+        )
+        return "created"
+    except DuplicateEntityError:
+        # Handle races against older workers or concurrent requests.
+        existing = await mapping_repo.find_by_source(source, source_issue_id)
+        if existing is not None and existing.issue_id == issue_id:
+            return "reused"
+        raise ValidationError(
+            _mapping_conflict_message(source, source_issue_id)
+        ) from None
 
 
 def get_adapter(platform: str) -> SourceAdapter:
@@ -105,6 +154,9 @@ async def resolve_identity_task(
     ctx: dict[str, Any],
     url: str,
     operation_id: str,
+    force: bool = False,
+    clear_mappings: str | None = None,
+    dry_run: bool = False,
 ) -> dict[str, Any]:
     """Resolve comic identity from a URL.
 
@@ -115,6 +167,9 @@ async def resolve_identity_task(
         ctx: ARQ context dictionary
         url: URL from a comic platform (GCD, LoCG, CCL, etc.)
         operation_id: UUID of the operation to track
+        force: Skip idempotency check and re-search even if mapping exists
+        clear_mappings: Delete all external mappings for this source_issue_id before searching
+        dry_run: Show what would happen without executing the search
 
     Returns:
         Dictionary with resolution results:
@@ -123,6 +178,7 @@ async def resolve_identity_task(
         - urls: Dictionary of platform URLs for the issue
         - created_new: True if a new issue was created
         - explanation: Human-readable resolution explanation
+        - dry_run: True if this was a dry run
 
     Raises:
         No exceptions raised - all errors are caught and operation marked as failed.
@@ -140,6 +196,7 @@ async def resolve_identity_task(
     """
     async with AsyncSessionLocal() as session:
         operation_uuid = None
+        parsed_url = None
         try:
             operation_uuid = uuid.UUID(operation_id)
             operations_manager = OperationsManager(session)
@@ -151,18 +208,67 @@ async def resolve_identity_task(
                 "Starting identity resolution task",
                 operation_id=operation_id,
                 url=url,
+                force=force,
+                clear_mappings=clear_mappings,
+                dry_run=dry_run,
             )
 
             parsed_url = parse_url(url)
             mapping_repo = ExternalMappingRepository(session)
             series_repo = SeriesRunRepository(session)
 
-            # Check for existing mapping first
-            existing = await mapping_repo.find_by_source(
-                parsed_url.platform,
-                parsed_url.source_issue_id,
-            )
-            if existing:
+            # Handle clear_mappings: delete all external mappings for this source_issue_id
+            if clear_mappings:
+                logger.info(
+                    "Clearing external mappings",
+                    operation_id=operation_id,
+                    source_issue_id=clear_mappings,
+                )
+                deleted_count = await mapping_repo.delete_by_source_issue_id(
+                    clear_mappings
+                )
+                logger.info(
+                    "Deleted external mappings",
+                    operation_id=operation_id,
+                    source_issue_id=clear_mappings,
+                    deleted_count=deleted_count,
+                )
+
+            # Handle dry_run: return what would happen without executing
+            if dry_run:
+                logger.info(
+                    "Dry run mode - returning without executing search",
+                    operation_id=operation_id,
+                    url=url,
+                )
+                result_dict = {
+                    "canonical_uuid": None,
+                    "confidence": 0.0,
+                    "platform_urls": {},
+                    "platform_status": {},
+                    "created_new": False,
+                    "explanation": f"DRY RUN: Would resolve URL {url}",
+                    "dry_run": True,
+                }
+                await operations_manager.mark_completed(operation_uuid, result_dict)
+                await session.commit()
+                return result_dict
+
+            # Check for existing mapping first (unless force is True)
+            existing = None
+            if not force:
+                existing = await mapping_repo.find_by_source(
+                    parsed_url.platform,
+                    parsed_url.source_issue_id,
+                )
+            else:
+                logger.info(
+                    "Force mode enabled, skipping existing mapping check",
+                    operation_id=operation_id,
+                    platform=parsed_url.platform,
+                    source_issue_id=parsed_url.source_issue_id,
+                )
+            if existing and not force:
                 logger.info(
                     "Found existing mapping",
                     operation_id=operation_id,
@@ -200,6 +306,7 @@ async def resolve_identity_task(
                             publisher=series.publisher,
                             operation_id=operation_uuid,
                             source_platform=parsed_url.platform,
+                            operations_manager=operations_manager,
                         )
                         cross_platform_urls = cross_platform_result.get("urls", {})
 
@@ -280,21 +387,32 @@ async def resolve_identity_task(
             cross_platform_urls = {}
             cross_platform_result = {"urls": {}, "status": {}}
             platform_status = {}
+            source_mapping_action = None
 
             if result.issue_id:
-                await mapping_repo.create_mapping(
+                source_mapping_action = await _ensure_source_mapping(
+                    mapping_repo=mapping_repo,
                     issue_id=result.issue_id,
                     source=parsed_url.platform,
                     source_issue_id=parsed_url.source_issue_id,
                     source_series_id=candidate.source_series_id,
                 )
-                logger.info(
-                    "Created external mapping",
-                    operation_id=operation_id,
-                    issue_id=str(result.issue_id),
-                    platform=parsed_url.platform,
-                    source_issue_id=parsed_url.source_issue_id,
-                )
+                if source_mapping_action == "created":
+                    logger.info(
+                        "Created external mapping",
+                        operation_id=operation_id,
+                        issue_id=str(result.issue_id),
+                        platform=parsed_url.platform,
+                        source_issue_id=parsed_url.source_issue_id,
+                    )
+                else:
+                    logger.info(
+                        "Reused existing external mapping",
+                        operation_id=operation_id,
+                        issue_id=str(result.issue_id),
+                        platform=parsed_url.platform,
+                        source_issue_id=parsed_url.source_issue_id,
+                    )
 
                 # Mark source platform as found since we just created a mapping for it
                 platform_status[parsed_url.platform] = "found"
@@ -316,6 +434,7 @@ async def resolve_identity_task(
                         publisher=None,
                         operation_id=operation_uuid,
                         source_platform=parsed_url.platform,
+                        operations_manager=operations_manager,
                     )
                     cross_platform_urls = cross_platform_result.get("urls", {})
 
@@ -371,6 +490,7 @@ async def resolve_identity_task(
                 "platform_status": platform_status if result.issue_id else {},
                 "created_new": result.created_new,
                 "explanation": result.explanation,
+                "source_mapping_action": source_mapping_action,
             }
 
             await operations_manager.mark_completed(operation_uuid, result_dict)
@@ -392,7 +512,12 @@ async def resolve_identity_task(
                 operation_id=operation_id,
                 error=error_msg,
             )
-            await _mark_failed_safe(session, operation_uuid, error_msg)
+            await _mark_failed_safe(
+                session,
+                operation_uuid,
+                error_msg,
+                result={"error_type": "parse_error", "input_url": url},
+            )
             await session.commit()
             return {"error": error_msg, "error_type": "parse_error"}
 
@@ -403,7 +528,12 @@ async def resolve_identity_task(
                 operation_id=operation_id,
                 error=error_msg,
             )
-            await _mark_failed_safe(session, operation_uuid, error_msg)
+            await _mark_failed_safe(
+                session,
+                operation_uuid,
+                error_msg,
+                result={"error_type": "not_found", "input_url": url},
+            )
             await session.commit()
             return {"error": error_msg, "error_type": "not_found"}
 
@@ -414,7 +544,12 @@ async def resolve_identity_task(
                 operation_id=operation_id,
                 error=error_msg,
             )
-            await _mark_failed_safe(session, operation_uuid, error_msg)
+            await _mark_failed_safe(
+                session,
+                operation_uuid,
+                error_msg,
+                result={"error_type": "network_error", "input_url": url},
+            )
             await session.commit()
             return {"error": error_msg, "error_type": "network_error"}
 
@@ -425,7 +560,12 @@ async def resolve_identity_task(
                 operation_id=operation_id,
                 error=error_msg,
             )
-            await _mark_failed_safe(session, operation_uuid, error_msg)
+            await _mark_failed_safe(
+                session,
+                operation_uuid,
+                error_msg,
+                result={"error_type": "platform_error", "input_url": url},
+            )
             await session.commit()
             return {"error": error_msg, "error_type": "platform_error"}
 
@@ -436,9 +576,43 @@ async def resolve_identity_task(
                 operation_id=operation_id,
                 error=error_msg,
             )
-            await _mark_failed_safe(session, operation_uuid, error_msg)
+            await _mark_failed_safe(
+                session,
+                operation_uuid,
+                error_msg,
+                result={"error_type": "platform_validation_error", "input_url": url},
+            )
             await session.commit()
             return {"error": error_msg, "error_type": "platform_validation_error"}
+
+        except ValidationError as e:
+            error_msg = f"Validation error during resolution: {e}"
+            failure_result: dict[str, Any] = {
+                "error_type": "validation_error",
+                "input_url": url,
+            }
+            if parsed_url is not None:
+                failure_result["source"] = parsed_url.platform
+                failure_result["source_issue_id"] = parsed_url.source_issue_id
+            if "use --clear-mappings" in str(e):
+                failure_result["hint"] = (
+                    "Retry with --clear-mappings to replace the existing mapping"
+                )
+            logger.error(
+                "Identity resolution task failed - validation error",
+                operation_id=operation_id,
+                error=error_msg,
+                source=getattr(parsed_url, "platform", None),
+                source_issue_id=getattr(parsed_url, "source_issue_id", None),
+            )
+            await _mark_failed_safe(
+                session,
+                operation_uuid,
+                error_msg,
+                result=failure_result,
+            )
+            await session.commit()
+            return {"error": error_msg, **failure_result}
 
         except ResolutionError as e:
             error_msg = f"Identity resolution failed: {e}"
@@ -447,7 +621,12 @@ async def resolve_identity_task(
                 operation_id=operation_id,
                 error=error_msg,
             )
-            await _mark_failed_safe(session, operation_uuid, error_msg)
+            await _mark_failed_safe(
+                session,
+                operation_uuid,
+                error_msg,
+                result={"error_type": "resolution_error", "input_url": url},
+            )
             await session.commit()
             return {"error": error_msg, "error_type": "resolution_error"}
 
@@ -458,7 +637,12 @@ async def resolve_identity_task(
                 operation_id=operation_id,
                 error=error_msg,
             )
-            await _mark_failed_safe(session, operation_uuid, error_msg)
+            await _mark_failed_safe(
+                session,
+                operation_uuid,
+                error_msg,
+                result={"error_type": "database_error", "input_url": url},
+            )
             await session.commit()
             return {"error": error_msg, "error_type": "database_error"}
 
@@ -471,7 +655,16 @@ async def resolve_identity_task(
                 error_type=type(e).__name__,
             )
             if operation_uuid:
-                await _mark_failed_safe(session, operation_uuid, error_msg)
+                await _mark_failed_safe(
+                    session,
+                    operation_uuid,
+                    error_msg,
+                    result={
+                        "error_type": "unexpected_error",
+                        "exception_type": type(e).__name__,
+                        "input_url": url,
+                    },
+                )
                 await session.commit()
             return {"error": error_msg, "error_type": "unexpected_error"}
 
@@ -1132,6 +1325,7 @@ async def _mark_failed_safe(
     session: Any,
     operation_id: uuid.UUID,
     error_message: str,
+    result: dict[str, Any] | None = None,
 ) -> None:
     """Safely mark an operation as failed, handling any errors.
 
@@ -1142,10 +1336,16 @@ async def _mark_failed_safe(
         session: Database session
         operation_id: UUID of the operation
         error_message: Error message to store
+        result: Optional structured context to persist alongside the failure
     """
     try:
         operations_manager = OperationsManager(session)
-        await operations_manager.mark_failed(operation_id, error_message)
+        await operations_manager.update_operation(
+            operation_id,
+            "failed",
+            result=result,
+            error_message=error_message,
+        )
     except Exception as e:
         logger.error(
             "Failed to mark operation as failed",

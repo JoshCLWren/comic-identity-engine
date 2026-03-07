@@ -29,6 +29,9 @@ class ResolveIdentityRequest(BaseModel):
 
     Attributes:
         url: URL to a comic issue on any supported platform
+        force: Skip existing mapping cache and always fetch from platform
+        clear_mappings: Delete all external mappings for this source_issue_id before searching
+        dry_run: Show what would happen without executing the search
     """
 
     model_config = ConfigDict(
@@ -48,6 +51,21 @@ class ResolveIdentityRequest(BaseModel):
         ...,
         description="URL to a comic issue on any supported platform (GCD, LoCG, CCL, CLZ, AA, CPG, HipComic)",
         examples=["https://www.comics.org/issue/12345/"],
+    )
+    force: bool = Field(
+        default=False,
+        description="Skip existing mapping cache and always fetch from platform (for debugging)",
+        examples=[False],
+    )
+    clear_mappings: Optional[str] = Field(
+        default=None,
+        description="Delete all external mappings for this source_issue_id before searching",
+        examples=[None],
+    )
+    dry_run: bool = Field(
+        default=False,
+        description="Show what would happen without executing the search",
+        examples=[False],
     )
 
 

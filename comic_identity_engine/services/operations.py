@@ -68,12 +68,14 @@ class OperationsManager:
         self,
         operation_type: str,
         input_data: Optional[dict[str, Any]] = None,
+        force: bool = False,
     ) -> Operation:
         """Create a new async operation.
 
         Args:
             operation_type: Type of operation (resolve, bulk_resolve, import_clz, etc.)
             input_data: Optional input data for idempotency check
+            force: If True, bypass idempotency check and create a new operation
 
         Returns:
             Created Operation entity
@@ -99,7 +101,7 @@ class OperationsManager:
             else None
         )
 
-        if idempotency_key:
+        if idempotency_key and not force:
             existing = await self.operation_repo.find_by_input_hash(idempotency_key)
             if existing:
                 logger.info(
@@ -162,7 +164,14 @@ class OperationsManager:
         if not operation:
             raise ValueError(f"Operation not found: {operation_id}")
 
-        self._validate_status_transition(operation.status, status)
+        is_progress_update = (
+            operation.status == status
+            and status == "running"
+            and (result is not None or error_message is not None)
+        )
+
+        if not is_progress_update:
+            self._validate_status_transition(operation.status, status)
 
         updated = await self.operation_repo.update_status(
             operation,

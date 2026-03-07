@@ -33,8 +33,8 @@ source ~/.bashrc
 ## What You Get
 
 ### Aliases
-- `pytest` → `uv run pytest` (runs tests in project environment)
-- `py` → `uv run python` (runs Python in project environment)
+- `pytest` → project `.venv/bin/pytest`
+- `py` → project `.venv/bin/python`
 - `cie` → `cd` to project root
 
 ### Helper Functions
@@ -102,4 +102,4 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 Install direnv or remove the direnv hook from the shell config.
 
 ### Environment not loading
-Make sure you've run `uv sync` at least once to create the `.venv`.
+Run `uv sync` once from the project root, then re-enter the directory so direnv can attach the local `.venv`.

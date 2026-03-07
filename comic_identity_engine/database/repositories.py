@@ -18,7 +18,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Select, select, exc as sqlalchemy_exc
+from sqlalchemy import Delete, Select, delete, exc as sqlalchemy_exc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -556,6 +556,24 @@ class ExternalMappingRepository:
         )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
+
+    async def delete_by_source_issue_id(
+        self,
+        source_issue_id: str,
+    ) -> int:
+        """Delete all external mappings for a given source_issue_id.
+
+        Args:
+            source_issue_id: Issue ID on the source platform
+
+        Returns:
+            Number of mappings deleted
+        """
+        stmt: Delete[ExternalMapping] = delete(ExternalMapping).where(
+            ExternalMapping.source_issue_id == source_issue_id
+        )
+        result = await self.session.execute(stmt)
+        return result.rowcount
 
 
 class OperationRepository:
