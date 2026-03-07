@@ -1,227 +1,595 @@
-# Cross-Platform Search Implementation
+# ⚠️ CROSS-PLATFORM SEARCH - READ THIS BEFORE MODIFYING ⚠️
 
-## Summary
+## 🚨 CRITICAL: DO NOT SKIP THIS DOCUMENT 🚨
 
-Successfully integrated cross-platform search functionality into the Comic Identity Engine. When a user provides **ONE URL** from any platform, the system now **automatically searches for the same comic on other platforms** and returns URLs for ALL platforms where found.
+**IF YOU ARE MODIFYING CROSS-PLATFORM SEARCH CODE, YOU MUST READ THIS ENTIRE DOCUMENT.**
 
-## What Was Implemented
+**EVERY. SINGLE. WORD.**
 
-### 1. Dependencies Added (`pyproject.toml`)
-- Added `comic-web-scrapers` as a local dependency
-- Enabled direct references for local package development
-- Added required packages: `beautifulsoup4`, `aiohttp` (via scrapers)
+---
 
-### 2. Core Search Method (`IdentityResolver`)
+## THE PROBLEM (WHY WE'RE HERE)
 
-**New Method: `search_cross_platform()`** (lines 527-591 in `identity_resolver.py`)
-
-```python
-async def search_cross_platform(
-    self,
-    issue_id: uuid.UUID,
-    series_title: str,
-    issue_number: str,
-    year: Optional[int] = None,
-    publisher: Optional[str] = None,
-    skip_platform: Optional[str] = None,
-) -> Dict[str, str]
+### What Users Expect
+```
+User runs: cie-find "https://www.comics.org/issue/12345/"
+Expected: Search ALL platforms thoroughly, show real-time progress, complete when done
+Actual (BEFORE FIX): Searched once per platform, marked "not_found" immediately
 ```
 
-**Features:**
-- Searches AA, CCL, and HIP platforms (skips source platform)
-- Creates external mappings for found comics
-- Returns dictionary of platform URLs
-- Gracefully handles search failures per platform
+### Why Current Code Fails
 
-### 3. Platform-Specific Search (`_search_single_platform()`)
-
-**Helper Method** (lines 593-652 in `identity_resolver.py`)
-
-**Flow:**
-1. Gets scraper instance for platform
-2. Initializes scraper
-3. Creates search dict with: title, issue, year, publisher
-4. Calls `scraper.search_comic(comic_dict)`
-5. Selects best listing from results
-6. Extracts `source_issue_id` and `source_series_id` from URL
-7. Creates external mapping in database
-8. Returns platform URL
-
-### 4. URL ID Extraction (`_extract_ids_from_url()`)
-
-**Regex-based ID extraction** (lines 688-732 in `identity_resolver.py`)
-
-**Platform URL Patterns:**
-- **Atomic Avenue**: `/item/{source_issue_id}/1/details`
-- **CCL**: `/issue/{source_series_id}/{source_issue_id}`
-- **HIP**: `/comic/{source_series_id}/{source_issue_id}/`
-
-### 5. Task Integration (`tasks.py`)
-
-**Modified `resolve_identity_task()`** to call cross-platform search:
-
-**After line 209** (new mapping created):
+**WRONG APPROACH (DO NOT DO THIS):**
 ```python
-# Cross-platform search: find this issue on other platforms
-cross_platform_urls = await resolver.search_cross_platform(
-    issue_id=result.issue_id,
-    series_title=candidate.series_title,
-    issue_number=candidate.issue_number,
-    year=candidate.cover_date.year if candidate.cover_date else None,
-    publisher=None,
-    skip_platform=parsed_url.platform,
+# ❌ BAD: Search once, give up immediately
+for platform in platforms:
+    result = search_comic(title, issue, year, publisher)
+    if result.found:
+        status = "found"
+    else:
+        status = "not_found"  # ← WRONG! Gives up too soon!
+```
+
+**WHY THIS FAILS:**
+1. Network errors happen (timeouts, rate limits)
+2. Platforms have different search capabilities
+3. Issue number formats vary ("1" vs "01" vs "#1" vs "1A")
+4. Title formats vary ("X-Men (1991)" vs "X-Men" vs "Xmen")
+5. Some platforms fail without year, some fail with year
+6. Single query attempt = high false negative rate
+
+---
+
+## THE SOLUTION (WHAT YOU MUST IMPLEMENT)
+
+### Core Requirements (NON-NEGOTIABLE)
+
+1. ✅ **Search ALL platforms** - gcd, locg, aa, ccl, cpg, hip (NO skipping!)
+2. ✅ **Multiple strategies per platform** - exact, no_year, normalized, fuzzy, etc.
+3. ✅ **Retry with exponential backoff** - 2-3 retries per strategy
+4. ✅ **Real-time status updates** - user sees "searching_retry_1" while working
+5. ✅ **Parallel execution** - search all platforms concurrently for speed
+6. ✅ **Platform-specific configs** - different retry counts for different platforms
+7. ✅ **Max 2 minutes per platform** - timeout if taking too long
+8. ✅ **Max 5 minutes total operation** - fail-safe timeout
+9. ✅ **Create mappings immediately** - don't wait for all platforms to finish
+10. ✅ **Only mark "not_found" after ALL strategies exhausted** - not after first failure
+
+### Search Strategies (REQUIRED - IN ORDER)
+
+For each platform, try these strategies in sequence:
+
+```python
+STRATEGIES = [
+    "exact",              # Try exact match first
+    "no_year",            # Drop year (many platforms better without it)
+    "normalized_title",   # Normalize: "X-Men (1991)" → "x-men"
+    "fuzzy_title",        # Use jellyfish.jaro_winkler_similarity ≥0.85
+    "alt_issue_format",   # Try "1" → "01", "#1" → "1"
+    "simplified_tokens",  # Tokenize: "Amazing Spider-Man" → "amazing spiderman"
+]
+```
+
+**For each strategy:**
+- Retry 2-3 times with exponential backoff (1s, 2s, 4s)
+- Update operation status after each attempt
+- Only move to next strategy if all retries fail
+- Only mark "not_found" after all strategies exhausted
+
+---
+
+## PLATFORM-SPECIFIC CONFIGURATIONS
+
+### USE THESE EXACT CONFIGS (DO NOT MODIFY WITHOUT REASON)
+
+```python
+PLATFORM_SEARCH_CONFIG = {
+    "gcd": {
+        "max_retries": 2,
+        "max_duration_sec": 60,
+        "strategies": ["exact", "no_year", "normalized_title"],
+        "retry_delay_sec": 1,
+        "notes": "Excellent search, authoritative source"
+    },
+    "locg": {
+        "max_retries": 3,
+        "max_duration_sec": 90,
+        "strategies": ["exact", "no_year", "normalized_title", "fuzzy_title"],
+        "retry_delay_sec": 2,
+        "notes": "Good search but rate limited - need backoff"
+    },
+    "aa": {
+        "max_retries": 3,
+        "max_duration_sec": 120,
+        "strategies": ["exact", "no_year", "normalized_title", "fuzzy_title", "simplified_tokens"],
+        "retry_delay_sec": 2,
+        "notes": "Finicky HTML parsing, needs multiple strategies"
+    },
+    "ccl": {
+        "max_retries": 3,
+        "max_duration_sec": 120,
+        "strategies": ["exact", "no_year", "normalized_title", "fuzzy_title", "alt_issue_format"],
+        "retry_delay_sec": 2,
+        "notes": "Requires session cookies, session issues common"
+    },
+    "cpg": {
+        "max_retries": 2,
+        "max_duration_sec": 60,
+        "strategies": ["exact", "no_year"],
+        "retry_delay_sec": 1,
+        "notes": "Poor search functionality, don't waste time"
+    },
+    "hip": {
+        "max_retries": 2,
+        "max_duration_sec": 90,
+        "strategies": ["exact", "no_year", "normalized_title", "fuzzy_title"],
+        "retry_delay_sec": 2,
+        "notes": "Occasional timeouts, needs retries"
+    },
+}
+```
+
+---
+
+## REAL-TIME STATUS UPDATES
+
+### Status Values (USE THESE EXACT VALUES)
+
+```python
+# While searching
+"searching"              # Initial search
+"searching_exact"        # Trying exact match
+"searching_no_year"      # Trying without year
+"searching_normalized"   # Trying normalized title
+"searching_fuzzy"        # Trying fuzzy match
+"searching_retry_1"      # First retry
+"searching_retry_2"      # Second retry
+"searching_retry_3"      # Third retry
+
+# Final states
+"found"                  # Successfully found
+"not_found"              # All strategies exhausted (NOT after first failure!)
+"failed"                 # Error after all retries
+```
+
+### How to Update Status
+
+```python
+# After EACH strategy attempt, update operation metadata
+await operations_manager.update_operation(
+    operation_id=operation_id,
+    status="running",  # Still running!
+    result={
+        "platform_status": {
+            "gcd": "found",
+            "locg": "searching_fuzzy",
+            "aa": "searching_retry_2",
+            "ccl": "searching_normalized",
+            "cpg": "not_found",  # Only after exhausting strategies!
+            "hip": "searching",
+        }
+    }
 )
 ```
 
-**For existing mappings** (around line 150):
-- Also performs cross-platform search
-- Uses series title and issue number from database
-- Ensures even previously resolved issues get cross-platform updates
+---
 
-## How It Works
+## IMPLEMENTATION PATTERNS (USE THESE)
 
-### Example Flow: User provides CCL URL
-
-```
-1. User submits: https://www.comiccollectorlive.com/issue/xxx/123
-
-2. System parses URL → platform="ccl", source_issue_id="123"
-
-3. Fetches issue from CCL → gets metadata:
-   - series_title: "X-Men"
-   - issue_number: "1"
-   - cover_date: 1963-09-01
-   - publisher: "Marvel"
-
-4. Resolves to canonical issue_id (existing or new)
-
-5. Creates external mapping for CCL
-
-6. 🔥 NEW: Cross-platform search:
-   - Search AA with: {title: "X-Men", issue: "1", year: 1963}
-   - Search HIP with: {title: "X-Men", issue: "1", year: 1963}
-   - Skip CCL (source platform)
-
-7. For each found platform:
-   - Extract source_issue_id from listing URL
-   - Create external mapping
-   - Add to results dict
-
-8. Build URLs for ALL platforms (from database)
-
-9. Return complete dict:
-   {
-     "ccl": "https://www.comiccollectorlive.com/issue/xxx/123",
-     "aa": "https://atomicavenue.com/atomic/item/456/1/details",
-     "hip": "https://www.hipcomic.com/price-guide/us/marvel/comic/789/012/",
-     "gcd": "",  # Not found yet
-     "locg": "",  # Not searched (no scraper)
-     "cpg": ""   # Not searched (no scraper)
-   }
-```
-
-## Scraper Integration
-
-All three scrapers share the **same interface**:
+### Pattern 1: Parallel Search with asyncio.gather()
 
 ```python
-result = await scraper.search_comic({
-    "title": "X-Men",
-    "issue": "1",
-    "year": 1963,
-    "publisher": "Marvel",
-})
+async def search_all_platforms(self, ...):
+    """Search all platforms in parallel."""
+    all_platforms = ["gcd", "locg", "aa", "ccl", "cpg", "hip"]
+
+    # Create tasks for all platforms
+    tasks = {}
+    for platform in all_platforms:
+        task = self._search_single_platform_with_strategies(platform, ...)
+        tasks[platform] = task
+
+    # Execute in parallel (NOT sequential!)
+    results = await asyncio.gather(*tasks.values(), return_exceptions=True)
+
+    # Process results
+    for platform, result in zip(tasks.keys(), results):
+        if isinstance(result, Exception):
+            platform_status[platform] = "failed"
+        elif result:
+            platform_status[platform] = "found"
+        else:
+            platform_status[platform] = "not_found"
 ```
 
-**Returns `SearchResult` with:**
-- `listings`: List of found listings
-- Each listing has `url` to the comic
-- URLs are parsed to extract `source_issue_id`
+### Pattern 2: Single Platform with Strategies
 
-## Search Method Details
+```python
+async def _search_single_platform_with_strategies(self, platform, ...):
+    """Search one platform with multiple strategies and retries."""
+    config = PLATFORM_SEARCH_CONFIG[platform]
 
-### Atomic Avenue Scraper
-- **Search URL**: `/atomic/SearchIssues.aspx?XT=1&M=1&T={title}&I={issue}`
-- **Listing extraction**: Parses search results and issue pages
-- **Year filtering**: Uses year to select best series match
+    # Try each strategy in order
+    for strategy in config["strategies"]:
+        # Update status
+        await self._update_platform_status(operation_id, platform, f"searching_{strategy}")
 
-### CCL HTTP Scraper
-- **Search**: Two-phase (title search → series navigation)
-- **Authentication**: Requires cookies (empty dict for search)
-- **Series matching**: Selects series by year match
+        # Retry with exponential backoff
+        for attempt in range(config["max_retries"]):
+            try:
+                result = await self._execute_strategy(scraper, strategy, ...)
 
-### HIP Scraper
-- **Search URL**: `/category/comic-books/100/?keywords={title} {issue} {year}`
-- **Pagination**: Handles multiple pages
-- **Validation**: Filters by year and issue number
+                if result and result.has_results:
+                    # FOUND! Create mapping immediately
+                    url = await self._create_mapping(platform, issue_id, result)
+                    return url
 
-## GCD Integration
+                # No results - retry if not last attempt
+                if attempt < config["max_retries"] - 1:
+                    await self._update_platform_status(operation_id, platform, f"searching_retry_{attempt + 1}")
+                    await asyncio.sleep(config["retry_delay_sec"] * (2 ** attempt))
 
-**Status**: API available but not yet integrated
+            except NetworkError:
+                if attempt < config["max_retries"] - 1:
+                    await asyncio.sleep(config["retry_delay_sec"] * (2 ** attempt))
+                else:
+                    raise
 
-**GCD API** (https://www.comics.org/api/):
-- `/api/series/` - Series list with name, year_began, year_ended
-- `/api/issue/{id}/` - Issue details
-- Can search by series name, then find issue by number
-
-**Future Enhancement**: Add GCD search to cross-platform search
-
-## Testing
-
-Created `tests/test_cross_platform_search.py` with:
-
-1. **`test_cross_platform_search_with_mock_scrapers()`**
-   - Tests full flow with mocked scrapers
-   - Verifies external mapping creation
-   - Validates URL extraction
-
-2. **`test_extract_ids_from_url()`**
-   - Tests URL parsing for AA, CCL, HIP
-   - Validates regex extraction
-   - Tests invalid URLs
-
-3. **`test_select_best_listing()`**
-   - Tests listing selection logic
-   - Handles empty results
-   - Tests URL prioritization
-
-## Error Handling
-
-**Graceful degradation:**
-- If scraper fails to import → log warning, continue
-- If search fails → log warning, try next platform
-- If ID extraction fails → log warning, don't create mapping
-- If create_mapping fails → log error, continue
-
-**No exceptions propagated** from cross-platform search:
-- Original resolution continues even if search fails
-- Results include whatever platforms were found
-- Errors logged with appropriate level
-
-## Configuration
-
-**Local Development:**
-```toml
-"comic-web-scrapers @ file:///mnt/extra/josh/code/comic-web-scrapers"
+    # All strategies exhausted
+    return None
 ```
 
-**Production:**
-```toml
-"comic-web-scrapers @ git+https://github.com/anomalyco/comic-web-scrapers.git"
+### Pattern 3: Strategy Execution
+
+```python
+async def _execute_strategy(self, scraper, strategy, title, issue, year, publisher):
+    """Execute a single search strategy."""
+
+    if strategy == "exact":
+        return await scraper.search_comic(title, issue, year, publisher)
+
+    elif strategy == "no_year":
+        return await scraper.search_comic(title, issue, None, publisher)
+
+    elif strategy == "normalized_title":
+        normalized = self._normalize_series_name(title)
+        return await scraper.search_comic(normalized, issue, year, publisher)
+
+    elif strategy == "fuzzy_title":
+        # Use jellyfish.jaro_winkler_similarity with 0.85 threshold
+        return await self._fuzzy_search(scraper, title, issue, year, publisher)
+
+    elif strategy == "alt_issue_format":
+        # Try "1" → "01", "#1" → "1"
+        alt_formats = self._get_alternate_issue_formats(issue)
+        for alt_issue in alt_formats:
+            result = await scraper.search_comic(title, alt_issue, year, publisher)
+            if result and result.has_results:
+                return result
+        return None
+
+    elif strategy == "simplified_tokens":
+        # Use tokenize() from comics_backend/search_utils.py
+        tokens = tokenize(title)
+        simplified = " ".join(tokens)
+        return await scraper.search_comic(simplified, issue, year, publisher)
 ```
 
-## Success Criteria ✓
+---
 
-✅ **User gives ONE URL** (e.g., CCL)
-✅ **System searches other platforms** (AA, HIP)
-✅ **Returns URLs for ALL platforms** where found
-✅ **Creates external mappings** for future lookups
-✅ **Not just "found existing mapping"** but actually searches
+## HELPER FUNCTIONS TO REUSE
 
-## Next Steps
+### From IMPLEMENTATION_PLAN.md (lines 576-594)
 
-1. **Add GCD search**: Use GCD API for series/issue lookup
-2. **Add LoCG/CPG scrapers**: Implement search methods
-3. **Performance optimization**: Parallel platform searches
-4. **Confidence scoring**: Rank results by match quality
-5. **Caching**: Cache search results to avoid duplicate searches
+```python
+def _normalize_series_name(self, name: str) -> str:
+    """Normalize series name for fuzzy matching."""
+    import re
+
+    name = name.lower().strip()
+    name = re.sub(r'\s+', ' ', name)  # Normalize whitespace
+    name = re.sub(r'\(.*?\)', '', name)  # Remove parentheticals
+    name = re.sub(r'vol\.?\s*\d+', '', name)  # Remove volume numbers
+    name = name.strip()
+
+    return name
+```
+
+### From comics_backend/app/routers/library/search_utils.py
+
+```python
+def tokenize(text: str) -> list[str]:
+    """Break a string into lowercase alphanumeric tokens."""
+    import re
+    _TOKEN_RE = re.compile(r"[0-9a-zA-Z]+")
+    return [token for token in _TOKEN_RE.findall(text.lower()) if token]
+```
+
+### Jellyfish Fuzzy Matching
+
+```python
+import jellyfish
+
+async def _fuzzy_search(self, scraper, title, issue, year, publisher):
+    """Fuzzy search using Jaro-Winkler similarity."""
+
+    # Get broad results
+    broad_result = await scraper.search_comic(title, None, year, publisher)
+
+    if not broad_result or not broad_result.has_results:
+        return None
+
+    # Find best match
+    best_match = None
+    best_score = 0.0
+    normalized_issue = self._normalize_issue(issue)
+
+    for listing in broad_result.listings:
+        listing_issue = self._normalize_issue(listing.issue)
+        score = jellyfish.jaro_winkler_similarity(normalized_issue, listing_issue)
+
+        if score > best_score and score >= 0.85:
+            best_match = listing
+            best_score = score
+
+    if best_match:
+        return SearchResult(has_results=True, listings=[best_match])
+    return None
+```
+
+---
+
+## ISSUE NUMBER COMPLEXITY (WHY STRATEGIES NEEDED)
+
+### Issue Numbers Found in Wild
+
+```
+Simple (LOW complexity):
+- "1", "2", "100"
+
+Medium (MEDIUM complexity):
+- "1A", "1B", "1*"
+- "1/2", "1/3"
+- "#1", "#2"
+
+High (HIGH complexity):
+- "-1", "-2" (negative issues)
+- "0.5", "0.3" (decimals)
+- "1,000,000" (with commas)
+
+Very High (VERY HIGH complexity):
+- "1α", "1β" (Greek letters)
+- "1/DP", "1/RC" (variant codes)
+- "1/Director's Cut" (suffixes)
+- "1†" (special symbols)
+```
+
+### Why This Matters
+
+```python
+# These should match but won't without normalization:
+search_comic(title="X-Men", issue="1")
+    vs
+search_comic(title="X-Men", issue="#1")
+    vs
+search_comic(title="X-Men", issue="01")
+    vs
+search_comic(title="X-Men", issue="1A")
+```
+
+**Solution:** Try multiple issue formats in `alt_issue_format` strategy.
+
+---
+
+## COMMON MISTAKES (DO NOT DO THESE)
+
+### ❌ MISTAKE 1: Searching Once Per Platform
+
+```python
+# WRONG
+result = await search_comic(title, issue, year, publisher)
+if not result:
+    status = "not_found"  # WRONG! Too soon!
+```
+
+**CORRECT:**
+```python
+# RIGHT
+for strategy in strategies:
+    for retry in range(max_retries):
+        result = await search_with_strategy(strategy, ...)
+        if result:
+            return "found"
+        await asyncio.sleep(backoff)
+return "not_found"  # Only after all strategies exhausted
+```
+
+---
+
+### ❌ MISTAKE 2: Sequential Instead of Parallel
+
+```python
+# WRONG - Slow!
+for platform in platforms:
+    result = await search_platform(platform)  # Blocks on each platform
+```
+
+**CORRECT:**
+```python
+# RIGHT - Fast!
+tasks = [search_platform(p) for p in platforms]
+results = await asyncio.gather(*tasks)  # All in parallel
+```
+
+---
+
+### ❌ MISTAKE 3: Not Updating Status
+
+```python
+# WRONG - User sees nothing until done
+result = await search_with_all_strategies(...)
+return result
+```
+
+**CORRECT:**
+```python
+# RIGHT - User sees progress
+for strategy in strategies:
+    await update_status(operation_id, platform, f"searching_{strategy}")
+    result = await search_with_strategy(strategy, ...)
+    if result:
+        return result
+```
+
+---
+
+### ❌ MISTAKE 4: Skipping Platforms
+
+```python
+# WRONG - Skipping source platform
+if platform == source_platform:
+    continue  # DON'T SKIP!
+```
+
+**CORRECT:**
+```python
+# RIGHT - Mark source as found
+platform_status[source_platform] = "found"
+```
+
+---
+
+### ❌ MISTAKE 5: Creating Mappings Too Late
+
+```python
+# WRONG - Wait until all platforms done
+results = await search_all_platforms()
+for platform, url in results.items():
+    await create_mapping(platform, url)
+```
+
+**CORRECT:**
+```python
+# RIGHT - Create immediately when found
+async def search_platform():
+    url = await search_with_strategies(...)
+    if url:
+        await create_mapping(platform, url)  # Create now!
+        return url
+```
+
+---
+
+### ❌ MISTAKE 6: Not Handling Network Errors
+
+```python
+# WRONG - Network error = not_found
+try:
+    result = await search_comic(...)
+except NetworkError:
+    return None  # WRONG! Should retry
+```
+
+**CORRECT:**
+```python
+# RIGHT - Retry with backoff
+for attempt in range(max_retries):
+    try:
+        result = await search_comic(...)
+        if result:
+            return result
+    except NetworkError:
+        if attempt < max_retries - 1:
+            await asyncio.sleep(backoff_time)
+        else:
+            raise
+```
+
+---
+
+### ❌ MISTAKE 7: Using Wrong Issue Number Format
+
+```python
+# WRONG - Searching with wrong format
+await search_comic(title="X-Men", issue="1A")
+    # Platform has "X-Men #1" without variant
+    # No match!
+```
+
+**CORRECT:**
+```python
+# RIGHT - Try multiple formats
+formats = ["1", "01", "#1", "1A"]
+for fmt in formats:
+    result = await search_comic(title="X-Men", issue=fmt)
+    if result:
+        return result
+```
+
+---
+
+## TESTING CHECKLIST
+
+Before marking as done, verify:
+
+- [ ] All 6 platforms searched (gcd, locg, aa, ccl, cpg, hip)
+- [ ] Multiple strategies attempted per platform
+- [ ] Retries with exponential backoff working
+- [ ] Real-time status updates visible in CLI
+- [ ] Parallel execution (not sequential)
+- [ ] Platform-specific configs used
+- [ ] Source platform marked as "found" immediately
+- [ ] "not_found" only after all strategies exhausted
+- [ ] Mappings created immediately when found
+- [ ] Timeout after 2 min per platform
+- [ ] Timeout after 5 min total operation
+- [ ] Network errors trigger retries
+- [ ] Fuzzy matching with 0.85 threshold
+- [ ] Title normalization working
+- [ ] Issue format variants tried
+
+---
+
+## FILES TO MODIFY
+
+### NEW FILES
+- `comic_identity_engine/services/platform_searcher.py` (500 lines)
+- `tests/test_platform_searcher.py` (300 lines)
+
+### MODIFY FILES
+- `comic_identity_engine/jobs/tasks.py` - Replace search_cross_platform() call
+- `comic_identity_engine/cli/main.py` - Show intermediate statuses
+
+### DO NOT MODIFY
+- `comic_identity_engine/services/identity_resolver.py` - Keep resolve_issue() as-is
+- Scrapers in comic-search-lib - They're fine
+
+---
+
+## REFERENCES (READ THESE)
+
+**Must Read:**
+1. `IMPLEMENTATION_PLAN.md` lines 363-595 - Identity resolution algorithm
+2. `examples/research/issue-suffix-research.md` - Issue number complexity
+3. `examples/COMPARISON.md` - Cross-platform differences
+4. `/mnt/extra/josh/code/comics_backend/app/routers/library/search_utils.py` - Fuzzy matching utilities
+
+**Optional Reading:**
+5. `/mnt/extra/josh/code/comic_matcher/` - Specialized entity resolution library
+6. `examples/research/research-issue-zero-handling.md` - Issue #0 handling
+
+---
+
+## FINAL WARNING
+
+**IF YOU IMPLEMENT CROSS-PLATFORM SEARCH WITHOUT READING THIS DOCUMENT:**
+
+1. Users WILL complain that platforms are "not_found" when they actually exist
+2. The search WILL be slow (sequential instead of parallel)
+3. Network errors WILL cause false negatives
+4. You WILL have to rewrite it
+5. You WILL waste the user's money on AI credits
+
+**READ THE DOCUMENT. FOLLOW THE PATTERNS. USE THE CONFIGS.**
+
+**END OF DOCUMENT**

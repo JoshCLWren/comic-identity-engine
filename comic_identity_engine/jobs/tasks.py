@@ -187,41 +187,44 @@ async def resolve_identity_task(
 
                 if issue and series:
                     try:
-                        cross_platform_result = await resolver.search_cross_platform(
-                            issue_id=existing.issue_id,
-                            series_title=series.title,
-                            issue_number=issue.issue_number,
-                            year=issue.cover_date.year if issue.cover_date else None,
-                            publisher=series.publisher,
-                        )
-                        cross_platform_urls = cross_platform_result.get("urls", {})
-                        logger.debug(
-                            "Cross-platform search raw result",
-                            operation_id=operation_id,
-                            result=cross_platform_result,
-                        )
+                         from comic_identity_engine.services.platform_searcher import (
+                             PlatformSearcher,
+                         )
 
-                        # Merge platform_status - source platform stays "found"
-                        for platform, status in cross_platform_result.get(
-                            "status", {}
-                        ).items():
-                            if platform not in platform_status:
-                                platform_status[platform] = status
-                        logger.info(
-                            "Cross-platform search completed",
-                            operation_id=operation_id,
-                            issue_id=str(existing.issue_id),
-                            found_platforms=list(cross_platform_urls.keys()),
-                            platform_status=cross_platform_result.get("status", {}),
-                        )
-                    except Exception as e:
-                        logger.warning(
-                            "Cross-platform search failed, continuing without it",
-                            operation_id=operation_id,
-                            issue_id=str(existing.issue_id),
-                            error=str(e),
-                        )
-                        cross_platform_urls = {}
+                         searcher = PlatformSearcher(session)
+                         cross_platform_result = await searcher.search_all_platforms(
+                             issue_id=existing.issue_id,
+                             series_title=series.title,
+                             issue_number=issue.issue_number,
+                             year=issue.cover_date.year if issue.cover_date else None,
+                             publisher=series.publisher,
+                             operation_id=operation_uuid,
+                             source_platform=parsed_url.platform,
+                         )
+                         cross_platform_urls = cross_platform_result.get("urls", {})
+
+                         # Merge platform_status - source platform stays "found"
+                         for platform, status in cross_platform_result.get(
+                             "status", {}
+                         ).items():
+                             if platform not in platform_status:
+                                 platform_status[platform] = status
+
+                         logger.info(
+                             "Cross-platform search completed",
+                             operation_id=operation_id,
+                             issue_id=str(existing.issue_id),
+                             found_platforms=list(cross_platform_urls.keys()),
+                             platform_status=cross_platform_result.get("status", {}),
+                         )
+                     except Exception as e:
+                         logger.warning(
+                             "Cross-platform search failed, continuing without it",
+                             operation_id=operation_id,
+                             issue_id=str(existing.issue_id),
+                             error=str(e),
+                         )
+                         cross_platform_urls = {}
 
                 urls = cross_platform_urls.copy()
                 existing_mappings_urls = await build_urls(
@@ -296,8 +299,14 @@ async def resolve_identity_task(
                 # Mark source platform as found since we just created a mapping for it
                 platform_status[parsed_url.platform] = "found"
 
+                # Cross-platform search: find this issue on other platforms
                 try:
-                    cross_platform_result = await resolver.search_cross_platform(
+                    from comic_identity_engine.services.platform_searcher import (
+                        PlatformSearcher,
+                    )
+
+                    searcher = PlatformSearcher(session)
+                    cross_platform_result = await searcher.search_all_platforms(
                         issue_id=result.issue_id,
                         series_title=candidate.series_title,
                         issue_number=candidate.issue_number,
@@ -305,6 +314,8 @@ async def resolve_identity_task(
                         if candidate.cover_date
                         else None,
                         publisher=None,
+                        operation_id=operation_uuid,
+                        source_platform=parsed_url.platform,
                     )
                     cross_platform_urls = cross_platform_result.get("urls", {})
 
@@ -314,6 +325,7 @@ async def resolve_identity_task(
                     ).items():
                         if platform not in platform_status:
                             platform_status[platform] = status
+
                     logger.info(
                         "Cross-platform search completed",
                         operation_id=operation_id,
