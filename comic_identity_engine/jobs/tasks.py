@@ -180,21 +180,39 @@ async def resolve_identity_task(
                 )
 
                 cross_platform_urls = {}
+                platform_status = {}
+
+                # Mark source platform as found since we have a mapping for it
+                platform_status[parsed_url.platform] = "found"
+
                 if issue and series:
                     try:
-                        cross_platform_urls = await resolver.search_cross_platform(
+                        cross_platform_result = await resolver.search_cross_platform(
                             issue_id=existing.issue_id,
                             series_title=series.title,
                             issue_number=issue.issue_number,
                             year=issue.cover_date.year if issue.cover_date else None,
                             publisher=series.publisher,
-                            skip_platform=parsed_url.platform,
                         )
+                        cross_platform_urls = cross_platform_result.get("urls", {})
+                        logger.debug(
+                            "Cross-platform search raw result",
+                            operation_id=operation_id,
+                            result=cross_platform_result,
+                        )
+
+                        # Merge platform_status - source platform stays "found"
+                        for platform, status in cross_platform_result.get(
+                            "status", {}
+                        ).items():
+                            if platform not in platform_status:
+                                platform_status[platform] = status
                         logger.info(
                             "Cross-platform search completed",
                             operation_id=operation_id,
                             issue_id=str(existing.issue_id),
                             found_platforms=list(cross_platform_urls.keys()),
+                            platform_status=cross_platform_result.get("status", {}),
                         )
                     except Exception as e:
                         logger.warning(
@@ -219,6 +237,7 @@ async def resolve_identity_task(
                     "canonical_uuid": str(existing.issue_id),
                     "confidence": 1.0,
                     "platform_urls": urls,
+                    "platform_status": platform_status,
                     "created_new": False,
                     "explanation": f"Found existing external mapping for {parsed_url.platform}:{parsed_url.source_issue_id}",
                 }
@@ -255,6 +274,10 @@ async def resolve_identity_task(
             )
 
             # Create external mapping if successful
+            cross_platform_urls = {}
+            cross_platform_result = {"urls": {}, "status": {}}
+            platform_status = {}
+
             if result.issue_id:
                 await mapping_repo.create_mapping(
                     issue_id=result.issue_id,
@@ -270,10 +293,11 @@ async def resolve_identity_task(
                     source_issue_id=parsed_url.source_issue_id,
                 )
 
-                # Cross-platform search: find this issue on other platforms
-                cross_platform_urls = {}
+                # Mark source platform as found since we just created a mapping for it
+                platform_status[parsed_url.platform] = "found"
+
                 try:
-                    cross_platform_urls = await resolver.search_cross_platform(
+                    cross_platform_result = await resolver.search_cross_platform(
                         issue_id=result.issue_id,
                         series_title=candidate.series_title,
                         issue_number=candidate.issue_number,
@@ -281,13 +305,21 @@ async def resolve_identity_task(
                         if candidate.cover_date
                         else None,
                         publisher=None,
-                        skip_platform=parsed_url.platform,
                     )
+                    cross_platform_urls = cross_platform_result.get("urls", {})
+
+                    # Merge platform_status - source platform stays "found"
+                    for platform, status in cross_platform_result.get(
+                        "status", {}
+                    ).items():
+                        if platform not in platform_status:
+                            platform_status[platform] = status
                     logger.info(
                         "Cross-platform search completed",
                         operation_id=operation_id,
                         issue_id=str(result.issue_id),
                         found_platforms=list(cross_platform_urls.keys()),
+                        platform_status=cross_platform_result.get("status", {}),
                     )
                 except Exception as e:
                     logger.warning(
@@ -297,6 +329,7 @@ async def resolve_identity_task(
                         error=str(e),
                     )
                     cross_platform_urls = {}
+                    cross_platform_result = {"urls": {}, "status": {}}
 
             urls = {}
             if result.issue_id:
@@ -323,6 +356,7 @@ async def resolve_identity_task(
                     result.best_match.overall_confidence if result.best_match else 1.0
                 ),
                 "platform_urls": urls,
+                "platform_status": platform_status if result.issue_id else {},
                 "created_new": result.created_new,
                 "explanation": result.explanation,
             }

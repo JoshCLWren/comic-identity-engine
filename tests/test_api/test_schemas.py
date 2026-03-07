@@ -321,15 +321,15 @@ class TestIdentityResolutionResponse:
             )
         assert "explanation" in str(exc_info.value)
 
-    def test_missing_platform_urls_fails(self):
-        """Missing platform_urls should fail validation."""
-        with pytest.raises(ValidationError) as exc_info:
-            IdentityResolutionResponse(
-                canonical_uuid=UUID("550e8400-e29b-41d4-a716-446655440000"),
-                confidence=0.95,
-                explanation="Test",
-            )
-        assert "platform_urls" in str(exc_info.value)
+    def test_missing_platform_urls_defaults_to_empty_dict(self):
+        """Missing platform_urls should default to empty dict."""
+        response = IdentityResolutionResponse(
+            canonical_uuid=UUID("550e8400-e29b-41d4-a716-446655440000"),
+            confidence=0.95,
+            explanation="Test",
+        )
+        assert response.platform_urls == {}
+        assert response.platform_status == {}
 
 
 class TestOperationResponse:

@@ -9,7 +9,11 @@ dist/
 build/
 *.egg
 
-# Virtual environments
+# Virtual environments - exclude EVERYWHERE
+**/.venv/
+**/venv/
+**/ENV/
+**/env/
 .venv/
 venv/
 ENV/

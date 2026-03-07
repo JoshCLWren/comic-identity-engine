@@ -1,11 +1,45 @@
 services:
+  # API service
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - DATABASE_URL=postgresql+asyncpg://comic_user:comic_pass@postgres-app:5432/comic_identity
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      postgres-app:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: ["uv", "run", "uvicorn", "comic_identity_engine.api.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+
+  # Worker service
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - DATABASE_URL=postgresql+asyncpg://comic_user:comic_pass@postgres-app:5432/comic_identity
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      postgres-app:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: ["uv", "run", "python", "-m", "comic_identity_engine.jobs.worker"]
+
   # CI service for running tests and linting
   ci:
     build:
       context: .
       dockerfile: Dockerfile
-    volumes:
-      - .:/app
     environment:
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1

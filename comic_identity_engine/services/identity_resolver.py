@@ -531,9 +531,12 @@ class IdentityResolver:
         issue_number: str,
         year: Optional[int] = None,
         publisher: Optional[str] = None,
-        skip_platform: Optional[str] = None,
-    ) -> Dict[str, str]:
-        """Search for this issue on other platforms and create external mappings.
+    ) -> Dict[str, Any]:
+        """Search for this issue on ALL platforms and create external mappings.
+
+        Searches ALL supported platforms (gcd, locg, aa, ccl, cpg, hip).
+        For each platform, returns status indicating whether the platform
+        was found, failed, or not found.
 
         Args:
             issue_id: Canonical issue UUID
@@ -541,10 +544,12 @@ class IdentityResolver:
             issue_number: Issue number
             year: Optional publication year (helps with filtering)
             publisher: Optional publisher name (helps with filtering)
-            skip_platform: Platform code to skip (the source platform)
 
         Returns:
-            Dictionary mapping platform code to URL for all found platforms
+            Dictionary with:
+            - urls: Dictionary mapping platform code to URL for all found platforms
+            - status: Dictionary mapping platform code to search status
+              (searching/found/failed/not_found)
 
         Raises:
             ResolutionError: If cross-platform search fails
@@ -555,30 +560,17 @@ class IdentityResolver:
             series_title=series_title,
             issue_number=issue_number,
             year=year,
-            skip_platform=skip_platform,
-        )
-        logger.info(
-            "Starting cross-platform search",
-            issue_id=str(issue_id),
-            series_title=series_title,
-            issue_number=issue_number,
-            year=year,
-            skip_platform=skip_platform,
         )
 
-        platforms_to_search = []
-        if skip_platform != "aa":
-            platforms_to_search.append("aa")
-        if skip_platform != "ccl":
-            platforms_to_search.append("ccl")
-        if skip_platform != "cpg":
-            platforms_to_search.append("cpg")
-        if skip_platform != "hip":
-            platforms_to_search.append("hip")
+        all_platforms = ["gcd", "locg", "aa", "ccl", "cpg", "hip"]
 
         found_urls = {}
+        platform_status: Dict[str, str] = {}
 
-        for platform in platforms_to_search:
+        for platform in all_platforms:
+            platform_status[platform] = "searching"
+
+        for platform in all_platforms:
             try:
                 platform_url = await self._search_single_platform(
                     platform,
@@ -590,12 +582,20 @@ class IdentityResolver:
                 )
                 if platform_url:
                     found_urls[platform] = platform_url
+                    platform_status[platform] = "found"
                     logger.info(
                         "Found platform URL",
                         platform=platform,
                         url=platform_url,
                     )
+                else:
+                    platform_status[platform] = "not_found"
+                    logger.info(
+                        "Platform search returned no results",
+                        platform=platform,
+                    )
             except Exception as e:
+                platform_status[platform] = "failed"
                 logger.warning(
                     "Platform search failed",
                     platform=platform,
@@ -608,9 +608,13 @@ class IdentityResolver:
             "Cross-platform search completed",
             issue_id=str(issue_id),
             found_platforms=list(found_urls.keys()),
+            status_by_platform=platform_status,
         )
 
-        return found_urls
+        return {
+            "urls": found_urls,
+            "status": platform_status,
+        }
 
     async def _search_single_platform(
         self,

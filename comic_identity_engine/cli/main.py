@@ -120,6 +120,7 @@ def _display_table(data: dict[str, Any], console: Console) -> None:
     confidence = result.get("confidence", 0.0)
     explanation = result.get("explanation", "N/A")
     platform_urls = result.get("platform_urls", {})
+    platform_status = result.get("platform_status", {})
 
     table = Table(title="Identity Resolution Results")
     table.add_column("Field", style="cyan", no_wrap=True)
@@ -134,6 +135,19 @@ def _display_table(data: dict[str, Any], console: Console) -> None:
             f"{platform}: {url}" for platform, url in sorted(platform_urls.items())
         )
         table.add_row("Platform URLs", url_lines)
+
+    if platform_status:
+        status_colors = {
+            "found": "green",
+            "not_found": "yellow",
+            "failed": "red",
+            "searching": "blue",
+        }
+        status_lines = "\n".join(
+            f"[{status_colors.get(status, 'white')}]{platform}: {status}[/{status_colors.get(status, 'white')}]"
+            for platform, status in sorted(platform_status.items())
+        )
+        table.add_row("Platform Status", status_lines)
 
     console.print(table)
 

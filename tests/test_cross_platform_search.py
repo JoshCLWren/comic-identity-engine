@@ -13,11 +13,6 @@ import pytest
 @pytest.mark.asyncio
 async def test_cross_platform_search_with_mock_scrapers():
     """Test cross-platform search using mocked scrapers."""
-    from comic_identity_engine.database.repositories import (
-        ExternalMappingRepository,
-        IssueRepository,
-        SeriesRunRepository,
-    )
     from comic_identity_engine.services import IdentityResolver
 
     session = AsyncMock()
@@ -47,17 +42,20 @@ async def test_cross_platform_search_with_mock_scrapers():
 
     with patch.object(resolver, "_get_scraper", side_effect=_get_scraper_side_effect):
         with patch.object(resolver.mapping_repo, "create_mapping", AsyncMock()):
-            urls = await resolver.search_cross_platform(
+            result = await resolver.search_cross_platform(
                 issue_id=issue_id,
                 series_title=series_title,
                 issue_number=issue_number,
                 year=year,
                 publisher=publisher,
-                skip_platform="gcd",
             )
+
+    urls = result.get("urls", {})
+    status = result.get("status", {})
 
     assert "aa" in urls
     assert urls["aa"] == "https://atomicavenue.com/atomic/item/12345/1/details"
+    assert status["aa"] == "found"
     mock_aa_scraper.search_comic.assert_called_once_with(
         title=series_title, issue=issue_number, year=year, publisher=publisher
     )

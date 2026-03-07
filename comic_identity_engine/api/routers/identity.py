@@ -75,14 +75,19 @@ async def resolve_identity(
             input_data={"url": request.url},
         )
 
-        await queue.enqueue_resolve(
-            url=request.url,
-            operation_id=operation.id,
-        )
+        # Only enqueue job if operation is not already completed
+        if operation.status not in ("completed", "failed"):
+            await queue.enqueue_resolve(
+                url=request.url,
+                operation_id=operation.id,
+            )
+
+        # Return operation response with correct done status
+        is_done = operation.status in ("completed", "failed")
 
         return OperationResponse(
             name=f"operations/{operation.id}",
-            done=False,
+            done=is_done,
             metadata={
                 "operation_type": "resolve",
                 "url": request.url,

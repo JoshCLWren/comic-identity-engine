@@ -14,6 +14,8 @@ USAGE:
 from __future__ import annotations
 
 import asyncio
+import signal
+import sys
 from typing import Any
 
 import structlog
@@ -31,6 +33,26 @@ from comic_identity_engine.jobs.tasks import (
 )
 
 logger = structlog.get_logger(__name__)
+
+_received_signals = []
+
+
+def _signal_handler(signum: int, frame) -> None:
+    """Handle signals by logging them."""
+    _received_signals.append(signum)
+    logger.warning(
+        "Received signal", signum=signum, signal_name=signal.Signals(signum).name
+    )
+
+
+def _setup_signal_handlers() -> None:
+    """Set up signal handlers for debugging."""
+    for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+        try:
+            signal.signal(sig, _signal_handler)
+            logger.info("Registered signal handler", signal=signal.Signals(sig).name)
+        except ValueError:
+            pass
 
 
 async def create_redis_pool() -> Any:
@@ -99,11 +121,13 @@ def create_worker(settings_cls: type[WorkerSettings] = WorkerSettings) -> Worker
     )
 
 
-async def run_worker() -> None:
+def run_worker() -> None:
     """Run the arq worker.
 
     This function starts the worker and runs until interrupted.
     """
+    _setup_signal_handlers()
+
     worker = create_worker()
 
     logger.info(
@@ -114,7 +138,16 @@ async def run_worker() -> None:
         functions_count=len(WorkerSettings.functions),
     )
 
-    await worker.async_run()
+    try:
+        worker.run()
+    except BaseException as e:
+        logger.error(
+            "Worker crashed",
+            exception_type=type(e).__name__,
+            exception_message=str(e),
+            received_signals=_received_signals,
+        )
+        raise
 
 
 def main() -> None:
@@ -123,7 +156,7 @@ def main() -> None:
     This function is called by the cie-worker CLI command.
     """
     try:
-        asyncio.run(run_worker())
+        run_worker()
     except KeyboardInterrupt:
         logger.info("Worker stopped by user")
     except (RuntimeError, asyncio.CancelledError) as e:

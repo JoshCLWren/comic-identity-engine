@@ -140,6 +140,7 @@ class IdentityResolutionResponse(BaseModel):
         confidence: Confidence score (0.0-1.0)
         explanation: Human-readable explanation of the match
         platform_urls: URLs to the issue on various platforms
+        platform_status: Status of cross-platform search for each platform
     """
 
     model_config = ConfigDict(
@@ -152,6 +153,14 @@ class IdentityResolutionResponse(BaseModel):
                     "platform_urls": {
                         "gcd": "https://www.comics.org/issue/12345/",
                         "locg": "https://leagueofcomicgeeks.com/comic/12345678/x-men-1",
+                    },
+                    "platform_status": {
+                        "gcd": "found",
+                        "locg": "found",
+                        "aa": "not_found",
+                        "ccl": "failed",
+                        "cpg": "not_found",
+                        "hip": "searching",
                     },
                 }
             ]
@@ -179,9 +188,24 @@ class IdentityResolutionResponse(BaseModel):
     )
 
     platform_urls: dict[str, str] = Field(
-        ...,
+        default_factory=dict,
         description="Mapping of platform identifiers to issue URLs",
         examples=[{"gcd": "https://www.comics.org/issue/12345/"}],
+    )
+
+    platform_status: dict[str, str] = Field(
+        default_factory=dict,
+        description="Status of cross-platform search for each platform (searching/found/failed/not_found)",
+        examples=[
+            {
+                "gcd": "found",
+                "locg": "found",
+                "aa": "not_found",
+                "ccl": "failed",
+                "cpg": "not_found",
+                "hip": "searching",
+            }
+        ],
     )
 
 
