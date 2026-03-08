@@ -40,8 +40,8 @@ logger.info(f"Async database URL: {_redacted_async_url}")
 async_engine = create_async_engine(
     ASYNC_DATABASE_URL,
     pool_recycle=3600,
-    pool_size=20,
-    max_overflow=40,
+    pool_size=10,
+    max_overflow=20,
     pool_timeout=30,
     pool_pre_ping=True,
 )
