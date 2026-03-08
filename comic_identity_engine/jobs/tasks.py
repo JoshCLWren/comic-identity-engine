@@ -53,7 +53,6 @@ from comic_identity_engine.database.repositories import (
     IssueRepository,
     OperationRepository,
     SeriesRunRepository,
-    VariantRepository,
 )
 from comic_identity_engine.errors import (
     DuplicateEntityError,
@@ -1048,9 +1047,7 @@ async def _record_clz_row_result(
             repo = OperationRepository(session)
 
             stmt = (
-                select(Operation)
-                .where(Operation.id == operation_id)
-                .with_for_update()
+                select(Operation).where(Operation.id == operation_id).with_for_update()
             )
             query_result = await session.execute(stmt)
             operation = query_result.scalar_one_or_none()
@@ -1356,7 +1353,9 @@ async def import_clz_task(
 
             adapter = CLZAdapter()
             rows = adapter.load_csv_from_file(csv_path)
-            row_manifest = current_result.get("row_manifest") or build_clz_row_manifest(rows)
+            row_manifest = current_result.get("row_manifest") or build_clz_row_manifest(
+                rows
+            )
             row_results = dict(current_result.get("row_results", {}) or {})
             processed, resolved, failed, errors = _summarize_clz_row_results(
                 row_results
@@ -1822,179 +1821,3 @@ async def _mark_failed_safe(
             operation_id=str(operation_id),
             error=str(e),
         )
-
-
-async def http_request_task(
-    ctx: dict[str, Any],
-    url: str,
-    method: str = "GET",
-    operation_id: str = "",
-    platform: str | None = None,
-    headers: dict[str, str] | None = None,
-    params: dict[str, Any] | None = None,
-    json_data: dict[str, Any] | None = None,
-    verify_ssl: bool = True,
-) -> dict[str, Any]:
-    """Execute a single HTTP request as an independent task.
-
-    This is the atomic task unit - one HTTP request to a platform.
-    All platform adapters should use this for maximum parallelism.
-
-    Args:
-        ctx: ARQ context dictionary
-        url: URL to request
-        method: HTTP method (GET, POST, etc.)
-        operation_id: UUID of the operation tracking this request
-        platform: Platform code (e.g., "gcd", "locg", "ccl", "aa", "cpg", "hip")
-        headers: Optional HTTP headers
-        params: Optional query parameters
-        json_data: Optional JSON body for POST requests
-        verify_ssl: Whether to verify SSL certificates
-
-    Returns:
-        Dictionary with:
-            - url: str - The requested URL
-            - status_code: int - HTTP status code
-            - content: str - Response body text
-            - elapsed_ms: int - Request duration in milliseconds
-            - success: bool - True if 2xx status code
-            - error: str | None - Error message if failed
-
-    Raises:
-        No exceptions raised - all errors are caught and operation marked as failed.
-
-    Examples:
-        >>> result = await http_request_task(
-        ...     {},
-        ...     "https://www.comics.org/issue/125295/?format=json",
-        ...     operation_id=str(uuid.uuid4()),
-        ...     platform="gcd"
-        ... )
-        >>> print(result["status_code"])
-        200
-    """
-    async with AsyncSessionLocal() as session:
-        try:
-            import httpx
-
-            from comic_identity_engine.services.operations import OperationsManager
-
-            operation_uuid = uuid.UUID(operation_id)
-            operations_manager = OperationsManager(session)
-
-            await operations_manager.mark_running(operation_uuid)
-
-            logger.info(
-                "HTTP request task starting",
-                operation_id=operation_id,
-                platform=platform,
-                url=url,
-                method=method,
-            )
-
-            start_time = time.time()
-
-            try:
-                async with httpx.AsyncClient(verify=verify_ssl) as client:
-                    if method.upper() == "GET":
-                        response = await client.get(
-                            url, headers=headers, params=params, timeout=30.0
-                        )
-                    elif method.upper() == "POST":
-                        response = await client.post(
-                            url,
-                            headers=headers,
-                            params=params,
-                            json=json_data,
-                            timeout=30.0,
-                        )
-                    else:
-                        raise ValueError(f"Unsupported HTTP method: {method}")
-
-                elapsed_ms = int((time.time() - start_time) * 1000)
-                content = response.text
-
-                result = {
-                    "url": url,
-                    "status_code": response.status_code,
-                    "content": content,
-                    "elapsed_ms": elapsed_ms,
-                    "success": 200 <= response.status_code < 300,
-                    "error": None,
-                }
-
-                logger.info(
-                    "HTTP request succeeded",
-                    operation_id=operation_id,
-                    url=url,
-                    status_code=response.status_code,
-                    elapsed_ms=elapsed_ms,
-                )
-
-                await operations_manager.mark_completed(operation_uuid, result)
-                await session.commit()
-
-                return result
-
-            except httpx.HTTPError as e:
-                elapsed_ms = int((time.time() - start_time) * 1000)
-                error_msg = f"HTTP request failed: {e}"
-
-                result = {
-                    "url": url,
-                    "status_code": None,
-                    "content": None,
-                    "elapsed_ms": elapsed_ms,
-                    "success": False,
-                    "error": error_msg,
-                }
-
-                logger.error(
-                    "HTTP request failed",
-                    operation_id=operation_id,
-                    url=url,
-                    error=str(e),
-                    elapsed_ms=elapsed_ms,
-                )
-
-                await operations_manager.mark_failed(operation_uuid, error_msg)
-                await session.commit()
-
-                return result
-
-        except ValueError as e:
-            error_msg = f"Invalid HTTP method or parameters: {e}"
-            logger.error(
-                "HTTP request task failed - validation error",
-                operation_id=operation_id,
-                error=error_msg,
-            )
-            await _mark_failed_safe(
-                session,
-                operation_uuid,
-                error_msg,
-                result={"error_type": "validation_error", "url": url},
-            )
-            await session.commit()
-            return {"error": error_msg, "error_type": "validation_error"}
-
-        except Exception as e:
-            error_msg = f"Unexpected error during HTTP request: {e}"
-            logger.error(
-                "HTTP request task failed - unexpected error",
-                operation_id=operation_id,
-                error=error_msg,
-                error_type=type(e).__name__,
-            )
-            await _mark_failed_safe(
-                session,
-                operation_uuid,
-                error_msg,
-                result={
-                    "error_type": "unexpected_error",
-                    "exception_type": type(e).__name__,
-                    "url": url,
-                },
-            )
-            await session.commit()
-            return {"error": error_msg, "error_type": "unexpected_error"}

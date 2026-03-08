@@ -487,9 +487,9 @@ class TestImportClzValid:
                     create_call = (
                         mock_ops.create_or_resume_import_operation.await_args.kwargs
                     )
-                    assert create_call["file_checksum"] == hashlib.sha256(
-                        csv
-                    ).hexdigest()
+                    assert (
+                        create_call["file_checksum"] == hashlib.sha256(csv).hexdigest()
+                    )
                     assert create_call["initial_result"]["total_rows"] == 1
 
     async def test_import_clz_response_structure(self, mock_operation):
@@ -560,9 +560,9 @@ class TestImportClzValid:
                         mock_ops.create_or_resume_import_operation.await_args.kwargs
                     )
                     assert create_call["operation_type"] == "import_clz"
-                    assert create_call["file_checksum"] == hashlib.sha256(
-                        csv
-                    ).hexdigest()
+                    assert (
+                        create_call["file_checksum"] == hashlib.sha256(csv).hexdigest()
+                    )
                     assert create_call["initial_result"]["row_manifest"] == [
                         {
                             "row_index": 1,

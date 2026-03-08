@@ -142,7 +142,10 @@ async def create_import_clz_job(
             file_path=str(temp_file_path),
         )
 
-        operation, should_enqueue = await operations_manager.create_or_resume_import_operation(
+        (
+            operation,
+            should_enqueue,
+        ) = await operations_manager.create_or_resume_import_operation(
             operation_type="import_clz",
             file_checksum=prepared_import.file_checksum,
             initial_result=prepared_import.to_operation_result(),

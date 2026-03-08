@@ -65,7 +65,10 @@ async def import_clz(
     """
     try:
         prepared_import = prepare_clz_import_from_path(request.file_path)
-        operation, should_enqueue = await operations_manager.create_or_resume_import_operation(
+        (
+            operation,
+            should_enqueue,
+        ) = await operations_manager.create_or_resume_import_operation(
             operation_type="import_clz",
             file_checksum=prepared_import.file_checksum,
             initial_result=prepared_import.to_operation_result(),

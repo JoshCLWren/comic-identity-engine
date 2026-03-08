@@ -58,8 +58,7 @@ def create_test_app(mock_ops: AsyncMock, mock_queue: AsyncMock) -> FastAPI:
 async def test_import_clz_submits_checksum_addressed_operation(tmp_path: Path):
     csv_file = tmp_path / "collection.csv"
     csv_content = (
-        "Series,Issue,Publisher,Year,Core ComicID\n"
-        "X-Men,1,Marvel,1991,clz-001\n"
+        "Series,Issue,Publisher,Year,Core ComicID\nX-Men,1,Marvel,1991,clz-001\n"
     )
     csv_file.write_text(csv_content, encoding="utf-8")
 
@@ -87,9 +86,10 @@ async def test_import_clz_submits_checksum_addressed_operation(tmp_path: Path):
     assert response.status_code == 202
     create_call = mock_ops.create_or_resume_import_operation.await_args.kwargs
     assert create_call["operation_type"] == "import_clz"
-    assert create_call["file_checksum"] == hashlib.sha256(
-        csv_content.encode("utf-8")
-    ).hexdigest()
+    assert (
+        create_call["file_checksum"]
+        == hashlib.sha256(csv_content.encode("utf-8")).hexdigest()
+    )
     assert create_call["initial_result"]["total_rows"] == 1
     assert create_call["initial_result"]["row_manifest"] == [
         {
@@ -115,8 +115,7 @@ async def test_import_clz_returns_existing_running_operation_without_requeue(
 ):
     csv_file = tmp_path / "collection.csv"
     csv_content = (
-        "Series,Issue,Publisher,Year,Core ComicID\n"
-        "X-Men,1,Marvel,1991,clz-001\n"
+        "Series,Issue,Publisher,Year,Core ComicID\nX-Men,1,Marvel,1991,clz-001\n"
     )
     csv_file.write_text(csv_content, encoding="utf-8")
 
