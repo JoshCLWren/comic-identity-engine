@@ -36,9 +36,7 @@ dependencies = [
     # Logging
     "structlog>=25.1",
     # Comic Search Library (for cross-platform search)
-    # Using absolute path for local development
-    # Docker build script copies comic-search-lib into build context
-    "comic-search-lib @ file:///mnt/extra/josh/code/comic-search-lib",
+    "comic-search-lib",
 ]
 
 [dependency-groups]
@@ -55,6 +53,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.metadata]
 allow-direct-references = true
+
+[tool.uv.sources]
+comic-search-lib = { path = "comic-search-lib" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
