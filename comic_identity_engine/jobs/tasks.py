@@ -1113,40 +1113,6 @@ async def resolve_clz_row_task(
                 )
 
             cross_platform_count = 0
-            try:
-                from comic_identity_engine.services.platform_searcher import (
-                    PlatformSearcher,
-                )
-
-                operations_manager = OperationsManager(session)
-                searcher = PlatformSearcher(session)
-                cross_platform_result = await searcher.search_all_platforms(
-                    issue_id=result.issue_id,
-                    series_title=issue_candidate.series_title,
-                    issue_number=issue_candidate.issue_number,
-                    year=issue_candidate.series_start_year,
-                    publisher=issue_candidate.publisher,
-                    operation_id=operation_uuid,
-                    source_platform="clz",
-                    operations_manager=operations_manager,
-                )
-
-                cross_platform_count = len(cross_platform_result.get("urls", {}))
-                logger.info(
-                    "Cross-platform search completed",
-                    operation_id=operation_id,
-                    row=row_index,
-                    issue_id=str(result.issue_id),
-                    found_platforms=list(cross_platform_result.get("urls", {}).keys()),
-                )
-            except Exception as e:
-                logger.warning(
-                    "Cross-platform search failed, continuing without it",
-                    operation_id=operation_id,
-                    row=row_index,
-                    issue_id=str(result.issue_id),
-                    error=str(e),
-                )
 
             await session.commit()
 
