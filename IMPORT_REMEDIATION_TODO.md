@@ -22,13 +22,13 @@ Status markers:
   `pool_size`, `max_overflow`, and `pool_timeout` are controlled by env/config instead of hardcoded values.
 
 ## Priority 1: Restore Import Idempotency
-- [ ] Replace `force=True` import submission with checksum-based import identity.
+- [x] Replace `force=True` import submission with checksum-based import identity.
   Success criteria:
   Re-submitting the same file returns or resumes the same logical import operation.
-- [ ] Persist import fingerprints and row manifests on the operation.
+- [x] Persist import fingerprints and row manifests on the operation.
   Success criteria:
   Operation state includes file checksum, total row count, and stable per-row source identifiers.
-- [ ] Add explicit resume semantics for incomplete imports.
+- [x] Add explicit resume semantics for incomplete imports.
   Success criteria:
   A stuck or interrupted same-file import can be resumed without creating a fresh operation id.
 - [ ] Add retry-failed-only semantics.

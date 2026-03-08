@@ -13,6 +13,7 @@ Total Tests: 75+
 
 import io
 import os
+import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -462,7 +463,9 @@ class TestImportClzValid:
                 "comic_identity_engine.api.routers.jobs.JobQueue"
             ) as mock_queue_cls:
                 mock_ops = AsyncMock()
-                mock_ops.create_operation = AsyncMock(return_value=mock_operation)
+                mock_ops.create_or_resume_import_operation = AsyncMock(
+                    return_value=(mock_operation, True)
+                )
                 mock_ops_cls.return_value = mock_ops
 
                 mock_queue = AsyncMock()
@@ -481,6 +484,13 @@ class TestImportClzValid:
                         files={"file": ("test.csv", io.BytesIO(csv), "text/csv")},
                     )
                     assert response.status_code == 202
+                    create_call = (
+                        mock_ops.create_or_resume_import_operation.await_args.kwargs
+                    )
+                    assert create_call["file_checksum"] == hashlib.sha256(
+                        csv
+                    ).hexdigest()
+                    assert create_call["initial_result"]["total_rows"] == 1
 
     async def test_import_clz_response_structure(self, mock_operation):
         with patch(
@@ -490,7 +500,10 @@ class TestImportClzValid:
                 "comic_identity_engine.api.routers.jobs.JobQueue"
             ) as mock_queue_cls:
                 mock_ops = AsyncMock()
-                mock_ops.create_operation = AsyncMock(return_value=mock_operation)
+                mock_operation.result = {"resume_count": 0}
+                mock_ops.create_or_resume_import_operation = AsyncMock(
+                    return_value=(mock_operation, True)
+                )
                 mock_ops_cls.return_value = mock_ops
 
                 mock_queue = AsyncMock()
@@ -511,6 +524,9 @@ class TestImportClzValid:
                     data = response.json()
                     assert data["metadata"]["filename"] == "collection.csv"
                     assert "file_size" in data["metadata"]
+                    assert "file_checksum" in data["metadata"]
+                    assert data["metadata"]["total_rows"] == 1
+                    assert data["metadata"]["resume_count"] == 0
 
     async def test_import_clz_creates_import_operation(self, mock_operation):
         with patch(
@@ -520,7 +536,9 @@ class TestImportClzValid:
                 "comic_identity_engine.api.routers.jobs.JobQueue"
             ) as mock_queue_cls:
                 mock_ops = AsyncMock()
-                mock_ops.create_operation = AsyncMock(return_value=mock_operation)
+                mock_ops.create_or_resume_import_operation = AsyncMock(
+                    return_value=(mock_operation, True)
+                )
                 mock_ops_cls.return_value = mock_ops
 
                 mock_queue = AsyncMock()
@@ -538,11 +556,20 @@ class TestImportClzValid:
                         "/api/v1/jobs/import-clz",
                         files={"file": ("data.csv", io.BytesIO(csv), "text/csv")},
                     )
-                    mock_ops.create_operation.assert_called_once_with(
-                        operation_type="import_clz",
-                        input_data={"filename": "data.csv"},
-                        force=True,
+                    create_call = (
+                        mock_ops.create_or_resume_import_operation.await_args.kwargs
                     )
+                    assert create_call["operation_type"] == "import_clz"
+                    assert create_call["file_checksum"] == hashlib.sha256(
+                        csv
+                    ).hexdigest()
+                    assert create_call["initial_result"]["row_manifest"] == [
+                        {
+                            "row_index": 1,
+                            "source_issue_id": None,
+                            "row_key": "row-1:1",
+                        }
+                    ]
 
 
 @pytest.mark.asyncio
@@ -614,30 +641,37 @@ class TestImportClzValidation:
 
     async def test_import_clz_exception_cleanup(self, mock_operation, tmp_path):
         """Test that temp file is cleaned up on exception during import."""
-        from comic_identity_engine.jobs.queue import JobQueue
-        from comic_identity_engine.services.operations import OperationsManager
+        with patch(
+            "comic_identity_engine.api.routers.jobs.OperationsManager"
+        ) as mock_ops_cls:
+            with patch(
+                "comic_identity_engine.api.routers.jobs.JobQueue"
+            ) as mock_queue_cls:
+                mock_ops = AsyncMock()
+                mock_ops.create_or_resume_import_operation = AsyncMock(
+                    return_value=(mock_operation, True)
+                )
+                mock_ops_cls.return_value = mock_ops
 
-        mock_ops = AsyncMock(spec=OperationsManager)
-        mock_ops.create_operation = AsyncMock(return_value=mock_operation)
+                mock_queue = AsyncMock()
+                mock_queue.enqueue_import_clz = AsyncMock(
+                    side_effect=RuntimeError("Queue error")
+                )
+                mock_queue_cls.return_value = mock_queue
 
-        mock_queue = AsyncMock(spec=JobQueue)
-        mock_queue.enqueue_import_clz = AsyncMock(
-            side_effect=RuntimeError("Queue error")
-        )
+                app = get_test_app_with_mocks(mock_queue=mock_queue)
+                transport = ASGITransport(app=app)
 
-        app = get_test_app_with_mocks(mock_ops=mock_ops, mock_queue=mock_queue)
-        transport = ASGITransport(app=app)
-
-        async with httpx.AsyncClient(
-            transport=transport, base_url="http://test"
-        ) as client:
-            csv = b"Title,Issue\nX-Men,1"
-            response = await client.post(
-                "/api/v1/jobs/import-clz",
-                files={"file": ("data.csv", io.BytesIO(csv), "text/csv")},
-            )
-            assert response.status_code == 500
-            assert "Failed to enqueue import job" in response.json()["detail"]
+                async with httpx.AsyncClient(
+                    transport=transport, base_url="http://test"
+                ) as client:
+                    csv = b"Title,Issue\nX-Men,1"
+                    response = await client.post(
+                        "/api/v1/jobs/import-clz",
+                        files={"file": ("data.csv", io.BytesIO(csv), "text/csv")},
+                    )
+                    assert response.status_code == 500
+                    assert "Failed to enqueue import job" in response.json()["detail"]
 
 
 # =============================================================================

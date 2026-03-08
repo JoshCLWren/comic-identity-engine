@@ -591,6 +591,7 @@ class OperationRepository:
         self,
         operation_type: str,
         input_hash: Optional[str] = None,
+        result: Optional[dict] = None,
     ) -> Operation:
         """Create a new operation.
 
@@ -608,6 +609,7 @@ class OperationRepository:
             operation_type=operation_type,
             status="pending",
             input_hash=input_hash,
+            result=result,
         )
         self.session.add(operation)
         try:
@@ -629,6 +631,7 @@ class OperationRepository:
         status: str,
         result: Optional[dict] = None,
         error_message: Optional[str] = None,
+        clear_error_message: bool = False,
     ) -> Operation:
         """Update operation status and result.
 
@@ -647,7 +650,9 @@ class OperationRepository:
         operation.status = status
         if result is not None:
             operation.result = result
-        if error_message is not None:
+        if clear_error_message:
+            operation.error_message = None
+        elif error_message is not None:
             operation.error_message = error_message
         self.session.add(operation)
         try:

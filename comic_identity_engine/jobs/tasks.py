@@ -67,6 +67,10 @@ from comic_identity_engine.services import (
     OperationsManager,
     parse_url,
 )
+from comic_identity_engine.services.imports import (
+    build_clz_row_key,
+    build_clz_row_manifest,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -1002,6 +1006,38 @@ def _build_clz_import_summary(result: dict[str, Any]) -> str:
     )
 
 
+def _summarize_clz_row_results(
+    row_results: dict[str, dict[str, Any]],
+) -> tuple[int, int, int, list[dict[str, Any]]]:
+    """Compute CLZ import counters from persisted per-row results."""
+    processed = len(row_results)
+    resolved = 0
+    errors: list[dict[str, Any]] = []
+
+    ordered_row_results = sorted(
+        row_results.values(),
+        key=lambda row_result: (
+            int(row_result.get("row_index", 0) or 0),
+            str(row_result.get("row_key", "")),
+        ),
+    )
+    for row_result in ordered_row_results:
+        if row_result.get("resolved"):
+            resolved += 1
+            continue
+        errors.append(
+            {
+                "row": row_result.get("row_index"),
+                "row_key": row_result.get("row_key"),
+                "source_issue_id": row_result.get("source_issue_id"),
+                "error": row_result.get("error", "Unknown error"),
+            }
+        )
+
+    failed = processed - resolved
+    return processed, resolved, failed, errors
+
+
 async def _record_clz_row_result(
     operation_id: uuid.UUID,
     row_result: dict[str, Any],
@@ -1031,26 +1067,26 @@ async def _record_clz_row_result(
 
             current_result = dict(operation.result or {})
             total_rows = int(current_result.get("total_rows", 0) or 0)
-            processed = int(current_result.get("processed", 0) or 0) + 1
-            resolved = int(current_result.get("resolved", 0) or 0)
-            failed = int(current_result.get("failed", 0) or 0)
-            errors = list(current_result.get("errors", []) or [])
+            if total_rows == 0:
+                total_rows = len(current_result.get("row_manifest", []) or [])
 
-            if row_result.get("resolved"):
-                resolved += 1
-            else:
-                failed += 1
-                errors.append(
-                    {
-                        "row": row_result.get("row_index"),
-                        "source_issue_id": row_result.get("source_issue_id"),
-                        "error": row_result.get("error", "Unknown error"),
-                    }
-                )
+            row_key = row_result.get("row_key") or build_clz_row_key(
+                row_result.get("source_issue_id"),
+                int(row_result.get("row_index", 0) or 0),
+            )
+            row_results = dict(current_result.get("row_results", {}) or {})
+            row_results[row_key] = {
+                **row_result,
+                "row_key": row_key,
+            }
+            processed, resolved, failed, errors = _summarize_clz_row_results(
+                row_results
+            )
 
             updated_result = {
                 **current_result,
                 "total_rows": total_rows,
+                "row_results": row_results,
                 "processed": processed,
                 "resolved": resolved,
                 "failed": failed,
@@ -1133,6 +1169,7 @@ async def resolve_clz_row_task(
             adapter = CLZAdapter()
             issue_candidate = adapter.fetch_issue_from_csv_row(row_data)
             source_issue_id = issue_candidate.source_issue_id
+            row_key = build_clz_row_key(source_issue_id, row_index)
 
             mapping_repo = ExternalMappingRepository(session)
             existing_mapping = await mapping_repo.find_by_source("clz", source_issue_id)
@@ -1147,6 +1184,7 @@ async def resolve_clz_row_task(
                 )
                 row_result = {
                     "row_index": row_index,
+                    "row_key": row_key,
                     "source_issue_id": source_issue_id,
                     "resolved": True,
                     "issue_id": str(existing_mapping.issue_id),
@@ -1185,6 +1223,7 @@ async def resolve_clz_row_task(
                 )
                 row_result = {
                     "row_index": row_index,
+                    "row_key": row_key,
                     "source_issue_id": source_issue_id,
                     "resolved": False,
                     "error": error_msg,
@@ -1223,6 +1262,7 @@ async def resolve_clz_row_task(
 
             row_result = {
                 "row_index": row_index,
+                "row_key": row_key,
                 "source_issue_id": source_issue_id,
                 "resolved": True,
                 "issue_id": str(result.issue_id),
@@ -1237,6 +1277,7 @@ async def resolve_clz_row_task(
             logger.warning(error_msg, operation_id=operation_id)
             row_result = {
                 "row_index": row_index,
+                "row_key": build_clz_row_key(row_data.get("Core ComicID"), row_index),
                 "source_issue_id": row_data.get("Core ComicID"),
                 "resolved": False,
                 "error": error_msg,
@@ -1253,6 +1294,7 @@ async def resolve_clz_row_task(
             )
             row_result = {
                 "row_index": row_index,
+                "row_key": build_clz_row_key(row_data.get("Core ComicID"), row_index),
                 "source_issue_id": row_data.get("Core ComicID"),
                 "resolved": False,
                 "error": error_msg,
@@ -1300,6 +1342,8 @@ async def import_clz_task(
     async with AsyncSessionLocal() as session:
         try:
             operations_manager = OperationsManager(session)
+            operation = await operations_manager.get_operation(operation_uuid)
+            current_result = dict(operation.result or {}) if operation else {}
 
             await operations_manager.mark_running(operation_uuid)
             await session.commit()
@@ -1312,16 +1356,39 @@ async def import_clz_task(
 
             adapter = CLZAdapter()
             rows = adapter.load_csv_from_file(csv_path)
+            row_manifest = current_result.get("row_manifest") or build_clz_row_manifest(rows)
+            row_results = dict(current_result.get("row_results", {}) or {})
+            processed, resolved, failed, errors = _summarize_clz_row_results(
+                row_results
+            )
+            total_rows = len(rows)
 
             result_dict = {
-                "total_rows": len(rows),
-                "processed": 0,
-                "resolved": 0,
-                "failed": 0,
-                "errors": [],
-                "progress": 0.0,
-                "summary": f"Enqueued {len(rows)} CLZ row tasks for processing",
+                **current_result,
+                "total_rows": total_rows,
+                "row_manifest": row_manifest,
+                "row_results": row_results,
+                "processed": processed,
+                "resolved": resolved,
+                "failed": failed,
+                "errors": errors,
+                "progress": (processed / total_rows) if total_rows else 0.0,
             }
+
+            remaining_rows: list[tuple[int, dict[str, str], str]] = []
+            for row_index, row in enumerate(rows, start=1):
+                source_issue_id = (row.get("Core ComicID") or "").strip() or None
+                row_key = build_clz_row_key(source_issue_id, row_index)
+                if row_key in row_results:
+                    continue
+                remaining_rows.append((row_index, row, row_key))
+
+            if remaining_rows:
+                result_dict["summary"] = (
+                    f"Enqueued {len(remaining_rows)} pending CLZ row tasks for processing"
+                )
+            else:
+                result_dict["summary"] = _build_clz_import_summary(result_dict)
 
             await operations_manager.update_operation(
                 operation_uuid,
@@ -1335,16 +1402,17 @@ async def import_clz_task(
             logger.info(
                 "Enqueueing CLZ row tasks",
                 operation_id=operation_id,
-                total_rows=len(rows),
+                total_rows=total_rows,
+                remaining_rows=len(remaining_rows),
             )
 
             jobs = []
             queue = JobQueue()
             try:
-                for idx, row in enumerate(rows):
+                for row_index, row, _row_key in remaining_rows:
                     job = await queue.enqueue_resolve_clz_row(
                         row_data=row,
-                        row_index=idx + 1,
+                        row_index=row_index,
                         operation_id=operation_uuid,
                     )
                     jobs.append(job)
@@ -1361,10 +1429,28 @@ async def import_clz_task(
                 job_count=len(jobs),
             )
 
+            if total_rows and processed >= total_rows:
+                completed_result = {
+                    **result_dict,
+                    "summary": _build_clz_import_summary(result_dict),
+                    "progress": 1.0,
+                }
+                await operations_manager.mark_completed(
+                    operation_uuid,
+                    completed_result,
+                )
+                await session.commit()
+                logger.info(
+                    "CLZ import resumed into completed state",
+                    operation_id=operation_id,
+                    total_rows=total_rows,
+                )
+                return completed_result
+
             logger.info(
                 "CLZ import orchestration completed",
                 operation_id=operation_id,
-                total_rows=len(rows),
+                total_rows=total_rows,
                 enqueued_jobs=len(jobs),
             )
 

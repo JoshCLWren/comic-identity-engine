@@ -57,6 +57,50 @@ def sample_running_operation():
     return operation
 
 
+@pytest.fixture
+def sample_failed_import_operation():
+    """Create sample failed import operation with resumable state."""
+    operation = MagicMock()
+    operation.id = uuid.uuid4()
+    operation.operation_type = "import_clz"
+    operation.status = "failed"
+    operation.input_hash = "checksum-hash"
+    operation.result = {
+        "file_checksum": "checksum-123",
+        "file_size": 128,
+        "total_rows": 2,
+        "row_manifest": [
+            {
+                "row_index": 1,
+                "source_issue_id": "clz-001",
+                "row_key": "clz-001:1",
+            },
+            {
+                "row_index": 2,
+                "source_issue_id": "clz-002",
+                "row_key": "clz-002:2",
+            },
+        ],
+        "row_results": {
+            "clz-001:1": {
+                "row_index": 1,
+                "row_key": "clz-001:1",
+                "source_issue_id": "clz-001",
+                "resolved": True,
+            }
+        },
+        "processed": 1,
+        "resolved": 1,
+        "failed": 0,
+        "errors": [],
+        "progress": 0.5,
+        "resume_count": 1,
+        "summary": "Processed 1/2 CLZ rows: 1 resolved, 0 failed. 0 errors so far.",
+    }
+    operation.error_message = "worker crashed"
+    return operation
+
+
 @pytest.mark.asyncio
 class TestOperationsManager:
     """Tests for OperationsManager class."""
@@ -91,6 +135,167 @@ class TestOperationsManager:
 
         assert result == sample_operation
         mock_repo.create_operation.assert_not_called()
+
+    @patch("comic_identity_engine.services.operations.OperationRepository")
+    async def test_create_operation_supports_initial_result_and_explicit_key(
+        self, mock_repo_cls, mock_session, sample_operation
+    ):
+        """Test operation creation with explicit idempotency key and initial result."""
+        mock_repo = MagicMock()
+        mock_repo.create_operation = AsyncMock(return_value=sample_operation)
+        mock_repo.find_by_input_hash = AsyncMock(return_value=None)
+        mock_repo_cls.return_value = mock_repo
+
+        manager = OperationsManager(mock_session)
+        initial_result = {"file_checksum": "checksum-123"}
+
+        await manager.create_operation(
+            "import_clz",
+            idempotency_key="custom-key",
+            initial_result=initial_result,
+        )
+
+        mock_repo.find_by_input_hash.assert_awaited_once_with("custom-key")
+        mock_repo.create_operation.assert_awaited_once_with(
+            operation_type="import_clz",
+            input_hash="custom-key",
+            result=initial_result,
+        )
+
+    @patch("comic_identity_engine.services.operations.OperationRepository")
+    async def test_create_or_resume_import_operation_creates_new_operation(
+        self, mock_repo_cls, mock_session
+    ):
+        """Test checksum-addressed import creation for a new file."""
+        created_operation = MagicMock()
+        created_operation.id = uuid.uuid4()
+        created_operation.operation_type = "import_clz"
+        created_operation.status = "pending"
+        created_operation.result = {"resume_count": 0}
+
+        mock_repo = MagicMock()
+        mock_repo.find_by_input_hash = AsyncMock(return_value=None)
+        mock_repo.create_operation = AsyncMock(return_value=created_operation)
+        mock_repo_cls.return_value = mock_repo
+
+        manager = OperationsManager(mock_session)
+        initial_result = {
+            "file_checksum": "checksum-123",
+            "file_size": 128,
+            "total_rows": 1,
+            "row_manifest": [
+                {
+                    "row_index": 1,
+                    "source_issue_id": "clz-001",
+                    "row_key": "clz-001:1",
+                }
+            ],
+            "row_results": {},
+            "processed": 0,
+            "resolved": 0,
+            "failed": 0,
+            "errors": [],
+            "progress": 0.0,
+            "resume_count": 0,
+            "summary": "Prepared 1 CLZ rows for processing",
+        }
+
+        operation, should_enqueue = await manager.create_or_resume_import_operation(
+            operation_type="import_clz",
+            file_checksum="checksum-123",
+            initial_result=initial_result,
+        )
+
+        assert operation is created_operation
+        assert should_enqueue is True
+        mock_repo.create_operation.assert_awaited_once()
+
+    @patch("comic_identity_engine.services.operations.OperationRepository")
+    async def test_create_or_resume_import_operation_reuses_running_operation(
+        self, mock_repo_cls, mock_session
+    ):
+        """Test same-file import returns the current running operation."""
+        existing_operation = MagicMock()
+        existing_operation.id = uuid.uuid4()
+        existing_operation.operation_type = "import_clz"
+        existing_operation.status = "running"
+        existing_operation.result = {
+            "file_checksum": "checksum-123",
+            "file_size": 128,
+            "total_rows": 1,
+            "row_manifest": [
+                {
+                    "row_index": 1,
+                    "source_issue_id": "clz-001",
+                    "row_key": "clz-001:1",
+                }
+            ],
+            "row_results": {},
+            "processed": 0,
+            "resolved": 0,
+            "failed": 0,
+            "errors": [],
+            "progress": 0.0,
+            "resume_count": 0,
+            "summary": "Prepared 1 CLZ rows for processing",
+        }
+
+        mock_repo = MagicMock()
+        mock_repo.find_by_input_hash = AsyncMock(return_value=existing_operation)
+        mock_repo.update_status = AsyncMock(return_value=existing_operation)
+        mock_repo_cls.return_value = mock_repo
+
+        manager = OperationsManager(mock_session)
+        operation, should_enqueue = await manager.create_or_resume_import_operation(
+            operation_type="import_clz",
+            file_checksum="checksum-123",
+            initial_result=dict(existing_operation.result),
+        )
+
+        assert operation is existing_operation
+        assert should_enqueue is False
+        mock_repo.create_operation.assert_not_called()
+        mock_repo.update_status.assert_not_called()
+
+    @patch("comic_identity_engine.services.operations.OperationRepository")
+    async def test_create_or_resume_import_operation_resumes_failed_operation(
+        self, mock_repo_cls, mock_session, sample_failed_import_operation
+    ):
+        """Test same-file retry reuses the failed operation id and resets it."""
+        resumed_operation = MagicMock()
+        resumed_operation.id = sample_failed_import_operation.id
+        resumed_operation.operation_type = "import_clz"
+        resumed_operation.status = "pending"
+        resumed_operation.result = {
+            **sample_failed_import_operation.result,
+            "resume_count": 2,
+            "summary": "Resuming CLZ import with 1 rows remaining out of 2.",
+        }
+        resumed_operation.input_hash = sample_failed_import_operation.input_hash
+        resumed_operation.error_message = None
+
+        mock_repo = MagicMock()
+        mock_repo.find_by_input_hash = AsyncMock(
+            return_value=sample_failed_import_operation
+        )
+        mock_repo.update_status = AsyncMock(return_value=resumed_operation)
+        mock_repo_cls.return_value = mock_repo
+
+        manager = OperationsManager(mock_session)
+        operation, should_enqueue = await manager.create_or_resume_import_operation(
+            operation_type="import_clz",
+            file_checksum="checksum-123",
+            initial_result=dict(sample_failed_import_operation.result),
+        )
+
+        assert operation is resumed_operation
+        assert should_enqueue is True
+        mock_repo.update_status.assert_awaited_once_with(
+            sample_failed_import_operation,
+            status="pending",
+            result=resumed_operation.result,
+            clear_error_message=True,
+        )
 
     @patch("comic_identity_engine.services.operations.OperationRepository")
     async def test_create_operation_invalid_type(self, mock_repo_cls, mock_session):

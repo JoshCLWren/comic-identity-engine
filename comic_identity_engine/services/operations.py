@@ -69,6 +69,8 @@ class OperationsManager:
         operation_type: str,
         input_data: Optional[dict[str, Any]] = None,
         force: bool = False,
+        idempotency_key: str | None = None,
+        initial_result: Optional[dict[str, Any]] = None,
     ) -> Operation:
         """Create a new async operation.
 
@@ -95,14 +97,16 @@ class OperationsManager:
                 f"Must be one of: {', '.join(VALID_OPERATION_TYPES)}"
             )
 
-        idempotency_key = (
-            self._compute_idempotency_key(operation_type, input_data)
-            if input_data
-            else None
-        )
+        computed_idempotency_key = idempotency_key
+        if computed_idempotency_key is None and input_data:
+            computed_idempotency_key = self._compute_idempotency_key(
+                operation_type, input_data
+            )
 
-        if idempotency_key and not force:
-            existing = await self.operation_repo.find_by_input_hash(idempotency_key)
+        if computed_idempotency_key and not force:
+            existing = await self.operation_repo.find_by_input_hash(
+                computed_idempotency_key
+            )
             if existing:
                 logger.info(
                     "Found existing operation for idempotency key",
@@ -114,17 +118,90 @@ class OperationsManager:
 
         operation = await self.operation_repo.create_operation(
             operation_type=operation_type,
-            input_hash=idempotency_key,
+            input_hash=computed_idempotency_key,
+            result=initial_result,
         )
 
         logger.info(
             "Created operation",
             operation_id=str(operation.id),
             operation_type=operation.operation_type,
-            idempotency_key=idempotency_key,
+            idempotency_key=computed_idempotency_key,
         )
 
         return operation
+
+    async def create_or_resume_import_operation(
+        self,
+        *,
+        operation_type: str,
+        file_checksum: str,
+        initial_result: dict[str, Any],
+    ) -> tuple[Operation, bool]:
+        """Create or resume a checksum-addressed import operation.
+
+        Returns:
+            Tuple of the operation and whether the caller should enqueue work.
+        """
+        if operation_type not in VALID_OPERATION_TYPES:
+            raise ValueError(
+                f"Invalid operation_type: {operation_type}. "
+                f"Must be one of: {', '.join(VALID_OPERATION_TYPES)}"
+            )
+
+        idempotency_key = self._compute_idempotency_key(
+            operation_type,
+            {"file_checksum": file_checksum},
+        )
+        existing = await self.operation_repo.find_by_input_hash(idempotency_key)
+        if existing is None:
+            operation = await self.operation_repo.create_operation(
+                operation_type=operation_type,
+                input_hash=idempotency_key,
+                result=initial_result,
+            )
+            logger.info(
+                "Created checksum-addressed import operation",
+                operation_id=str(operation.id),
+                operation_type=operation.operation_type,
+                file_checksum=file_checksum,
+            )
+            return operation, True
+
+        merged_result = self._merge_import_result(existing.result, initial_result)
+        operation = existing
+        should_enqueue = False
+
+        if merged_result != (existing.result or {}):
+            operation = await self.operation_repo.update_status(
+                existing,
+                status=existing.status,
+                result=merged_result,
+            )
+
+        if existing.status == "failed":
+            resumed_result = dict(operation.result or {})
+            resumed_result["resume_count"] = (
+                int(resumed_result.get("resume_count", 0) or 0) + 1
+            )
+            resumed_result["summary"] = self._build_resume_summary(resumed_result)
+            operation = await self.operation_repo.update_status(
+                operation,
+                status="pending",
+                result=resumed_result,
+                clear_error_message=True,
+            )
+            should_enqueue = True
+
+        logger.info(
+            "Reused checksum-addressed import operation",
+            operation_id=str(operation.id),
+            operation_type=operation.operation_type,
+            status=operation.status,
+            file_checksum=file_checksum,
+            should_enqueue=should_enqueue,
+        )
+        return operation, should_enqueue
 
     async def update_operation(
         self,
@@ -291,6 +368,46 @@ class OperationsManager:
             ...     print(f"Retry {op.id}: {op.error_message}")
         """
         return await self.operation_repo.find_by_status("failed", limit)
+
+    def _merge_import_result(
+        self,
+        existing_result: Optional[dict[str, Any]],
+        incoming_result: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Merge persisted import state with the latest fingerprint metadata."""
+        merged = dict(existing_result or {})
+        persisted_keys = {
+            "row_results",
+            "processed",
+            "resolved",
+            "failed",
+            "errors",
+            "progress",
+            "summary",
+            "resume_count",
+        }
+
+        for key, value in incoming_result.items():
+            if key in persisted_keys and key in merged:
+                continue
+            merged[key] = value
+
+        if "resume_count" not in merged:
+            merged["resume_count"] = int(incoming_result.get("resume_count", 0) or 0)
+
+        return merged
+
+    def _build_resume_summary(self, result: dict[str, Any]) -> str:
+        """Build a summary message for a resumed import operation."""
+        total_rows = int(result.get("total_rows", 0) or 0)
+        processed = int(result.get("processed", 0) or 0)
+        remaining = max(total_rows - processed, 0)
+        if processed:
+            return (
+                f"Resuming CLZ import with {remaining} rows remaining "
+                f"out of {total_rows}."
+            )
+        return f"Resuming CLZ import for {total_rows} rows."
 
     def _compute_idempotency_key(
         self, operation_type: str, input_data: dict[str, Any]

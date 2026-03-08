@@ -36,8 +36,9 @@ from comic_identity_engine.api.schemas import (
     JobStatusResponse,
     OperationResponse,
 )
-
+from comic_identity_engine.errors import ValidationError
 from comic_identity_engine.jobs.queue import JobQueue
+from comic_identity_engine.services.imports import prepare_clz_import_from_bytes
 from comic_identity_engine.services.operations import OperationsManager
 
 router = APIRouter(prefix="/jobs", tags=["Job Management"])
@@ -135,29 +136,50 @@ async def create_import_clz_job(
             temp_file_path = Path(temp_file.name)
 
         operations_manager = OperationsManager(db)
+        prepared_import = prepare_clz_import_from_bytes(
+            content,
+            file_name=file.filename,
+            file_path=str(temp_file_path),
+        )
 
-        operation = await operations_manager.create_operation(
+        operation, should_enqueue = await operations_manager.create_or_resume_import_operation(
             operation_type="import_clz",
-            input_data={"filename": file.filename},
-            # Import retries for the same file should create fresh work instead
-            # of reusing a stale operation record.
-            force=True,
+            file_checksum=prepared_import.file_checksum,
+            initial_result=prepared_import.to_operation_result(),
         )
 
-        await queue.enqueue_import_clz(
-            csv_path=str(temp_file_path),
-            operation_id=operation.id,
-        )
+        if should_enqueue:
+            await queue.enqueue_import_clz(
+                csv_path=str(temp_file_path),
+                operation_id=operation.id,
+            )
+        elif temp_file_path.exists():
+            os.unlink(temp_file_path)
 
         return OperationResponse(
             name=f"operations/{operation.id}",
-            done=False,
+            done=operation.status in ("completed", "failed"),
             metadata={
                 "filename": file.filename,
-                "file_size": len(content),
+                "file_checksum": prepared_import.file_checksum,
+                "file_size": prepared_import.file_size,
+                "total_rows": prepared_import.total_rows,
+                "resume_count": (
+                    operation.result.get("resume_count", 0)
+                    if isinstance(operation.result, dict)
+                    else 0
+                ),
+                "status": operation.status,
             },
         )
 
+    except ValidationError as e:
+        if temp_file_path and temp_file_path.exists():
+            os.unlink(temp_file_path)
+        raise HTTPException(
+            status_code=400,
+            detail=str(e),
+        ) from e
     except Exception as e:
         if temp_file_path and temp_file_path.exists():
             os.unlink(temp_file_path)

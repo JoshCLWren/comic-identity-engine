@@ -25,6 +25,7 @@ from comic_identity_engine.api.schemas import (
 )
 from comic_identity_engine.errors import ValidationError
 from comic_identity_engine.jobs.queue import JobQueue
+from comic_identity_engine.services.imports import prepare_clz_import_from_path
 from comic_identity_engine.services.operations import OperationsManager
 
 router = APIRouter(prefix="/import", tags=["Import"])
@@ -63,25 +64,19 @@ async def import_clz(
         HTTPException: 400 for validation errors, 500 for server errors
     """
     try:
-        operation = await operations_manager.create_operation(
+        prepared_import = prepare_clz_import_from_path(request.file_path)
+        operation, should_enqueue = await operations_manager.create_or_resume_import_operation(
             operation_type="import_clz",
-            input_data={"csv_path": request.file_path},
-            # Import retries for the same file path should create fresh work.
-            # Reusing a stale "running" operation can deadlock after queue loss.
-            force=True,
+            file_checksum=prepared_import.file_checksum,
+            initial_result=prepared_import.to_operation_result(),
         )
 
-        # Only enqueue job if operation is not already completed or running
-        if operation.status == "pending":
+        if should_enqueue:
             await queue.enqueue_import_clz(
                 csv_path=request.file_path,
                 operation_id=operation.id,
             )
-        elif operation.status == "running":
-            # Operation is already in progress, return it without re-enqueuing
-            pass
 
-        # Return operation response with correct done status
         is_done = operation.status in ("completed", "failed")
 
         return OperationResponse(
@@ -90,6 +85,14 @@ async def import_clz(
             metadata={
                 "operation_type": "import_clz",
                 "csv_path": request.file_path,
+                "file_checksum": prepared_import.file_checksum,
+                "file_size": prepared_import.file_size,
+                "total_rows": prepared_import.total_rows,
+                "resume_count": (
+                    operation.result.get("resume_count", 0)
+                    if isinstance(operation.result, dict)
+                    else 0
+                ),
                 "status": operation.status,
             },
         )
@@ -158,6 +161,11 @@ async def get_import_clz_status(
             else None,
         },
     )
+
+    if isinstance(operation.result, dict):
+        for key in ("file_checksum", "file_size", "total_rows", "resume_count"):
+            if key in operation.result:
+                response.metadata[key] = operation.result[key]
 
     if operation.result:
         response.response = operation.result
