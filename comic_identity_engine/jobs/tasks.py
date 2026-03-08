@@ -362,8 +362,8 @@ async def resolve_identity_task(
             )
             adapter = get_adapter(parsed_url.platform)
 
-            # AA requires full URL with slug for issue fetching
-            if parsed_url.platform == "aa" and parsed_url.full_url:
+            # Some platforms need the original source URL to fetch the issue page.
+            if parsed_url.platform in {"aa", "hip"} and parsed_url.full_url:
                 candidate = await adapter.fetch_issue(
                     parsed_url.source_issue_id, full_url=parsed_url.full_url
                 )

@@ -12,6 +12,16 @@ services:
       - DATABASE_URL=postgresql+asyncpg://comic_user:comic_pass@postgres-app:5432/comic_identity
       - REDIS_URL=redis://redis:6379/0
       - ARQ_QUEUE_NAME=cie:docker:queue
+      - HIPCOMIC_AUTH_USERNAME
+      - HIPCOMIC_AUTH_PASSWORD
+      - HIPCOMIC_GUEST_BEARER
+      - HIPCOMIC_USER_TOKEN
+      - HIPCOMIC_COUNTRY_TOKEN
+      - HIPCOMIC_PHPSESSID
+      - HIPCOMIC_CF_CLEARANCE
+      - HIPCOMIC_X_COMMIT_HASH
+      - HIPCOMIC_BROWSER
+      - HIPCOMIC_PLATFORM
     depends_on:
       postgres-app:
         condition: service_healthy
@@ -30,6 +40,16 @@ services:
       - DATABASE_URL=postgresql+asyncpg://comic_user:comic_pass@postgres-app:5432/comic_identity
       - REDIS_URL=redis://redis:6379/0
       - ARQ_QUEUE_NAME=cie:docker:queue
+      - HIPCOMIC_AUTH_USERNAME
+      - HIPCOMIC_AUTH_PASSWORD
+      - HIPCOMIC_GUEST_BEARER
+      - HIPCOMIC_USER_TOKEN
+      - HIPCOMIC_COUNTRY_TOKEN
+      - HIPCOMIC_PHPSESSID
+      - HIPCOMIC_CF_CLEARANCE
+      - HIPCOMIC_X_COMMIT_HASH
+      - HIPCOMIC_BROWSER
+      - HIPCOMIC_PLATFORM
     depends_on:
       postgres-app:
         condition: service_healthy

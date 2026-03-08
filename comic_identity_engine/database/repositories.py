@@ -714,8 +714,11 @@ class OperationRepository:
         Returns:
             Operation entity or None if not found
         """
-        stmt: Select[Operation] = select(Operation).where(
-            Operation.input_hash == input_hash
+        stmt: Select[Operation] = (
+            select(Operation)
+            .where(Operation.input_hash == input_hash)
+            .order_by(Operation.created_at.desc(), Operation.id.desc())
+            .limit(1)
         )
         result = await self.session.execute(stmt)
-        return result.scalar_one_or_none()
+        return result.scalars().first()

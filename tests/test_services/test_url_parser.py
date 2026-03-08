@@ -125,6 +125,17 @@ class TestParseUrl:
         assert result.source_issue_id == "1-1"
         assert result.variant_suffix == "directedition"
 
+    def test_parse_hip_url_with_query_string(self):
+        """Test parsing HIP Comic URL with query string."""
+        url = "https://www.hipcomic.com/price-guide/us/marvel/comic/x-men-1991/1-1/?keywords="
+        result = parse_url(url)
+
+        assert result.platform == "hip"
+        assert result.source_issue_id == "1-1"
+        assert result.source_series_id == "x-men-1991"
+        assert result.variant_suffix is None
+        assert result.full_url == url
+
     def test_parse_url_empty_string(self):
         """Test parsing empty string raises ParseError."""
         with pytest.raises(ParseError, match="must be a non-empty string"):

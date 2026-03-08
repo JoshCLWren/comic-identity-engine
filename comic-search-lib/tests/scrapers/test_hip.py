@@ -1,5 +1,7 @@
 """Tests for HipComics scraper."""
 
+from unittest.mock import AsyncMock
+
 import pytest
 from comic_search_lib.models.comic import Comic
 from comic_search_lib.scrapers.hip import HipScraper
@@ -126,3 +128,155 @@ async def test_hip_find_years():
     assert 1988 in years
 
     await scraper.close()
+
+
+def test_select_best_volume_prefers_exact_series_match():
+    """Catalog volume matching should pick the exact series over noisy results."""
+    scraper = HipScraper()
+    comic = Comic(
+        id="xmen-minus-one",
+        title="X-Men",
+        issue="-1",
+        year=1997,
+        publisher="Marvel",
+        series_start_year=1991,
+    )
+    volumes = [
+        {
+            "name": "X-Men: The End: Book 1: Dreamers & Demons (2004)",
+            "issueCount": 6,
+            "startYear": "2004",
+            "publisher": {"name": "Marvel"},
+            "uri": "/us/marvel/comic/x-men-the-end-2004/",
+        },
+        {
+            "name": "X-Men (1991)",
+            "issueCount": 115,
+            "startYear": "1991",
+            "publisher": {"name": "Marvel"},
+            "uri": "/us/marvel/comic/x-men-1991/",
+        },
+    ]
+
+    selected = scraper._select_best_volume(volumes, comic)
+
+    assert selected is not None
+    assert selected["uri"] == "/us/marvel/comic/x-men-1991/"
+
+
+def test_build_catalog_listing_returns_price_guide_url():
+    """Catalog issues should map to canonical Hip price-guide URLs."""
+    scraper = HipScraper()
+    listing = scraper._build_catalog_listing(
+        {
+            "@id": "/api/issues/42206",
+            "uri": "/us/marvel/comic/x-men-1991/1-1/",
+            "issueNumber": "-1",
+            "name": "I Had A Dream",
+            "suggestedPrice": 9.91,
+            "imageUrl": "https://example.invalid/xmen.jpg",
+            "volume": {"name": "X-Men (1991)"},
+        }
+    )
+
+    assert listing["url"] == "https://www.hipcomic.com/price-guide/us/marvel/comic/x-men-1991/1-1/"
+    assert listing["price"] == "$9.91"
+    assert listing["issue_number"] == "-1"
+    assert listing["source_issue_id"] == "42206"
+
+
+@pytest.mark.asyncio
+async def test_search_catalog_api_returns_exact_issue_result():
+    """Hip catalog API search should return the exact issue page for #-1."""
+    scraper = HipScraper()
+    comic = Comic(
+        id="xmen-minus-one",
+        title="X-Men",
+        issue="-1",
+        year=1997,
+        publisher="Marvel",
+        series_start_year=1991,
+    )
+    fake_client = object()
+
+    scraper._get_catalog_token = AsyncMock(return_value="token")
+    scraper._search_catalog_volumes = AsyncMock(
+        return_value=[
+            {
+                "name": "X-Men (1991)",
+                "issueCount": 115,
+                "startYear": "1991",
+                "publisher": {"name": "Marvel"},
+                "uri": "/us/marvel/comic/x-men-1991/",
+            }
+        ]
+    )
+    scraper._search_catalog_issues = AsyncMock(
+        return_value=[
+            {
+                "@id": "/api/issues/42206",
+                "uri": "/us/marvel/comic/x-men-1991/1-1/",
+                "issueNumber": "-1",
+                "name": "I Had A Dream",
+                "suggestedPrice": 9.91,
+                "volume": {"name": "X-Men (1991)"},
+            }
+        ]
+    )
+
+    results = await scraper._search_catalog_api(comic, fake_client)  # type: ignore[arg-type]
+
+    assert len(results) == 1
+    assert results[0]["url"].endswith("/price-guide/us/marvel/comic/x-men-1991/1-1/")
+
+
+@pytest.mark.asyncio
+async def test_search_catalog_api_checks_later_ranked_volume_candidates():
+    """Hip catalog search should keep probing ranked volumes until an exact issue is found."""
+    scraper = HipScraper()
+    comic = Comic(
+        id="xmen-minus-one",
+        title="X-Men",
+        issue="-1",
+        year=1997,
+        publisher="Marvel",
+    )
+    fake_client = object()
+
+    uncanny = {
+        "name": "The Uncanny X-Men (1981)",
+        "issueCount": 405,
+        "startYear": "1981",
+        "publisher": {"name": "Marvel"},
+        "uri": "/us/marvel/comic/the-uncanny-x-men-1981/",
+    }
+    xmen = {
+        "name": "X-Men (1991)",
+        "issueCount": 115,
+        "startYear": "1991",
+        "publisher": {"name": "Marvel"},
+        "uri": "/us/marvel/comic/x-men-1991/",
+    }
+
+    scraper._get_catalog_token = AsyncMock(return_value="token")
+    scraper._search_catalog_volumes = AsyncMock(return_value=[uncanny, xmen])
+    scraper._search_catalog_issues = AsyncMock(
+        side_effect=[
+            [],
+            [
+                {
+                    "@id": "/api/issues/42206",
+                    "uri": "/us/marvel/comic/x-men-1991/1-1/",
+                    "issueNumber": "-1",
+                    "name": "I Had A Dream",
+                    "suggestedPrice": 9.91,
+                    "volume": {"name": "X-Men (1991)"},
+                }
+            ],
+        ]
+    )
+
+    results = await scraper._search_catalog_api(comic, fake_client)  # type: ignore[arg-type]
+
+    assert len(results) == 1
+    assert results[0]["url"].endswith("/price-guide/us/marvel/comic/x-men-1991/1-1/")

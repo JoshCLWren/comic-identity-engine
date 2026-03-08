@@ -242,9 +242,19 @@ class AAAdapter(SourceAdapter):
             # Remove issue number if present (e.g., "Leave it to Chance #1" -> "Leave it to Chance")
             issue_match = re.search(r"\s*#\d+", title_text)
             if issue_match:
-                return title_text[: issue_match.start()].strip()
-            return title_text
+                title_text = title_text[: issue_match.start()].strip()
+            return self._normalize_series_title(title_text)
         return None
+
+    def _normalize_series_title(self, title_text: str) -> str:
+        """Normalize Atomic Avenue series titles with common duplication glitches."""
+        cleaned = re.sub(r"\s+", " ", title_text).strip()
+        words = cleaned.split()
+        if len(words) % 2 == 0:
+            midpoint = len(words) // 2
+            if words[:midpoint] == words[midpoint:]:
+                return " ".join(words[:midpoint])
+        return cleaned
 
     def _extract_series_metadata(
         self, parser: LexborHTMLParser

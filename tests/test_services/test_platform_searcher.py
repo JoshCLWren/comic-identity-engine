@@ -268,6 +268,31 @@ class TestPlatformSearcher:
         assert result["reason"] in {"no_match", "no_match_after_errors"}
 
     @pytest.mark.asyncio
+    async def test_fuzzy_search_does_not_downgrade_negative_issue_to_positive_one(
+        self, searcher
+    ):
+        """Fuzzy title search must keep issue matching deterministic."""
+        scraper = MagicMock()
+        broad_result = MagicMock()
+        broad_result.listings = [
+            MagicMock(
+                title="The Uncanny X-Men (1981) #1",
+                url="https://www.hipcomic.com/price-guide/us/marvel/comic/the-uncanny-x-men-1981/1/",
+            )
+        ]
+
+        with patch.object(searcher, "_call_scraper", AsyncMock(return_value=broad_result)):
+            result = await searcher._fuzzy_search(
+                scraper=scraper,
+                title="X-Men",
+                issue="-1",
+                year=1997,
+                publisher="Marvel",
+            )
+
+        assert result is None
+
+    @pytest.mark.asyncio
     async def test_run_platform_search_with_timeout_returns_reason(self, searcher):
         """Hard timeouts should become informative not_found results."""
         fake_settings = MagicMock(platform_search_timeout=0.01)

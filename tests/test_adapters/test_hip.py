@@ -1,10 +1,12 @@
 """Tests for HIP adapter implementation."""
 
 from datetime import date
+from unittest.mock import Mock
 
+import httpx
 import pytest
 
-from comic_identity_engine.adapters import HIPAdapter, ValidationError
+from comic_identity_engine.adapters import HIPAdapter, NotFoundError, ValidationError
 
 
 class TestHIPAdapterSeriesMapping:
@@ -177,6 +179,44 @@ class TestHIPAdapterIssueMapping:
 
         assert result.issue_number == "1"
         assert result.variant_suffix == "A"
+
+    def test_issue_mapping_from_live_ssr_detail_layout(self):
+        """HIP live SSR detail rows map correctly without .issue-number elements."""
+        html = """
+        <html>
+        <head>
+            <meta name="description" content="X-Men #-1 (1997)">
+        </head>
+        <body>
+            <h1 style="display:none;"></h1>
+            <div class="r-detail-attribute">
+                <span class="r-detail-attribute__label r-detail-attribute__label--small">Publisher</span>
+                <a>Marvel</a>
+            </div>
+            <div class="r-detail-attribute">
+                <span class="r-detail-attribute__label r-detail-attribute__label--small">Issue</span>
+                <a href="/price-guide/us/marvel/comic/x-men-1991/1-1/">-1</a>
+            </div>
+            <div class="r-detail-attribute">
+                <span class="r-detail-attribute__label r-detail-attribute__label--small">Series</span>
+                <a href="/price-guide/us/marvel/comic/x-men-1991/">X-Men (1991)</a>
+            </div>
+            <script>
+                window.__NUXT__={coverDate:"1997-07-01"}
+            </script>
+        </body>
+        </html>
+        """
+        payload = {"html": html}
+
+        adapter = HIPAdapter()
+        result = adapter.fetch_issue_from_payload("1-1", payload)
+
+        assert result.series_title == "X-Men"
+        assert result.series_start_year == 1991
+        assert result.issue_number == "-1"
+        assert result.publisher == "Marvel"
+        assert result.cover_date is None
 
     def test_series_slug_extraction(self):
         """Series slug is extracted from HTML."""
@@ -716,6 +756,73 @@ class TestHIPAdapterNotImplemented:
         adapter = HIPAdapter()
         with pytest.raises(NotImplementedError, match="fetch_series_from_payload"):
             await adapter.fetch_series("x-men-1991")
+
+
+class TestHIPAdapterFetchIssue:
+    """Tests for HIP live fetch behavior."""
+
+    @pytest.mark.asyncio
+    async def test_fetch_issue_uses_full_url_and_browser_headers(self, mock_http_client):
+        """HIP uses the price-guide URL with browser-like headers when available."""
+        html = """
+        <html>
+        <body>
+            <div class="r-detail-attribute">
+                <span class="r-detail-attribute__label r-detail-attribute__label--small">Issue</span>
+                <a href="/price-guide/us/marvel/comic/x-men-1991/1-1/">-1</a>
+            </div>
+            <div class="r-detail-attribute">
+                <span class="r-detail-attribute__label r-detail-attribute__label--small">Series</span>
+                <a>X-Men (1991)</a>
+            </div>
+        </body>
+        </html>
+        """
+        mock_response = Mock()
+        mock_response.text = html
+        mock_response.raise_for_status = Mock()
+        mock_http_client.get.return_value = mock_response
+
+        adapter = HIPAdapter(http_client=mock_http_client)
+        url = "https://www.hipcomic.com/price-guide/us/marvel/comic/x-men-1991/1-1/?keywords="
+
+        result = await adapter.fetch_issue("1-1", full_url=url)
+
+        assert result.issue_number == "-1"
+        mock_http_client.get.assert_awaited_once()
+        assert mock_http_client.get.await_args.args[0] == url
+        assert "User-Agent" in mock_http_client.get.await_args.kwargs["headers"]
+
+    @pytest.mark.asyncio
+    async def test_fetch_issue_raises_not_found_when_all_patterns_fail(
+        self, mock_http_client
+    ):
+        """HIP raises NotFoundError when canonical and fallback URLs all 404."""
+
+        def build_404(url: str) -> Mock:
+            response = Mock()
+            response.raise_for_status = Mock(
+                side_effect=httpx.HTTPStatusError(
+                    "Not found",
+                    request=httpx.Request("GET", url),
+                    response=httpx.Response(404),
+                )
+            )
+            return response
+
+        mock_http_client.get.side_effect = [
+            build_404("https://www.hipcomic.com/price-guide/us/marvel/comic/x-men-1991/1-1/"),
+            build_404("https://www.hipcomic.com/listing/1-1"),
+            build_404("https://www.hipcomic.com/new-comic-listings/1-1"),
+        ]
+
+        adapter = HIPAdapter(http_client=mock_http_client)
+
+        with pytest.raises(NotFoundError, match="Issue not found: 1-1"):
+            await adapter.fetch_issue(
+                "1-1",
+                full_url="https://www.hipcomic.com/price-guide/us/marvel/comic/x-men-1991/1-1/",
+            )
 
 
 class TestHIPAdapterRealWorldData:

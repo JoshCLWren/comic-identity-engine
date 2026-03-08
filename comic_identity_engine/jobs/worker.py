@@ -14,6 +14,7 @@ USAGE:
 from __future__ import annotations
 
 import asyncio
+import logging
 import signal
 from typing import Any
 
@@ -38,8 +39,11 @@ def _configure_logging() -> None:
     This must be called before any loggers are created to ensure
     log messages appear in console output.
     """
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+
     structlog.configure(
         processors=[
+            structlog.stdlib.filter_by_level,
             structlog.stdlib.add_log_level,
             structlog.stdlib.add_logger_name,
             structlog.processors.TimeStamper(fmt="iso"),
@@ -58,6 +62,18 @@ def _configure_logging() -> None:
 logger = structlog.get_logger(__name__)
 
 _received_signals = []
+
+
+async def _on_worker_startup(ctx: dict[str, Any]) -> None:
+    """Log when the arq worker has fully initialized and is ready for jobs."""
+    logger.info(
+        "Worker started successfully",
+        queue_name=WorkerSettings.queue_name,
+        max_jobs=WorkerSettings.max_jobs,
+        job_timeout=WorkerSettings.job_timeout,
+        functions_count=len(WorkerSettings.functions),
+        redis_host=WorkerSettings.redis_settings.host,
+    )
 
 
 def _signal_handler(signum: int, frame) -> None:
@@ -146,6 +162,7 @@ def create_worker(settings_cls: type[WorkerSettings] = WorkerSettings) -> Worker
         job_timeout=settings_cls.job_timeout,
         keep_result=settings_cls.keep_result,
         functions=settings_cls.functions,
+        on_startup=_on_worker_startup,
     )
 
 

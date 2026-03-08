@@ -313,6 +313,7 @@ class TestPostResolveIdentity:
         mock_ops.create_operation.assert_called_once_with(
             operation_type="resolve",
             input_data={"url": "https://www.comics.org/issue/12345/"},
+            force=False,
         )
 
     async def test_resolve_locg_url_returns_202(

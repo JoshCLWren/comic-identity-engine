@@ -52,6 +52,30 @@ class HIPAdapter(SourceAdapter):
         """
         super().__init__(http_client)
         self.timeout = timeout
+        self.headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/133.0.0.0 Safari/537.36"
+            ),
+            "Accept": (
+                "text/html,application/xhtml+xml,application/xml;q=0.9,"
+                "image/avif,image/webp,*/*;q=0.8"
+            ),
+            "Accept-Language": "en-US,en;q=0.9",
+            "Cache-Control": "max-age=0",
+            "Upgrade-Insecure-Requests": "1",
+            "Sec-Fetch-Site": "none",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-User": "?1",
+            "Sec-Fetch-Dest": "document",
+            "sec-ch-ua": (
+                '"Chromium";v="133", "Not(A:Brand";v="99", '
+                '"Google Chrome";v="133"'
+            ),
+            "sec-ch-ua-mobile": "?0",
+            'sec-ch-ua-platform': '"Windows"',
+        }
 
     async def fetch_series(self, source_series_id: str) -> SeriesCandidate:
         """Fetch series from HIP price guide.
@@ -77,7 +101,8 @@ class HIPAdapter(SourceAdapter):
         """Fetch issue from HIP price guide.
 
         Args:
-            source_issue_id: HIP listing ID (e.g., "12345678")
+            source_issue_id: HIP listing ID or encoded issue identifier
+            full_url: Optional canonical HipComic price-guide URL
 
         Returns:
             IssueCandidate with validated metadata
@@ -90,6 +115,19 @@ class HIPAdapter(SourceAdapter):
         if self.http_client is None:
             raise SourceError("HTTP client not initialized")
 
+        if full_url:
+            try:
+                response = await self.http_client.get(full_url, headers=self.headers)
+                response.raise_for_status()
+                return self.fetch_issue_from_payload(
+                    source_issue_id, {"html": response.text}
+                )
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code != 404:
+                    raise SourceError(f"HTTP error fetching issue: {e}") from e
+            except httpx.RequestError as e:
+                raise SourceError(f"Network error fetching issue: {e}") from e
+
         # Try the listing URL pattern first
         urls = [
             f"{self.BASE_URL}/listing/{source_issue_id}",
@@ -99,7 +137,7 @@ class HIPAdapter(SourceAdapter):
         last_error = None
         for url in urls:
             try:
-                response = await self.http_client.get(url)
+                response = await self.http_client.get(url, headers=self.headers)
                 response.raise_for_status()
                 # Success - parse the HTML
                 return self.fetch_issue_from_payload(
@@ -294,7 +332,7 @@ class HIPAdapter(SourceAdapter):
         result: dict[str, Any] = {}
 
         title_elem = parser.css_first("h1")
-        if title_elem:
+        if title_elem and title_elem.text().strip():
             title_text = title_elem.text().strip()
             series_title, start_year = self._parse_hip_title(title_text)
             if series_title:
@@ -302,11 +340,28 @@ class HIPAdapter(SourceAdapter):
             if start_year is not None:
                 result["start_year"] = start_year
 
+        detail_attributes = self._extract_detail_attributes(parser)
+        series_text = detail_attributes.get("series")
+        if series_text and "series_title" not in result:
+            series_title, start_year = self._parse_hip_title(series_text)
+            if series_title:
+                result["series_title"] = series_title
+            if start_year is not None:
+                result["start_year"] = start_year
+
+        issue_text = detail_attributes.get("issue")
+        if issue_text:
+            result["issue_number"] = self._clean_issue_number(issue_text)
+
+        publisher_text = detail_attributes.get("publisher")
+        if publisher_text:
+            result["publisher"] = publisher_text
+
         issue_number_elem = parser.css_first(".issue-number, [class*='issue-number']")
         if issue_number_elem:
             issue_text = issue_number_elem.text().strip()
             result["issue_number"] = self._clean_issue_number(issue_text)
-        else:
+        elif "issue_number" not in result:
             return None
 
         publisher_elem = parser.css_first(
@@ -350,6 +405,29 @@ class HIPAdapter(SourceAdapter):
                 result["upc"] = upc_text
 
         return result if result else None
+
+    def _extract_detail_attributes(self, parser: Any) -> dict[str, str]:
+        """Extract key/value metadata from HipComic detail rows."""
+        details: dict[str, str] = {}
+
+        for attr in parser.css(".r-detail-attribute"):
+            label_elem = attr.css_first(".r-detail-attribute__label")
+            if label_elem is None:
+                continue
+
+            label = label_elem.text().strip().lower()
+            value_parts: list[str] = []
+            for child in attr.iter():
+                text = child.text().strip()
+                if not text or text.lower() == label:
+                    continue
+                if text not in value_parts:
+                    value_parts.append(text)
+
+            if value_parts:
+                details[label] = " ".join(value_parts)
+
+        return details
 
     def _parse_hip_title(self, title: str) -> tuple[str, int | None]:
         """Extract series title and start year from HIP title.
@@ -424,6 +502,17 @@ class HIPAdapter(SourceAdapter):
         """
         if not date_str:
             return None
+
+        iso_match = re.search(r"(\d{4})-(\d{2})-(\d{2})", date_str)
+        if iso_match:
+            try:
+                return date(
+                    int(iso_match.group(1)),
+                    int(iso_match.group(2)),
+                    int(iso_match.group(3)),
+                )
+            except ValueError:
+                pass
 
         month_match = re.search(
             r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{4})",

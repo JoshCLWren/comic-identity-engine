@@ -415,13 +415,16 @@ def _parse_hip_url(url: str) -> ParsedUrl:
     Raises:
         ParseError: If URL cannot be parsed
     """
-    issue_match = re.search(r"/comic/([^/]+)/([^/]+)", url)
+    parsed = urlparse(url)
+    path = parsed.path
+
+    issue_match = re.search(r"/comic/([^/]+)/([^/]+)", path)
     if issue_match:
         series_slug = issue_match.group(1)
         issue_encoded = issue_match.group(2)
 
         variant_suffix = None
-        path_parts = url.rstrip("/").split("/")
+        path_parts = path.rstrip("/").split("/")
         if len(path_parts) > 1:
             last_part = path_parts[-1]
             if last_part != issue_encoded and last_part not in ["", "keywords"]:
@@ -432,15 +435,17 @@ def _parse_hip_url(url: str) -> ParsedUrl:
             source_issue_id=issue_encoded,
             source_series_id=series_slug,
             variant_suffix=variant_suffix,
+            full_url=url,
         )
 
-    series_match = re.search(r"/comic/([^/]+)", url)
+    series_match = re.search(r"/comic/([^/]+)", path)
     if series_match:
         series_slug = series_match.group(1)
         return ParsedUrl(
             platform="hip",
             source_issue_id=series_slug,
             source_series_id=series_slug,
+            full_url=url,
         )
 
     raise ParseError(f"Invalid HIP URL format: {url}")

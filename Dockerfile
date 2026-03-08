@@ -37,6 +37,9 @@ RUN mkdir -p /mnt/extra/josh/code && \
 # Install dependencies using uv (including dev dependencies)
 RUN uv sync --dev
 
+# Install Playwright browsers and required system packages for browser-backed scrapers.
+RUN uv run playwright install --with-deps chromium
+
 # Copy application files
 COPY tests/ ./tests/
 COPY scripts/ ./scripts/

@@ -7,12 +7,12 @@ focusing on finding the best prices for wishlist items.
 
 import asyncio
 import logging
+import os
 import re
 import time
 from typing import Any, Dict, List, Optional, Union
 
 import httpx
-from selectolax.lexbor import LexborHTMLParser
 
 from comic_search_lib.exceptions import (
     NetworkError,
@@ -34,9 +34,8 @@ class HipScraper:
     HipComic.com, with special handling for year matching and price extraction.
     """
 
-    BASE_URL = (
-        "https://www.hipcomic.com/category/comic-books/100/?category_slug=comic-books"
-    )
+    PLATFORM_URL = "https://www.hipcomic.com"
+    CATALOG_API_URL = "https://catalog.hipcomic.com/api"
 
     def __init__(self, timeout: int = 30, max_retries: int = 3):
         """
@@ -49,18 +48,18 @@ class HipScraper:
         self.timeout = timeout
         self._max_retries = max_retries
         self._client: Optional[httpx.AsyncClient] = None
+        self._catalog_token: Optional[str] = None
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
         if self._client is None:
             headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "User-Agent": self._browser_user_agent(),
+                "Accept": "application/json, text/plain, */*",
                 "Accept-Language": "en-US,en;q=0.9",
                 "Accept-Encoding": "gzip, deflate",
-                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
                 "X-Requested-With": "XMLHttpRequest",
-                "Origin": self.BASE_URL,
+                "Origin": self.PLATFORM_URL,
             }
             self._client = httpx.AsyncClient(
                 headers=headers,
@@ -75,33 +74,290 @@ class HipScraper:
             await self._client.aclose()
             self._client = None
 
-    async def _fetch_html(self, url: str, client: httpx.AsyncClient) -> str:
-        """Fetch HTML from URL."""
-        try:
-            response = await client.get(url)
-            if response.status_code == 429:
-                retry_after = response.headers.get("Retry-After", "60")
-                raise RateLimitError(
-                    "Rate limited by HipComics (HTTP 429)",
-                    source="hip",
-                    retry_after=int(retry_after) if retry_after.isdigit() else 60,
+    def _browser_user_agent(self) -> str:
+        """Return the browser user agent for HipComic requests."""
+        return os.getenv(
+            "HIPCOMIC_USER_AGENT",
+            "Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0",
+        )
+
+    def _catalog_headers(
+        self, token: str, referer: str = "https://www.hipcomic.com/"
+    ) -> dict[str, str]:
+        """Build request headers for HipComic catalog API calls."""
+        return {
+            "User-Agent": self._browser_user_agent(),
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "en-US,en;q=0.5",
+            "Referer": referer,
+            "X-Requested-With": "XMLHttpRequest",
+            "is-app": "0",
+            "is-pwa": "0",
+            "is-mobile": "0",
+            "is-mobile-device": "0",
+            "browser": os.getenv("HIPCOMIC_BROWSER", "Firefox"),
+            "platform": os.getenv("HIPCOMIC_PLATFORM", "Linux"),
+            "Origin": self.PLATFORM_URL,
+            "Sec-Fetch-Dest": "empty",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Site": "same-site",
+            "Authorization": f"Bearer {token}",
+        }
+
+    def _login_headers(self) -> dict[str, str]:
+        """Build request headers for HipComic authentication calls."""
+        headers = self._catalog_headers(
+            token=os.getenv("HIPCOMIC_GUEST_BEARER", ""),
+            referer=f"{self.PLATFORM_URL}/",
+        )
+        headers["Sec-Fetch-Site"] = "same-origin"
+        if token := headers.get("Authorization"):
+            headers["Cookie"] = self._auth_cookie_header(token.removeprefix("Bearer "))
+        headers.pop("Authorization", None)
+        return headers
+
+    def _auth_cookie_header(self, guest_token: str) -> str:
+        """Build a cookie header for HipComic auth requests."""
+        cookie_pairs = [
+            ("i18n_redirected", "en"),
+            ("JkKSMfEWUserToken", os.getenv("HIPCOMIC_USER_TOKEN", "")),
+            ("JkKSMfEWCountryToken", os.getenv("HIPCOMIC_COUNTRY_TOKEN", "")),
+            ("auth.strategy", "hybridJwt"),
+            ("PHPSESSID", os.getenv("HIPCOMIC_PHPSESSID", "")),
+            ("cf_clearance", os.getenv("HIPCOMIC_CF_CLEARANCE", "")),
+            ("auth._token.hybridJwt", f"Bearer {guest_token}" if guest_token else ""),
+            ("auth._refresh_token.hybridJwt", "false"),
+        ]
+        return "; ".join(f"{key}={value}" for key, value in cookie_pairs if value)
+
+    async def _get_catalog_token(self, client: httpx.AsyncClient) -> Optional[str]:
+        """Return an authenticated token for HipComic catalog API access."""
+        if self._catalog_token:
+            return self._catalog_token
+
+        guest_token = os.getenv("HIPCOMIC_GUEST_BEARER")
+        username = os.getenv("HIPCOMIC_AUTH_USERNAME")
+        password = os.getenv("HIPCOMIC_AUTH_PASSWORD")
+
+        if username and password and guest_token:
+            try:
+                response = await client.post(
+                    f"{self.PLATFORM_URL}/api/authenticate",
+                    files={
+                        "username": (None, username),
+                        "password": (None, password),
+                        "remember_me": (None, "0"),
+                    },
+                    headers=self._login_headers(),
                 )
-            response.raise_for_status()
-            return response.text
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 429:
-                raise RateLimitError(
-                    "Rate limited by HipComics (HTTP 429)",
-                    source="hip",
-                    retry_after=60,
-                ) from e
-            raise NetworkError(
-                f"HTTP error: {e}", source="hip", original_error=e
-            ) from e
-        except httpx.RequestError as e:
-            raise NetworkError(
-                f"Network error: {e}", source="hip", original_error=e
-            ) from e
+                response.raise_for_status()
+                token = response.json().get("token")
+                if token:
+                    self._catalog_token = token
+                    return token
+            except Exception:
+                logger.debug("HipComic auth refresh failed; falling back to guest token")
+
+        if guest_token:
+            self._catalog_token = guest_token
+            return guest_token
+
+        return None
+
+    async def _fetch_catalog_json(
+        self,
+        client: httpx.AsyncClient,
+        path: str,
+        *,
+        params: Optional[Dict[str, Any]] = None,
+        token: Optional[str] = None,
+        referer: str = "https://www.hipcomic.com/",
+    ) -> Dict[str, Any]:
+        """Fetch JSON from HipComic's catalog API."""
+        auth_token = token or await self._get_catalog_token(client)
+        if not auth_token:
+            return {}
+
+        response = await client.get(
+            f"{self.CATALOG_API_URL}{path}",
+            params=params,
+            headers=self._catalog_headers(auth_token, referer=referer),
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def _normalize_series_title(self, title: str) -> str:
+        """Normalize a series title for Hip volume matching."""
+        normalized = title.lower()
+        normalized = re.sub(r"\(\d{4}\)", "", normalized)
+        normalized = normalized.replace("-", " ")
+        normalized = re.sub(r"[^a-z0-9\s]", " ", normalized)
+        normalized = re.sub(r"\s+", " ", normalized).strip()
+        if normalized.startswith("the "):
+            normalized = normalized[4:]
+        return normalized
+
+    def _score_volume_match(self, volume: Dict[str, Any], comic: Comic) -> float:
+        """Score how well a HipComic volume matches the target comic."""
+        target = self._normalize_series_title(comic.title)
+        target_year = comic.series_start_year
+        target_issue_year = comic.year
+        target_publisher = (comic.publisher or "").strip().lower()
+        name = volume.get("name") or ""
+        candidate = self._normalize_series_title(name)
+        if not candidate:
+            return -1
+
+        if candidate == target:
+            score = 100.0
+        elif candidate.startswith(target) or target in candidate:
+            score = 70.0
+        else:
+            return -1
+
+        start_year = volume.get("startYear")
+        if target_year and str(start_year) == str(target_year):
+            score += 20
+        elif target_issue_year and str(start_year) == str(target_issue_year):
+            score += 8
+
+        publisher = ((volume.get("publisher") or {}).get("name") or "").lower()
+        if target_publisher and publisher == target_publisher:
+            score += 10
+
+        issue_count = int(volume.get("issueCount") or 0)
+        score += min(issue_count, 999) / 1000
+        return score
+
+    def _rank_candidate_volumes(
+        self, volumes: List[Dict[str, Any]], comic: Comic
+    ) -> List[Dict[str, Any]]:
+        """Rank plausible HipComic volumes from best to worst match."""
+        scored_volumes: list[tuple[float, Dict[str, Any]]] = []
+        for volume in volumes:
+            score = self._score_volume_match(volume, comic)
+            if score >= 0:
+                scored_volumes.append((score, volume))
+
+        scored_volumes.sort(key=lambda item: item[0], reverse=True)
+        return [volume for _, volume in scored_volumes]
+
+    def _select_best_volume(
+        self, volumes: List[Dict[str, Any]], comic: Comic
+    ) -> Optional[Dict[str, Any]]:
+        """Choose the best HipComic volume from catalog search results."""
+        ranked = self._rank_candidate_volumes(volumes, comic)
+        return ranked[0] if ranked else None
+
+    async def _search_catalog_volumes(
+        self, comic: Comic, client: httpx.AsyncClient, token: str
+    ) -> List[Dict[str, Any]]:
+        """Search HipComic catalog volumes for the target series."""
+        queries = [comic.title]
+        if comic.series_start_year:
+            queries.insert(0, f"{comic.title} {comic.series_start_year}")
+
+        volumes_by_uri: Dict[str, Dict[str, Any]] = {}
+        for query in queries:
+            data = await self._fetch_catalog_json(
+                client,
+                "/volumes",
+                params={
+                    "search": query,
+                    "page": 1,
+                    "itemsPerPage": 50,
+                    "order[issueCount]": "DESC",
+                },
+                token=token,
+            )
+            for volume in data.get("hydra:member", []):
+                uri = volume.get("uri")
+                if uri:
+                    volumes_by_uri[uri] = volume
+
+        all_volumes = list(volumes_by_uri.values())
+        us_volumes = [
+            volume
+            for volume in all_volumes
+            if str(volume.get("uri") or "").startswith("/us/")
+        ]
+        return us_volumes or all_volumes
+
+    async def _search_catalog_issues(
+        self,
+        comic: Comic,
+        client: httpx.AsyncClient,
+        token: str,
+        volume: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
+        """Fetch HipComic catalog issues for a volume and exact issue number."""
+        volume_uri = volume.get("uri")
+        if not volume_uri:
+            return []
+
+        data = await self._fetch_catalog_json(
+            client,
+            "/issues",
+            params={
+                "volume.uri": volume_uri,
+                "issueNumber": comic.issue,
+                "page": 1,
+                "itemsPerPage": 10,
+            },
+            token=token,
+        )
+        return data.get("hydra:member", [])
+
+    def _build_catalog_listing(self, issue: Dict[str, Any]) -> Dict[str, Any]:
+        """Map a HipComic catalog issue to a listing-like dictionary."""
+        volume = issue.get("volume") or {}
+        volume_name = volume.get("name") or ""
+        issue_number = issue.get("issueNumber") or ""
+        story_name = issue.get("name") or ""
+        suggested_price = issue.get("suggestedPrice") or 0.0
+        uri = issue.get("uri") or ""
+
+        if story_name:
+            display_name = f"{volume_name} #{issue_number} {story_name}".strip()
+        else:
+            display_name = f"{volume_name} #{issue_number}".strip()
+
+        return {
+            "store": "HipComic Price Guide",
+            "name": display_name,
+            "item_title": volume_name,
+            "raw_item_title": display_name,
+            "price": f"${float(suggested_price):.2f}",
+            "grade": "Guide",
+            "url": f"{self.PLATFORM_URL}/price-guide{uri}" if uri else "",
+            "image_url": issue.get("imageUrl", ""),
+            "title": volume_name,
+            "type": "hip",
+            "issue_number": issue_number,
+            "source_issue_id": str(issue.get("@id", "")).rsplit("/", 1)[-1],
+            "key": f"{volume_name}|{issue_number}",
+        }
+
+    async def _search_catalog_api(
+        self, comic: Comic, client: httpx.AsyncClient
+    ) -> List[Dict[str, Any]]:
+        """Search HipComic's authenticated catalog API for an exact issue."""
+        token = await self._get_catalog_token(client)
+        if not token:
+            return []
+
+        volumes = await self._search_catalog_volumes(comic, client, token)
+        ranked_volumes = self._rank_candidate_volumes(volumes, comic)
+        for volume in ranked_volumes[:10]:
+            issues = await self._search_catalog_issues(comic, client, token, volume)
+            if issues:
+                return [
+                    self._build_catalog_listing(issue)
+                    for issue in issues
+                    if issue.get("uri")
+                ]
+
+        return []
 
     async def search_comic(self, comic: Union[Comic, Dict[str, Any]]) -> SearchResult:
         """
@@ -162,6 +418,8 @@ class HipScraper:
                     image_url=item.get("image_url", ""),
                     store_type="hip",
                 )
+                if item.get("issue_number"):
+                    setattr(listing, "issue_number", item["issue_number"])
                 search_result.listings.append(listing)
 
                 # Create price
@@ -173,6 +431,11 @@ class HipScraper:
                     store_type="hip",
                 )
                 search_result.prices.append(price)
+
+            if search_result.listings:
+                search_result.url = search_result.listings[0].url
+                if results[0].get("source_issue_id"):
+                    search_result.source_issue_id = results[0]["source_issue_id"]
 
             return search_result
 
@@ -196,170 +459,8 @@ class HipScraper:
         Returns:
             List[Dict]: List of found listings
         """
-        results = []
-        comic_title = comic.title
-        comic_issue = comic.issue
-
         try:
-            page = 1
-            page_size = 96
-            max_pages = 5
-
-            while page <= max_pages and len(results) < 50:
-                logger.debug(f"Processing page {page} for {comic_title} #{comic_issue}")
-
-                year_suffix = f" {comic.year}" if comic.year else ""
-                keywords = f"{comic_title} {comic_issue}{year_suffix}".replace(
-                    " ", "%20"
-                )
-                search_url = (
-                    f"{self.BASE_URL}&keywords={keywords}&listing_type=product&"
-                    f"limit={page_size}&sort=default"
-                )
-
-                if page > 1:
-                    search_url += f"&page={page}"
-
-                logger.debug(f"Search URL: {search_url}")
-
-                html = await self._fetch_html(search_url, client)
-
-                if not html:
-                    break
-
-                parser = LexborHTMLParser(html)
-                comic_listings = parser.css(".r-listing")
-
-                if not comic_listings:
-                    logger.debug(f"No listings found on page {page}")
-                    break
-
-                logger.debug(f"Found {len(comic_listings)} listings on page {page}")
-
-                for listing_div in comic_listings:
-                    listing = {}
-
-                    link_tag = listing_div.css_first("a[href*='/listing/']")
-                    if not link_tag:
-                        continue
-
-                    listing["url"] = link_tag.attributes.get("href", "")
-                    if not listing["url"]:
-                        continue
-                    listing["url"] = f"https://www.hipcomic.com{listing['url']}"
-
-                    name_elem = listing_div.css_first(".r-listing__title h5")
-                    if name_elem:
-                        listing["name"] = name_elem.text().strip()
-                    else:
-                        title_elem = listing_div.css_first(".r-listing__title")
-                        if title_elem:
-                            listing["name"] = title_elem.text().strip()
-
-                    if not listing.get("name"):
-                        continue
-
-                    listing["raw_item_title"] = listing["name"]
-                    listing["item_title"] = (
-                        listing["name"].lower().split("#")[0].strip()
-                    )
-
-                    skip_keywords = ["cgc", "lot", "set"]
-                    if any(
-                        keyword in listing["item_title"].lower()
-                        for keyword in skip_keywords
-                    ):
-                        continue
-
-                    img_tag = listing_div.css_first("img")
-                    if img_tag:
-                        listing["image_url"] = img_tag.attributes.get("src", "")
-
-                    price_tag = listing_div.css_first(".r-listing__price")
-                    if not price_tag:
-                        price_tag = listing_div.css_first("[class*='price']")
-
-                    if price_tag:
-                        price_text = price_tag.text().strip()
-                    else:
-                        continue
-
-                    if price_text.startswith("C"):
-                        continue
-
-                    price_value = self._parse_price(price_text)
-                    if price_value <= 0:
-                        continue
-                    listing["price"] = f"${price_value:.2f}"
-
-                    seller_elem = listing_div.css_first("#details-seller-username")
-                    if seller_elem:
-                        seller_text = seller_elem.text()
-                        seller_name = re.sub(r"\s*\(\d+\)", "", seller_text).strip()
-                        listing["store"] = seller_name if seller_name else "HIP"
-                    else:
-                        listing["store"] = "HIP"
-
-                    implied_years = self._find_years(listing)
-
-                    if "#" in listing["name"]:
-                        implied_issue = listing["name"].split("#")[1].split(" ")[0]
-                        if comic_issue != implied_issue:
-                            for divider in ("--", "-"):
-                                if divider in implied_issue:
-                                    implied_issue = implied_issue.split(divider)[0]
-
-                            cleaned_issue = "".join(filter(str.isdigit, implied_issue))
-                            if cleaned_issue == implied_issue:
-                                continue
-                            if comic_issue != cleaned_issue:
-                                continue
-
-                    valid_listing = True
-
-                    if comic.year:
-                        comic_year_int = int(comic.year)
-                        year_matches = any(
-                            int(imp_year) in (comic_year_int, comic_year_int + 1)
-                            for imp_year in implied_years
-                            if isinstance(imp_year, int) or str(imp_year).isdigit()
-                        )
-                        if not year_matches:
-                            valid_listing = False
-                            logger.debug(
-                                f"[HIP] Filtered listing with years {implied_years}, "
-                                f"looking for {comic_year_int}"
-                            )
-
-                    elif (
-                        hasattr(comic, "series_start_year")
-                        and comic.series_start_year
-                        and hasattr(comic, "series_end_year")
-                        and comic.series_end_year
-                    ):
-                        for imp_year in implied_years:
-                            try:
-                                start_year = int(comic.series_start_year)
-                                end_year = int(comic.series_end_year)
-                                imp_year = int(imp_year)
-
-                                if imp_year < start_year or imp_year > end_year:
-                                    valid_listing = False
-                                    break
-                            except (ValueError, TypeError):
-                                pass
-
-                    if not valid_listing:
-                        continue
-
-                    listing["title"] = comic.title
-                    listing["type"] = "hip"
-                    listing["key"] = f"{comic.title}|{listing['item_title']}"
-                    results.append(listing)
-
-                page += 1
-
-            return results
+            return await self._search_catalog_api(comic, client)
 
         except Exception as e:
             if isinstance(e, (NetworkError, ParseError, RateLimitError)):

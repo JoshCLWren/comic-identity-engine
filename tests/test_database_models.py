@@ -443,12 +443,15 @@ class TestOperationRepository:
         repo = OperationRepository(mock_session)
 
         mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = Operation(
+        operation = Operation(
             id=uuid.uuid4(),
             operation_type="import",
             status="completed",
             input_hash="abc123",
         )
+        mock_scalars = MagicMock()
+        mock_scalars.first.return_value = operation
+        mock_result.scalars.return_value = mock_scalars
 
         mock_session.execute.return_value = mock_result
 
@@ -456,6 +459,29 @@ class TestOperationRepository:
 
         assert result is not None
         assert result.input_hash == "abc123"
+
+    @pytest.mark.asyncio
+    async def test_find_by_input_hash_returns_newest_duplicate(
+        self, mock_session: AsyncMock
+    ) -> None:
+        """Duplicate input hashes should not crash repository lookup."""
+        repo = OperationRepository(mock_session)
+
+        newest = Operation(
+            id=uuid.uuid4(),
+            operation_type="resolve",
+            status="pending",
+            input_hash="abc123",
+        )
+        mock_result = MagicMock()
+        mock_scalars = MagicMock()
+        mock_scalars.first.return_value = newest
+        mock_result.scalars.return_value = mock_scalars
+        mock_session.execute.return_value = mock_result
+
+        result = await repo.find_by_input_hash("abc123")
+
+        assert result is newest
 
 
 class TestModelStringRepresentations:

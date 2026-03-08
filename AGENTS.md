@@ -22,7 +22,23 @@ uv sync
 source .venv/bin/activate
 ```
 
-### Docker-Based CI (Recommended)
+### Local Development (Recommended)
+
+Use local `uv` processes for normal development, scraper debugging, and dogfooding. Browser-backed scrapers can behave differently in Docker because anti-bot systems fingerprint the containerized browser differently.
+
+```bash
+# Start only infrastructure in Docker
+docker compose up -d postgres-app redis
+
+# Run the app locally
+uv run cie-api
+uv run cie-worker
+
+# Exercise the CLI
+uv run cie-find "https://www.comics.org/issue/125295/" --verbose --force
+```
+
+### Docker-Based CI / Full Stack
 
 The project includes a Docker-based CI environment that works identically locally and in GitHub Actions.
 

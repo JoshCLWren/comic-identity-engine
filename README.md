@@ -167,13 +167,29 @@ uv sync
 direnv allow  # Loads .envrc automatically
 
 # Run tests
-pytest
+uv run pytest
 
 # Run with coverage
-pytest --cov=comic_identity_engine
+uv run pytest --cov=comic_identity_engine
 ```
 
-### Docker-Based CI (Recommended)
+### Local Development (Recommended)
+
+Use local `uv` processes for scraper development, dogfooding, and day-to-day CLI work. This avoids Docker-specific browser and anti-bot differences on sites like LoCG.
+
+```bash
+# Start infrastructure only
+docker compose up -d postgres-app redis
+
+# Start the API and worker locally
+uv run cie-api
+uv run cie-worker
+
+# In another shell
+uv run cie-find https://www.comics.org/issue/12345/ --verbose --force
+```
+
+### Docker-Based CI / Full Stack
 
 ```bash
 # Build and run all tests locally using Docker
@@ -203,18 +219,18 @@ See [SHELL.md](SHELL.md) for details.
 
 ```bash
 # Find an issue by URL (auto-detects platform)
-cie-find https://www.comics.org/issue/12345/
+uv run cie-find https://www.comics.org/issue/12345/
 
-# Start the API and worker from the project .venv
-cie-api --reload
-cie-worker
+# Start the API and worker from the project environment
+uv run cie-api
+uv run cie-worker
 
 # Import CLZ backup file
-cie-import-clz backup.clz
+uv run cie-import-clz backup.clz
 
 # Admin commands
-cie-admin db migrate
-cie-admin db seed
+uv run cie-admin db migrate
+uv run cie-admin db seed
 ```
 
 ### Python API

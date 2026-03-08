@@ -1,5 +1,6 @@
 """Tests for arq worker configuration."""
 
+import logging
 from unittest.mock import AsyncMock, Mock, patch
 import pytest
 from arq.connections import RedisSettings as ArqRedisSettings
@@ -7,6 +8,8 @@ from arq.worker import Worker
 
 from comic_identity_engine.jobs.worker import (
     WorkerSettings,
+    _configure_logging,
+    _on_worker_startup,
     create_redis_pool,
     create_worker,
     main,
@@ -150,6 +153,22 @@ class TestCreateWorker:
                 job_timeout=WorkerSettings.job_timeout,
                 keep_result=WorkerSettings.keep_result,
                 functions=WorkerSettings.functions,
+                on_startup=_on_worker_startup,
+            )
+
+    @pytest.mark.asyncio
+    async def test_worker_startup_logs_success(self):
+        """The startup hook should emit a clear ready log."""
+        with patch("comic_identity_engine.jobs.worker.logger") as mock_logger:
+            await _on_worker_startup({})
+
+            mock_logger.info.assert_called_once_with(
+                "Worker started successfully",
+                queue_name=WorkerSettings.queue_name,
+                max_jobs=WorkerSettings.max_jobs,
+                job_timeout=WorkerSettings.job_timeout,
+                functions_count=len(WorkerSettings.functions),
+                redis_host=WorkerSettings.redis_settings.host,
             )
 
 
@@ -216,3 +235,14 @@ class TestMain:
                     main()
 
                 mock_logger.error.assert_called_once()
+
+
+class TestLoggingConfiguration:
+    """Tests for worker logging bootstrap."""
+
+    def test_configure_logging_initializes_stdlib_handler(self):
+        """Worker logs should be visible on stdout at info level."""
+        with patch("comic_identity_engine.jobs.worker.logging.basicConfig") as mock_basic:
+            _configure_logging()
+
+            mock_basic.assert_called_once_with(level=logging.INFO, format="%(message)s")

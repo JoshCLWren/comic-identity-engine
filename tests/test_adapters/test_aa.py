@@ -351,6 +351,28 @@ class TestAAAdapterHelpers:
 
         assert result == "Alpha Flight (1st Series)"
 
+    def test_extract_series_title_dedupes_repeated_words(self):
+        """Atomic Avenue sometimes duplicates the series title in issue headers."""
+        html = """
+        <html>
+        <body>
+            <h2 class="dropLeftMargin">
+                <a href="https://atomicavenue.com/atomic/series/12345/1/Batman">
+                    Batman Batman
+                </a>
+            </h2>
+        </body>
+        </html>
+        """
+
+        adapter = AAAdapter()
+        from selectolax.lexbor import LexborHTMLParser
+
+        parser = LexborHTMLParser(html)
+        result = adapter._extract_series_title(parser)
+
+        assert result == "Batman"
+
     def test_extract_series_metadata_full(self):
         """Series metadata with publisher and years is extracted correctly."""
         html = """

@@ -633,9 +633,12 @@ class PlatformSearcher:
                 listing_issue = listing.title.split("#")[-1].split()[0]
 
             listing_issue = self._normalize_issue(listing_issue)
+            if listing_issue != normalized_issue:
+                continue
+
             score = jellyfish.jaro_winkler_similarity(
-                normalized_issue,
-                listing_issue,
+                self._normalize_title(title),
+                self._normalize_title(getattr(listing, "title", "") or ""),
             )
 
             if score > best_score and score >= 0.85:
