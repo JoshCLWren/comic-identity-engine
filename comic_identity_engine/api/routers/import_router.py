@@ -68,12 +68,15 @@ async def import_clz(
             input_data={"csv_path": request.file_path},
         )
 
-        # Only enqueue job if operation is not already completed
-        if operation.status not in ("completed", "failed"):
+        # Only enqueue job if operation is not already completed or running
+        if operation.status == "pending":
             await queue.enqueue_import_clz(
                 csv_path=request.file_path,
                 operation_id=operation.id,
             )
+        elif operation.status == "running":
+            # Operation is already in progress, return it without re-enqueuing
+            pass
 
         # Return operation response with correct done status
         is_done = operation.status in ("completed", "failed")
