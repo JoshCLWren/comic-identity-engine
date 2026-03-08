@@ -301,7 +301,7 @@ async def resolve_identity_task(
                             issue_id=existing.issue_id,
                             series_title=series.title,
                             issue_number=issue.issue_number,
-                            year=issue.cover_date.year if issue.cover_date else None,
+                            year=series.start_year,
                             publisher=series.publisher,
                             operation_id=operation_uuid,
                             source_platform=parsed_url.platform,
@@ -426,9 +426,7 @@ async def resolve_identity_task(
                         issue_id=result.issue_id,
                         series_title=candidate.series_title,
                         issue_number=candidate.issue_number,
-                        year=candidate.cover_date.year
-                        if candidate.cover_date
-                        else None,
+                        year=candidate.series_start_year,
                         publisher=None,
                         operation_id=operation_uuid,
                         source_platform=parsed_url.platform,

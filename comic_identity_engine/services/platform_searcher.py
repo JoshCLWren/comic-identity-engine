@@ -763,6 +763,10 @@ class PlatformSearcher:
             match = re.search(r"/titles/[^/]+/([^/]+)/[^/]+/?$", url)
             if match:
                 return self._normalize_issue_token(match.group(1))
+        if platform == "ccl":
+            match = re.search(r"/issue/comic-books/[^/]+/([^/]+)/[^/]+/?$", url)
+            if match:
+                return self._normalize_issue_token(match.group(1))
         return None
 
     def _url_matches_target(

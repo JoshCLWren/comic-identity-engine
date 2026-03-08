@@ -116,6 +116,26 @@ class TestPlatformSearcher:
         assert url == listing.url
         assert "matched" in detail
 
+    def test_select_candidate_url_accepts_ccl_issue_match(self, searcher):
+        """CCL issue URLs should be recognized as exact issue matches."""
+        listing = MagicMock()
+        listing.title = "X-Men #-1"
+        listing.url = (
+            "https://www.comiccollectorlive.com/issue/comic-books/"
+            "X-Men-1991/-1/98ab98c9-a87a-4cd2-b49a-ee5232abc0ad"
+        )
+        result = MagicMock(listings=[listing], url=listing.url)
+
+        url, detail = searcher._select_candidate_url(
+            platform="ccl",
+            result=result,
+            series_title="X-Men",
+            issue_number="-1",
+        )
+
+        assert url == listing.url
+        assert "matched" in detail
+
     def test_select_candidate_url_rejects_hip_wrong_issue(self, searcher):
         """Hip results must match the requested issue, not just the title."""
         listing = MagicMock()
