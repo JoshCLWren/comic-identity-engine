@@ -31,6 +31,16 @@ repo_status() {
   git status --porcelain=v1
 }
 
+base_head() {
+  cat "${BASE_HEAD_FILE}"
+}
+
+find_step_commit() {
+  local expected_commit="$1"
+
+  git log --format='%H%x09%s' "$(base_head)"..HEAD | awk -F'\t' -v msg="${expected_commit}" '$2 == msg { print $1; exit }'
+}
+
 verify_step_commit() {
   local step_name="$1"
   local expected_commit="$2"
@@ -94,39 +104,46 @@ for entry in "${STEPS[@]}"; do
   remainder="${entry#*|}"
   expected_commit="${remainder%%|*}"
   prompt="${remainder#*|}"
-  previous_head="$(git rev-parse HEAD)"
-  baseline_status="$(repo_status)"
+  step_commit="$(find_step_commit "${expected_commit}")"
 
   echo "=================================================="
   echo "Running: ${name}"
   echo "=================================================="
 
-  if codex exec \
-    --full-auto \
-    -o "/tmp/import-remediation-${name}.md" \
-    "${prompt}"
-  then
-    echo "${name} completed"
-    verify_step_commit "${name}" "${expected_commit}" "${previous_head}" "${baseline_status}"
-    echo "Running remediation check for ${name}"
+  if [ -n "${step_commit}" ]; then
+    echo "Found existing commit for ${name}: ${step_commit}"
+  else
+    previous_head="$(git rev-parse HEAD)"
+    baseline_status="$(repo_status)"
 
-    if bash "${STEP_CHECK_SCRIPT}" "${name}"; then
-      echo "Verification passed for ${name}"
+    if codex exec \
+      --full-auto \
+      -o "/tmp/import-remediation-${name}.md" \
+      "${prompt}"
+    then
+      echo "${name} completed"
+      verify_step_commit "${name}" "${expected_commit}" "${previous_head}" "${baseline_status}"
+      step_commit="$(git rev-parse HEAD)"
     else
       exit_code=$?
-      echo "Verification failed for ${name} (exit code ${exit_code})"
-      echo "Fix the repo state before continuing to the next step"
-      exit "${exit_code}"
+      echo "${name} failed (exit code ${exit_code})"
+      echo "   Check /tmp/import-remediation-${name}.md for details"
+      echo "   Fix the issue manually, then re-run this script"
+      echo "   (completed steps will be skipped via git branch state)"
+      exit 1
     fi
+  fi
 
+  echo "Running remediation check for ${name}"
+
+  if bash "${STEP_CHECK_SCRIPT}" "${name}" "${step_commit}"; then
+    echo "Verification passed for ${name}"
     echo ""
   else
     exit_code=$?
-    echo "${name} failed (exit code ${exit_code})"
-    echo "   Check /tmp/import-remediation-${name}.md for details"
-    echo "   Fix the issue manually, then re-run this script"
-    echo "   (completed steps will be skipped via git branch state)"
-    exit 1
+    echo "Verification failed for ${name} (exit code ${exit_code})"
+    echo "Fix the repo state before continuing to the next step"
+    exit "${exit_code}"
   fi
 done
 

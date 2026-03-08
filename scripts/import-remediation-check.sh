@@ -3,27 +3,33 @@ set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
-if [ $# -ne 1 ]; then
-  echo "Usage: bash scripts/import-remediation-check.sh <step>"
+CACHE_ROOT="${CIE_IMPORT_REMEDIATION_CACHE_DIR:-$PWD/.cache/import-remediation}"
+export UV_CACHE_DIR="${CIE_IMPORT_REMEDIATION_UV_CACHE_DIR:-${CACHE_ROOT}/uv}"
+export RUFF_CACHE_DIR="${CIE_IMPORT_REMEDIATION_RUFF_CACHE_DIR:-${CACHE_ROOT}/ruff}"
+mkdir -p "${UV_CACHE_DIR}" "${RUFF_CACHE_DIR}"
+
+if [ $# -lt 1 ] || [ $# -gt 2 ]; then
+  echo "Usage: bash scripts/import-remediation-check.sh <step> [commit]"
   exit 2
 fi
 
 step="$1"
+commit_ref="${2:-HEAD}"
 
 run() {
   echo "+ $*"
   "$@"
 }
 
-head_python_files() {
-  git show --name-only --format= HEAD -- '*.py' | sed '/^$/d'
+commit_python_files() {
+  git show --name-only --format= "${commit_ref}" -- '*.py' | sed '/^$/d'
 }
 
-lint_head_python_files() {
-  mapfile -t python_files < <(head_python_files)
+lint_commit_python_files() {
+  mapfile -t python_files < <(commit_python_files)
 
   if [ "${#python_files[@]}" -eq 0 ]; then
-    echo "+ no Python files changed in HEAD"
+    echo "+ no Python files changed in ${commit_ref}"
     return 0
   fi
 
@@ -33,7 +39,7 @@ lint_head_python_files() {
 
 common_checks() {
   run git diff --check
-  lint_head_python_files
+  lint_commit_python_files
 }
 
 case "${step}" in

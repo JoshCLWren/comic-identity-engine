@@ -73,7 +73,9 @@ class TestCreateRedisPool:
         """Test successful Redis pool creation."""
         mock_pool = AsyncMock()
 
-        with patch("comic_identity_engine.jobs.worker.get_settings") as mock_get_settings:
+        with patch(
+            "comic_identity_engine.jobs.worker.get_settings"
+        ) as mock_get_settings:
             mock_get_settings.return_value = mock_settings
             with patch(
                 "comic_identity_engine.jobs.worker.ArqRedisSettings.from_dsn"
@@ -99,7 +101,9 @@ class TestCreateRedisPool:
         self, mock_settings, mock_arq_redis_settings
     ):
         """Test Redis pool creation with connection error."""
-        with patch("comic_identity_engine.jobs.worker.get_settings") as mock_get_settings:
+        with patch(
+            "comic_identity_engine.jobs.worker.get_settings"
+        ) as mock_get_settings:
             mock_get_settings.return_value = mock_settings
             with patch(
                 "comic_identity_engine.jobs.worker.ArqRedisSettings.from_dsn"
@@ -279,7 +283,9 @@ class TestLoggingConfiguration:
 
     def test_configure_logging_initializes_stdlib_handler(self):
         """Worker logs should be visible on stdout at info level."""
-        with patch("comic_identity_engine.jobs.worker.logging.basicConfig") as mock_basic:
+        with patch(
+            "comic_identity_engine.jobs.worker.logging.basicConfig"
+        ) as mock_basic:
             _configure_logging()
 
             mock_basic.assert_called_once_with(level=logging.INFO, format="%(message)s")
