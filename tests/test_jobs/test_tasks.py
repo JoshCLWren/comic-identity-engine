@@ -143,9 +143,7 @@ class TestResolveIdentityTask:
 
         assert result["canonical_uuid"] == str(TEST_ISSUE_ID)
         assert result["confidence"] == 0.95
-        assert result["platform_urls"] == {
-            "gcd": "https://www.comics.org/issue/123/"
-        }
+        assert result["platform_urls"] == {"gcd": "https://www.comics.org/issue/123/"}
         assert result["created_new"] is True
         assert result["explanation"] == "Matched on issue number"
         mock_ops_manager.mark_running.assert_called_once_with(TEST_OPERATION_ID)
@@ -416,13 +414,16 @@ class TestResolveIdentityTask:
                             )
                             mock_resolver_class.return_value = mock_resolver
 
-                            with patch(
-                                "comic_identity_engine.jobs.tasks._ensure_source_mapping",
-                                new_callable=AsyncMock,
-                                return_value="reused",
-                            ), patch(
-                                "comic_identity_engine.services.platform_searcher.PlatformSearcher"
-                            ) as mock_searcher_class:
+                            with (
+                                patch(
+                                    "comic_identity_engine.jobs.tasks._ensure_source_mapping",
+                                    new_callable=AsyncMock,
+                                    return_value="reused",
+                                ),
+                                patch(
+                                    "comic_identity_engine.services.platform_searcher.PlatformSearcher"
+                                ) as mock_searcher_class,
+                            ):
                                 mock_searcher = Mock()
                                 mock_searcher.search_all_platforms = AsyncMock(
                                     return_value={"urls": {}, "status": {}}
@@ -769,12 +770,11 @@ class TestImportClzTask:
     async def test_import_clz_task_success(
         self, mock_async_session_local, mock_session, tmp_path
     ):
-        """Test successful CLZ CSV import."""
-        # Create test CSV file
+        """Test successful CLZ CSV import using identity resolution."""
         csv_file = tmp_path / "test_collection.csv"
-        csv_content = """Series,Issue,Publisher,Year
-X-Men,1,Marvel,1991
-X-Men,2,Marvel,1991"""
+        csv_content = """Series,Issue,Publisher,Year,Core ComicID
+X-Men,1,Marvel,1991,clz-001
+X-Men,2,Marvel,1991,clz-002"""
         csv_file.write_text(csv_content)
 
         with patch(
@@ -796,73 +796,86 @@ X-Men,2,Marvel,1991"""
                         "Issue": "1",
                         "Publisher": "Marvel",
                         "Year": "1991",
+                        "Core ComicID": "clz-001",
                     },
                     {
                         "Series": "X-Men",
                         "Issue": "2",
                         "Publisher": "Marvel",
                         "Year": "1991",
+                        "Core ComicID": "clz-002",
                     },
                 ]
 
-                # Mock issue candidate
-                mock_candidate = Mock()
-                mock_candidate.series_title = "X-Men"
-                mock_candidate.series_start_year = 1991
-                mock_candidate.publisher = "Marvel"
-                mock_candidate.issue_number = "1"
-                mock_candidate.variant_suffix = None
-                mock_candidate.cover_date = None
-                mock_candidate.upc = None
+                def make_candidate(comic_id):
+                    mock_candidate = Mock()
+                    mock_candidate.series_title = "X-Men"
+                    mock_candidate.series_start_year = 1991
+                    mock_candidate.publisher = "Marvel"
+                    mock_candidate.issue_number = "1"
+                    mock_candidate.variant_suffix = None
+                    mock_candidate.cover_date = None
+                    mock_candidate.upc = None
+                    mock_candidate.source_issue_id = comic_id
+                    mock_candidate.source_series_id = "X-Men, Vol. 1"
+                    return mock_candidate
 
-                mock_adapter._extract_series_id.return_value = "X-Men, Vol. 1"
-                mock_adapter.fetch_issue_from_csv_row.return_value = mock_candidate
+                mock_adapter.fetch_issue_from_csv_row.side_effect = [
+                    make_candidate("clz-001"),
+                    make_candidate("clz-002"),
+                ]
                 mock_adapter_class.return_value = mock_adapter
 
                 with patch(
-                    "comic_identity_engine.jobs.tasks.SeriesRunRepository"
-                ) as mock_series_repo_class:
-                    mock_series_repo = Mock()
-                    mock_series = Mock()
-                    mock_series.id = TEST_SERIES_ID
-                    # Track series creation: first call returns None, subsequent calls return existing
-                    series_exists = [
-                        None,
-                        mock_series,
-                    ]  # First row: None, Second row: existing
-                    mock_series_repo.find_by_title = AsyncMock(
-                        side_effect=series_exists
-                    )
-                    mock_series_repo.create = AsyncMock(return_value=mock_series)
-                    mock_series_repo_class.return_value = mock_series_repo
+                    "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
+                ) as mock_mapping_repo_class:
+                    mock_mapping_repo = Mock()
+                    mock_mapping_repo.find_by_source = AsyncMock(return_value=None)
+                    mock_mapping_repo_class.return_value = mock_mapping_repo
 
                     with patch(
-                        "comic_identity_engine.jobs.tasks.IssueRepository"
-                    ) as mock_issue_repo_class:
-                        mock_issue_repo = Mock()
-                        mock_issue = Mock()
-                        mock_issue.id = TEST_ISSUE_ID
-                        mock_issue_repo.find_by_number = AsyncMock(return_value=None)
-                        mock_issue_repo.create = AsyncMock(return_value=mock_issue)
-                        mock_issue_repo_class.return_value = mock_issue_repo
+                        "comic_identity_engine.jobs.tasks.IdentityResolver"
+                    ) as mock_resolver_class:
+                        mock_resolver = Mock()
+
+                        mock_resolution_result = Mock()
+                        mock_resolution_result.issue_id = TEST_ISSUE_ID
+                        mock_resolution_result.explanation = "Match found"
+
+                        mock_resolver.resolve_issue = AsyncMock(
+                            return_value=mock_resolution_result
+                        )
+                        mock_resolver_class.return_value = mock_resolver
 
                         with patch(
-                            "comic_identity_engine.jobs.tasks.VariantRepository"
-                        ) as mock_variant_repo_class:
-                            mock_variant_repo = Mock()
-                            mock_variant_repo.create = AsyncMock()
-                            mock_variant_repo_class.return_value = mock_variant_repo
+                            "comic_identity_engine.jobs.tasks._ensure_source_mapping",
+                            new_callable=AsyncMock,
+                        ) as mock_ensure_mapping:
+                            mock_ensure_mapping.return_value = "created"
 
-                            result = await import_clz_task(
-                                {},
-                                str(csv_file),
-                                str(TEST_OPERATION_ID),
-                            )
+                            with patch(
+                                "comic_identity_engine.services.platform_searcher.PlatformSearcher"
+                            ) as mock_searcher_class:
+                                mock_searcher = Mock()
+                                mock_searcher.search_all_platforms = AsyncMock(
+                                    return_value={
+                                        "urls": {},
+                                        "status": {},
+                                        "events": [],
+                                    }
+                                )
+                                mock_searcher_class.return_value = mock_searcher
+
+                                result = await import_clz_task(
+                                    {},
+                                    str(csv_file),
+                                    str(TEST_OPERATION_ID),
+                                )
 
         assert result["total_rows"] == 2
-        assert result["series_created"] == 1
-        assert result["issues_created"] == 2
-        assert result["variants_created"] == 0
+        assert result["processed"] == 2
+        assert result["resolved"] == 2
+        assert result["failed"] == 0
         assert len(result["errors"]) == 0
         mock_ops_manager.mark_running.assert_called_once()
         mock_ops_manager.mark_completed.assert_called_once()
@@ -1658,262 +1671,13 @@ class TestImportClzTaskEdgeCases:
     """Tests for import_clz_task edge cases."""
 
     @pytest.mark.asyncio
-    async def test_import_clz_task_with_variant_creation(
+    async def test_import_clz_task_with_existing_mapping(
         self, mock_async_session_local, mock_session, tmp_path
     ):
-        """Test CLZ import creates variants correctly."""
+        """Test CLZ import reuses existing external mapping."""
         csv_file = tmp_path / "test_collection.csv"
-        csv_content = """Series,Issue,Publisher,Year
-X-Men,1A,Marvel,1991"""
-        csv_file.write_text(csv_content)
-
-        with patch(
-            "comic_identity_engine.jobs.tasks.OperationsManager"
-        ) as mock_ops_manager_class:
-            mock_ops_manager = Mock()
-            mock_ops_manager.mark_running = AsyncMock()
-            mock_ops_manager.mark_completed = AsyncMock()
-            mock_ops_manager.update_operation = AsyncMock()
-            mock_ops_manager_class.return_value = mock_ops_manager
-
-            with patch(
-                "comic_identity_engine.jobs.tasks.CLZAdapter"
-            ) as mock_adapter_class:
-                mock_adapter = Mock()
-                mock_adapter.load_csv_from_file.return_value = [
-                    {
-                        "Series": "X-Men",
-                        "Issue": "1A",
-                        "Publisher": "Marvel",
-                        "Year": "1991",
-                    },
-                ]
-
-                mock_candidate = Mock()
-                mock_candidate.series_title = "X-Men"
-                mock_candidate.series_start_year = 1991
-                mock_candidate.publisher = "Marvel"
-                mock_candidate.issue_number = "1"
-                mock_candidate.variant_suffix = "A"
-                mock_candidate.cover_date = None
-                mock_candidate.upc = None
-
-                mock_adapter._extract_series_id.return_value = "X-Men, Vol. 1"
-                mock_adapter.fetch_issue_from_csv_row.return_value = mock_candidate
-                mock_adapter_class.return_value = mock_adapter
-
-                with patch(
-                    "comic_identity_engine.jobs.tasks.SeriesRunRepository"
-                ) as mock_series_repo_class:
-                    mock_series_repo = Mock()
-                    mock_series = Mock()
-                    mock_series.id = TEST_SERIES_ID
-                    mock_series_repo.find_by_title = AsyncMock(return_value=None)
-                    mock_series_repo.create = AsyncMock(return_value=mock_series)
-                    mock_series_repo_class.return_value = mock_series_repo
-
-                    with patch(
-                        "comic_identity_engine.jobs.tasks.IssueRepository"
-                    ) as mock_issue_repo_class:
-                        mock_issue_repo = Mock()
-                        mock_issue = Mock()
-                        mock_issue.id = TEST_ISSUE_ID
-                        mock_issue_repo.find_by_number = AsyncMock(return_value=None)
-                        mock_issue_repo.create = AsyncMock(return_value=mock_issue)
-                        mock_issue_repo_class.return_value = mock_issue_repo
-
-                        with patch(
-                            "comic_identity_engine.jobs.tasks.VariantRepository"
-                        ) as mock_variant_repo_class:
-                            mock_variant_repo = Mock()
-                            mock_variant_repo.create = AsyncMock()
-                            mock_variant_repo_class.return_value = mock_variant_repo
-
-                            result = await import_clz_task(
-                                {},
-                                str(csv_file),
-                                str(TEST_OPERATION_ID),
-                            )
-
-            assert result["total_rows"] == 1
-            assert result["variants_created"] == 1
-
-    @pytest.mark.asyncio
-    async def test_import_clz_task_variant_creation_error(
-        self, mock_async_session_local, mock_session, tmp_path
-    ):
-        """Test CLZ import handles variant creation errors gracefully."""
-        csv_file = tmp_path / "test_collection.csv"
-        csv_content = """Series,Issue,Publisher,Year
-X-Men,1A,Marvel,1991"""
-        csv_file.write_text(csv_content)
-
-        with patch(
-            "comic_identity_engine.jobs.tasks.OperationsManager"
-        ) as mock_ops_manager_class:
-            mock_ops_manager = Mock()
-            mock_ops_manager.mark_running = AsyncMock()
-            mock_ops_manager.mark_completed = AsyncMock()
-            mock_ops_manager.update_operation = AsyncMock()
-            mock_ops_manager_class.return_value = mock_ops_manager
-
-            with patch(
-                "comic_identity_engine.jobs.tasks.CLZAdapter"
-            ) as mock_adapter_class:
-                mock_adapter = Mock()
-                mock_adapter.load_csv_from_file.return_value = [
-                    {
-                        "Series": "X-Men",
-                        "Issue": "1A",
-                        "Publisher": "Marvel",
-                        "Year": "1991",
-                    },
-                ]
-
-                mock_candidate = Mock()
-                mock_candidate.series_title = "X-Men"
-                mock_candidate.series_start_year = 1991
-                mock_candidate.publisher = "Marvel"
-                mock_candidate.issue_number = "1"
-                mock_candidate.variant_suffix = "A"
-                mock_candidate.cover_date = None
-                mock_candidate.upc = None
-
-                mock_adapter._extract_series_id.return_value = "X-Men, Vol. 1"
-                mock_adapter.fetch_issue_from_csv_row.return_value = mock_candidate
-                mock_adapter_class.return_value = mock_adapter
-
-                with patch(
-                    "comic_identity_engine.jobs.tasks.SeriesRunRepository"
-                ) as mock_series_repo_class:
-                    mock_series_repo = Mock()
-                    mock_series = Mock()
-                    mock_series.id = TEST_SERIES_ID
-                    mock_series_repo.find_by_title = AsyncMock(return_value=None)
-                    mock_series_repo.create = AsyncMock(return_value=mock_series)
-                    mock_series_repo_class.return_value = mock_series_repo
-
-                    with patch(
-                        "comic_identity_engine.jobs.tasks.IssueRepository"
-                    ) as mock_issue_repo_class:
-                        mock_issue_repo = Mock()
-                        mock_issue = Mock()
-                        mock_issue.id = TEST_ISSUE_ID
-                        mock_issue_repo.find_by_number = AsyncMock(return_value=None)
-                        mock_issue_repo.create = AsyncMock(return_value=mock_issue)
-                        mock_issue_repo_class.return_value = mock_issue_repo
-
-                        with patch(
-                            "comic_identity_engine.jobs.tasks.VariantRepository"
-                        ) as mock_variant_repo_class:
-                            mock_variant_repo = Mock()
-                            # Simulate error during variant creation
-                            mock_variant_repo.create = AsyncMock(
-                                side_effect=Exception("Duplicate variant")
-                            )
-                            mock_variant_repo_class.return_value = mock_variant_repo
-
-                            result = await import_clz_task(
-                                {},
-                                str(csv_file),
-                                str(TEST_OPERATION_ID),
-                            )
-
-            assert result["total_rows"] == 1
-            assert result["variants_created"] == 0  # Error should be handled gracefully
-
-    @pytest.mark.asyncio
-    async def test_import_clz_task_progress_update(
-        self, mock_async_session_local, mock_session, tmp_path
-    ):
-        """Test CLZ import sends progress updates every 10 rows."""
-        csv_file = tmp_path / "test_collection.csv"
-        # Create 12 rows to trigger progress update
-        csv_content = "Series,Issue,Publisher,Year\n"
-        for i in range(12):
-            csv_content += f"X-Men,{i + 1},Marvel,1991\n"
-        csv_file.write_text(csv_content)
-
-        with patch(
-            "comic_identity_engine.jobs.tasks.OperationsManager"
-        ) as mock_ops_manager_class:
-            mock_ops_manager = Mock()
-            mock_ops_manager.mark_running = AsyncMock()
-            mock_ops_manager.mark_completed = AsyncMock()
-            mock_ops_manager.update_operation = AsyncMock()
-            mock_ops_manager_class.return_value = mock_ops_manager
-
-            with patch(
-                "comic_identity_engine.jobs.tasks.CLZAdapter"
-            ) as mock_adapter_class:
-                mock_adapter = Mock()
-                rows = [
-                    {
-                        "Series": "X-Men",
-                        "Issue": str(i + 1),
-                        "Publisher": "Marvel",
-                        "Year": "1991",
-                    }
-                    for i in range(12)
-                ]
-                mock_adapter.load_csv_from_file.return_value = rows
-
-                mock_candidate = Mock()
-                mock_candidate.series_title = "X-Men"
-                mock_candidate.series_start_year = 1991
-                mock_candidate.publisher = "Marvel"
-                mock_candidate.issue_number = "1"
-                mock_candidate.variant_suffix = None
-                mock_candidate.cover_date = None
-                mock_candidate.upc = None
-
-                mock_adapter._extract_series_id.return_value = "X-Men, Vol. 1"
-                mock_adapter.fetch_issue_from_csv_row.return_value = mock_candidate
-                mock_adapter_class.return_value = mock_adapter
-
-                with patch(
-                    "comic_identity_engine.jobs.tasks.SeriesRunRepository"
-                ) as mock_series_repo_class:
-                    mock_series_repo = Mock()
-                    mock_series = Mock()
-                    mock_series.id = TEST_SERIES_ID
-                    mock_series_repo.find_by_title = AsyncMock(return_value=mock_series)
-                    mock_series_repo_class.return_value = mock_series_repo
-
-                    with patch(
-                        "comic_identity_engine.jobs.tasks.IssueRepository"
-                    ) as mock_issue_repo_class:
-                        mock_issue_repo = Mock()
-                        mock_issue = Mock()
-                        mock_issue.id = TEST_ISSUE_ID
-                        mock_issue_repo.find_by_number = AsyncMock(return_value=None)
-                        mock_issue_repo.create = AsyncMock(return_value=mock_issue)
-                        mock_issue_repo_class.return_value = mock_issue_repo
-
-                        with patch(
-                            "comic_identity_engine.jobs.tasks.VariantRepository"
-                        ) as mock_variant_repo_class:
-                            mock_variant_repo = Mock()
-                            mock_variant_repo_class.return_value = mock_variant_repo
-
-                            await import_clz_task(
-                                {},
-                                str(csv_file),
-                                str(TEST_OPERATION_ID),
-                            )
-
-            # Should update operation at least once at row 10
-            assert mock_ops_manager.update_operation.call_count >= 1
-
-    @pytest.mark.asyncio
-    async def test_import_clz_task_row_level_error(
-        self, mock_async_session_local, mock_session, tmp_path
-    ):
-        """Test CLZ import handles row-level errors."""
-        csv_file = tmp_path / "test_collection.csv"
-        csv_content = """Series,Issue,Publisher,Year
-X-Men,1,Marvel,1991
-X-Men,2,Marvel,1991"""
+        csv_content = """Series,Issue,Publisher,Year,Core ComicID
+X-Men,1,Marvel,1991,clz-001"""
         csv_file.write_text(csv_content)
 
         with patch(
@@ -1935,19 +1699,275 @@ X-Men,2,Marvel,1991"""
                         "Issue": "1",
                         "Publisher": "Marvel",
                         "Year": "1991",
+                        "Core ComicID": "clz-001",
+                    },
+                ]
+
+                mock_candidate = Mock()
+                mock_candidate.series_title = "X-Men"
+                mock_candidate.series_start_year = 1991
+                mock_candidate.publisher = "Marvel"
+                mock_candidate.issue_number = "1"
+                mock_candidate.variant_suffix = None
+                mock_candidate.cover_date = None
+                mock_candidate.upc = None
+                mock_candidate.source_issue_id = "clz-001"
+                mock_candidate.source_series_id = "X-Men, Vol. 1"
+
+                mock_adapter.fetch_issue_from_csv_row.return_value = mock_candidate
+                mock_adapter_class.return_value = mock_adapter
+
+                with patch(
+                    "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
+                ) as mock_mapping_repo_class:
+                    mock_mapping_repo = Mock()
+
+                    mock_existing_mapping = Mock()
+                    mock_existing_mapping.issue_id = TEST_ISSUE_ID
+
+                    mock_mapping_repo.find_by_source = AsyncMock(
+                        return_value=mock_existing_mapping
+                    )
+                    mock_mapping_repo_class.return_value = mock_mapping_repo
+
+                    result = await import_clz_task(
+                        {},
+                        str(csv_file),
+                        str(TEST_OPERATION_ID),
+                    )
+
+        assert result["total_rows"] == 1
+        assert result["processed"] == 1
+        assert result["resolved"] == 1  # Existing mapping counts as resolved
+        assert result["failed"] == 0
+        assert len(result["errors"]) == 0
+
+    @pytest.mark.asyncio
+    async def test_import_clz_task_resolution_failure(
+        self, mock_async_session_local, mock_session, tmp_path
+    ):
+        """Test CLZ import handles resolution failures gracefully."""
+        csv_file = tmp_path / "test_collection.csv"
+        csv_content = """Series,Issue,Publisher,Year,Core ComicID
+X-Men,1,Marvel,1991,clz-001"""
+        csv_file.write_text(csv_content)
+
+        with patch(
+            "comic_identity_engine.jobs.tasks.OperationsManager"
+        ) as mock_ops_manager_class:
+            mock_ops_manager = Mock()
+            mock_ops_manager.mark_running = AsyncMock()
+            mock_ops_manager.mark_completed = AsyncMock()
+            mock_ops_manager.update_operation = AsyncMock()
+            mock_ops_manager_class.return_value = mock_ops_manager
+
+            with patch(
+                "comic_identity_engine.jobs.tasks.CLZAdapter"
+            ) as mock_adapter_class:
+                mock_adapter = Mock()
+                mock_adapter.load_csv_from_file.return_value = [
+                    {
+                        "Series": "X-Men",
+                        "Issue": "1",
+                        "Publisher": "Marvel",
+                        "Year": "1991",
+                        "Core ComicID": "clz-001",
+                    },
+                ]
+
+                mock_candidate = Mock()
+                mock_candidate.series_title = "X-Men"
+                mock_candidate.series_start_year = 1991
+                mock_candidate.publisher = "Marvel"
+                mock_candidate.issue_number = "1"
+                mock_candidate.variant_suffix = None
+                mock_candidate.cover_date = None
+                mock_candidate.upc = None
+                mock_candidate.source_issue_id = "clz-001"
+                mock_candidate.source_series_id = "X-Men, Vol. 1"
+
+                mock_adapter.fetch_issue_from_csv_row.return_value = mock_candidate
+                mock_adapter_class.return_value = mock_adapter
+
+                with patch(
+                    "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
+                ) as mock_mapping_repo_class:
+                    mock_mapping_repo = Mock()
+                    mock_mapping_repo.find_by_source = AsyncMock(return_value=None)
+                    mock_mapping_repo_class.return_value = mock_mapping_repo
+
+                    with patch(
+                        "comic_identity_engine.jobs.tasks.IdentityResolver"
+                    ) as mock_resolver_class:
+                        mock_resolver = Mock()
+
+                        mock_resolution_result = Mock()
+                        mock_resolution_result.issue_id = None  # Resolution failed
+                        mock_resolution_result.explanation = "No match found"
+
+                        mock_resolver.resolve_issue = AsyncMock(
+                            return_value=mock_resolution_result
+                        )
+                        mock_resolver_class.return_value = mock_resolver
+
+                        result = await import_clz_task(
+                            {},
+                            str(csv_file),
+                            str(TEST_OPERATION_ID),
+                        )
+
+        assert result["total_rows"] == 1
+        assert result["processed"] == 1
+        assert result["resolved"] == 0
+        assert result["failed"] == 1
+        assert len(result["errors"]) == 1
+        assert result["errors"][0]["row"] == 1
+        assert result["errors"][0]["source_issue_id"] == "clz-001"
+        assert "Failed to resolve issue" in result["errors"][0]["error"]
+
+    @pytest.mark.asyncio
+    async def test_import_clz_task_progress_update(
+        self, mock_async_session_local, mock_session, tmp_path
+    ):
+        """Test CLZ import sends progress updates every 10 rows."""
+        csv_file = tmp_path / "test_collection.csv"
+        csv_content = "Series,Issue,Publisher,Year,Core ComicID\n"
+        for i in range(12):
+            csv_content += f"X-Men,{i + 1},Marvel,1991,clz-{i:03d}\n"
+        csv_file.write_text(csv_content)
+
+        with patch(
+            "comic_identity_engine.jobs.tasks.OperationsManager"
+        ) as mock_ops_manager_class:
+            mock_ops_manager = Mock()
+            mock_ops_manager.mark_running = AsyncMock()
+            mock_ops_manager.mark_completed = AsyncMock()
+            mock_ops_manager.update_operation = AsyncMock()
+            mock_ops_manager_class.return_value = mock_ops_manager
+
+            with patch(
+                "comic_identity_engine.jobs.tasks.CLZAdapter"
+            ) as mock_adapter_class:
+                mock_adapter = Mock()
+                rows = [
+                    {
+                        "Series": "X-Men",
+                        "Issue": str(i + 1),
+                        "Publisher": "Marvel",
+                        "Year": "1991",
+                        "Core ComicID": f"clz-{i:03d}",
+                    }
+                    for i in range(12)
+                ]
+                mock_adapter.load_csv_from_file.return_value = rows
+
+                mock_candidate = Mock()
+                mock_candidate.series_title = "X-Men"
+                mock_candidate.series_start_year = 1991
+                mock_candidate.publisher = "Marvel"
+                mock_candidate.issue_number = "1"
+                mock_candidate.variant_suffix = None
+                mock_candidate.cover_date = None
+                mock_candidate.upc = None
+                mock_candidate.source_issue_id = "clz-001"
+                mock_candidate.source_series_id = "X-Men, Vol. 1"
+
+                mock_adapter.fetch_issue_from_csv_row.return_value = mock_candidate
+                mock_adapter_class.return_value = mock_adapter
+
+                with patch(
+                    "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
+                ) as mock_mapping_repo_class:
+                    mock_mapping_repo = Mock()
+                    mock_mapping_repo.find_by_source = AsyncMock(return_value=None)
+                    mock_mapping_repo_class.return_value = mock_mapping_repo
+
+                    with patch(
+                        "comic_identity_engine.jobs.tasks.IdentityResolver"
+                    ) as mock_resolver_class:
+                        mock_resolver = Mock()
+
+                        mock_resolution_result = Mock()
+                        mock_resolution_result.issue_id = TEST_ISSUE_ID
+                        mock_resolution_result.explanation = "Match found"
+
+                        mock_resolver.resolve_issue = AsyncMock(
+                            return_value=mock_resolution_result
+                        )
+                        mock_resolver_class.return_value = mock_resolver
+
+                        with patch(
+                            "comic_identity_engine.jobs.tasks._ensure_source_mapping",
+                            new_callable=AsyncMock,
+                        ) as mock_ensure_mapping:
+                            mock_ensure_mapping.return_value = "created"
+
+                            with patch(
+                                "comic_identity_engine.services.platform_searcher.PlatformSearcher"
+                            ) as mock_searcher_class:
+                                mock_searcher = Mock()
+                                mock_searcher.search_all_platforms = AsyncMock(
+                                    return_value={
+                                        "urls": {},
+                                        "status": {},
+                                        "events": [],
+                                    }
+                                )
+                                mock_searcher_class.return_value = mock_searcher
+
+                                await import_clz_task(
+                                    {},
+                                    str(csv_file),
+                                    str(TEST_OPERATION_ID),
+                                )
+
+            # Should update operation at least once at row 10
+            assert mock_ops_manager.update_operation.call_count >= 1
+
+    @pytest.mark.asyncio
+    async def test_import_clz_task_row_level_error(
+        self, mock_async_session_local, mock_session, tmp_path
+    ):
+        """Test CLZ import handles row-level errors."""
+        csv_file = tmp_path / "test_collection.csv"
+        csv_content = """Series,Issue,Publisher,Year,Core ComicID
+X-Men,1,Marvel,1991,clz-001
+X-Men,2,Marvel,1991,clz-002"""
+        csv_file.write_text(csv_content)
+
+        with patch(
+            "comic_identity_engine.jobs.tasks.OperationsManager"
+        ) as mock_ops_manager_class:
+            mock_ops_manager = Mock()
+            mock_ops_manager.mark_running = AsyncMock()
+            mock_ops_manager.mark_completed = AsyncMock()
+            mock_ops_manager.update_operation = AsyncMock()
+            mock_ops_manager_class.return_value = mock_ops_manager
+
+            with patch(
+                "comic_identity_engine.jobs.tasks.CLZAdapter"
+            ) as mock_adapter_class:
+                mock_adapter = Mock()
+                mock_adapter.load_csv_from_file.return_value = [
+                    {
+                        "Series": "X-Men",
+                        "Issue": "1",
+                        "Publisher": "Marvel",
+                        "Year": "1991",
+                        "Core ComicID": "clz-001",
                     },
                     {
                         "Series": "X-Men",
                         "Issue": "2",
                         "Publisher": "Marvel",
                         "Year": "1991",
+                        "Core ComicID": "clz-002",
                     },
                 ]
 
-                call_count = [0]  # Use list to make it mutable in closure
+                call_count = [0]
 
                 def side_effect(*args, **kwargs):
-                    # First row succeeds, second raises error
                     call_count[0] += 1
                     if call_count[0] == 1:
                         mock_candidate = Mock()
@@ -1958,46 +1978,65 @@ X-Men,2,Marvel,1991"""
                         mock_candidate.variant_suffix = None
                         mock_candidate.cover_date = None
                         mock_candidate.upc = None
+                        mock_candidate.source_issue_id = "clz-001"
+                        mock_candidate.source_series_id = "X-Men, Vol. 1"
                         return mock_candidate
                     else:
                         raise Exception("Row processing error")
 
                 mock_adapter.fetch_issue_from_csv_row = Mock(side_effect=side_effect)
-                mock_adapter._extract_series_id.return_value = "X-Men, Vol. 1"
                 mock_adapter_class.return_value = mock_adapter
 
                 with patch(
-                    "comic_identity_engine.jobs.tasks.SeriesRunRepository"
-                ) as mock_series_repo_class:
-                    mock_series_repo = Mock()
-                    mock_series = Mock()
-                    mock_series.id = TEST_SERIES_ID
-                    mock_series_repo.find_by_title = AsyncMock(return_value=mock_series)
-                    mock_series_repo_class.return_value = mock_series_repo
+                    "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
+                ) as mock_mapping_repo_class:
+                    mock_mapping_repo = Mock()
+                    mock_mapping_repo.find_by_source = AsyncMock(return_value=None)
+                    mock_mapping_repo_class.return_value = mock_mapping_repo
 
                     with patch(
-                        "comic_identity_engine.jobs.tasks.IssueRepository"
-                    ) as mock_issue_repo_class:
-                        mock_issue_repo = Mock()
-                        mock_issue = Mock()
-                        mock_issue.id = TEST_ISSUE_ID
-                        mock_issue_repo.find_by_number = AsyncMock(return_value=None)
-                        mock_issue_repo.create = AsyncMock(return_value=mock_issue)
-                        mock_issue_repo_class.return_value = mock_issue_repo
+                        "comic_identity_engine.jobs.tasks.IdentityResolver"
+                    ) as mock_resolver_class:
+                        mock_resolver = Mock()
+
+                        mock_resolution_result = Mock()
+                        mock_resolution_result.issue_id = TEST_ISSUE_ID
+                        mock_resolution_result.explanation = "Match found"
+
+                        mock_resolver.resolve_issue = AsyncMock(
+                            return_value=mock_resolution_result
+                        )
+                        mock_resolver_class.return_value = mock_resolver
 
                         with patch(
-                            "comic_identity_engine.jobs.tasks.VariantRepository"
-                        ) as mock_variant_repo_class:
-                            mock_variant_repo = Mock()
-                            mock_variant_repo_class.return_value = mock_variant_repo
+                            "comic_identity_engine.jobs.tasks._ensure_source_mapping",
+                            new_callable=AsyncMock,
+                        ) as mock_ensure_mapping:
+                            mock_ensure_mapping.return_value = "created"
 
-                            result = await import_clz_task(
-                                {},
-                                str(csv_file),
-                                str(TEST_OPERATION_ID),
-                            )
+                            with patch(
+                                "comic_identity_engine.services.platform_searcher.PlatformSearcher"
+                            ) as mock_searcher_class:
+                                mock_searcher = Mock()
+                                mock_searcher.search_all_platforms = AsyncMock(
+                                    return_value={
+                                        "urls": {},
+                                        "status": {},
+                                        "events": [],
+                                    }
+                                )
+                                mock_searcher_class.return_value = mock_searcher
+
+                                result = await import_clz_task(
+                                    {},
+                                    str(csv_file),
+                                    str(TEST_OPERATION_ID),
+                                )
 
             assert result["total_rows"] == 2
+            assert result["processed"] == 1
+            assert result["resolved"] == 1
+            assert result["failed"] == 1
             assert len(result["errors"]) == 1
             assert "Row 2 error" in result["errors"][0]["error"]
 

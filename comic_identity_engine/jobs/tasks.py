@@ -827,11 +827,10 @@ async def import_clz_task(
     csv_path: str,
     operation_id: str,
 ) -> dict[str, Any]:
-    """Import comic data from CLZ CSV export.
+    """Import comic data from CLZ CSV export using identity resolution pipeline.
 
-    This task loads a CLZ CSV file and creates/updates series, issues,
-    and variants in the database. It processes each row and creates
-    the necessary entities.
+    This task loads a CLZ CSV file and uses the IdentityResolver to find/create
+    canonical issues, creates external mappings, and runs cross-platform search.
 
     Args:
         ctx: ARQ context dictionary
@@ -841,10 +840,10 @@ async def import_clz_task(
     Returns:
         Dictionary with import results:
         - total_rows: Total number of rows in CSV
-        - series_created: Number of new series created
-        - issues_created: Number of new issues created
-        - variants_created: Number of new variants created
-        - errors: List of any errors encountered
+        - processed: Number of rows processed
+        - resolved: Number of issues successfully resolved
+        - failed: Number of issues that failed to resolve
+        - errors: List of errors encountered
         - summary: Brief text summary of the import
 
     Raises:
@@ -856,7 +855,7 @@ async def import_clz_task(
         ...     "/path/to/clz_export.csv",
         ...     "550e8400-e29b-41d4-a716-446655440000"
         ... )
-        >>> print(result["series_created"])
+        >>> print(result["resolved"])
         5
     """
     async with AsyncSessionLocal() as session:
@@ -875,93 +874,173 @@ async def import_clz_task(
             adapter = CLZAdapter()
             rows = adapter.load_csv_from_file(csv_path)
 
-            series_repo = SeriesRunRepository(session)
-            issue_repo = IssueRepository(session)
-            variant_repo = VariantRepository(session)
+            mapping_repo = ExternalMappingRepository(session)
+            resolver = IdentityResolver(session)
 
-            series_created = 0
-            issues_created = 0
-            variants_created = 0
+            processed = 0
+            resolved = 0
+            failed = 0
             errors = []
 
             for idx, row in enumerate(rows):
                 try:
-                    _ = adapter._extract_series_id(row)  # Validate series extraction
-                    source_issue_id = str(idx)
+                    issue_candidate = adapter.fetch_issue_from_csv_row(row)
+                    source_issue_id = issue_candidate.source_issue_id
 
-                    issue_candidate = adapter.fetch_issue_from_csv_row(
-                        source_issue_id, row
+                    existing_mapping = await mapping_repo.find_by_source(
+                        "clz", source_issue_id
                     )
 
-                    series = await series_repo.find_by_title(
-                        issue_candidate.series_title,
-                        issue_candidate.series_start_year,
-                    )
-
-                    if not series:
-                        series = await series_repo.create(
-                            title=issue_candidate.series_title,
-                            start_year=issue_candidate.series_start_year or 2000,
-                            publisher=issue_candidate.publisher,
+                    if existing_mapping is not None:
+                        logger.info(
+                            "Existing CLZ mapping found",
+                            operation_id=operation_id,
+                            row=idx + 1,
+                            source_issue_id=source_issue_id,
+                            issue_id=str(existing_mapping.issue_id),
                         )
-                        series_created += 1
+                        resolved += 1
+                    else:
+                        from comic_identity_engine.services import ParsedUrl
 
-                    issue = await issue_repo.find_by_number(
-                        series.id, issue_candidate.issue_number
-                    )
+                        parsed_url = ParsedUrl(
+                            platform="clz",
+                            source_issue_id=source_issue_id,
+                            source_series_id=issue_candidate.source_series_id,
+                        )
 
-                    if not issue:
-                        issue = await issue_repo.create(
-                            series_run_id=series.id,
+                        result = await resolver.resolve_issue(
+                            parsed_url=parsed_url,
+                            upc=issue_candidate.upc,
+                            series_title=issue_candidate.series_title,
+                            series_start_year=issue_candidate.series_start_year,
                             issue_number=issue_candidate.issue_number,
                             cover_date=issue_candidate.cover_date,
-                            upc=issue_candidate.upc,
                         )
-                        issues_created += 1
 
-                    if issue_candidate.variant_suffix:
-                        try:
-                            await variant_repo.create(
-                                issue_id=issue.id,
-                                variant_suffix=issue_candidate.variant_suffix,
+                        if result.issue_id:
+                            source_mapping_action = await _ensure_source_mapping(
+                                mapping_repo=mapping_repo,
+                                issue_id=result.issue_id,
+                                source="clz",
+                                source_issue_id=source_issue_id,
+                                source_series_id=issue_candidate.source_series_id,
                             )
-                            variants_created += 1
-                        except Exception:
-                            pass
 
-                    if (idx + 1) % 10 == 0:
+                            if source_mapping_action == "created":
+                                logger.info(
+                                    "Created CLZ external mapping",
+                                    operation_id=operation_id,
+                                    row=idx + 1,
+                                    source_issue_id=source_issue_id,
+                                    issue_id=str(result.issue_id),
+                                )
+                            else:
+                                logger.info(
+                                    "Reused existing CLZ external mapping",
+                                    operation_id=operation_id,
+                                    row=idx + 1,
+                                    source_issue_id=source_issue_id,
+                                    issue_id=str(result.issue_id),
+                                )
+
+                            try:
+                                from comic_identity_engine.services.platform_searcher import (
+                                    PlatformSearcher,
+                                )
+
+                                searcher = PlatformSearcher(session)
+                                cross_platform_result = (
+                                    await searcher.search_all_platforms(
+                                        issue_id=result.issue_id,
+                                        series_title=issue_candidate.series_title,
+                                        issue_number=issue_candidate.issue_number,
+                                        year=issue_candidate.series_start_year,
+                                        publisher=issue_candidate.publisher,
+                                        operation_id=operation_uuid,
+                                        source_platform="clz",
+                                        operations_manager=operations_manager,
+                                    )
+                                )
+
+                                logger.info(
+                                    "Cross-platform search completed",
+                                    operation_id=operation_id,
+                                    row=idx + 1,
+                                    issue_id=str(result.issue_id),
+                                    found_platforms=list(
+                                        cross_platform_result.get("urls", {}).keys()
+                                    ),
+                                )
+                            except Exception as e:
+                                logger.warning(
+                                    "Cross-platform search failed, continuing without it",
+                                    operation_id=operation_id,
+                                    row=idx + 1,
+                                    issue_id=str(result.issue_id),
+                                    error=str(e),
+                                )
+
+                            resolved += 1
+                        else:
+                            error_msg = f"Failed to resolve issue: {result.explanation}"
+                            logger.warning(
+                                "Failed to resolve CLZ row",
+                                operation_id=operation_id,
+                                row=idx + 1,
+                                source_issue_id=source_issue_id,
+                                error=error_msg,
+                            )
+                            errors.append(
+                                {
+                                    "row": idx + 1,
+                                    "source_issue_id": source_issue_id,
+                                    "error": error_msg,
+                                }
+                            )
+                            failed += 1
+
+                    processed += 1
+
+                    if processed % 10 == 0:
                         progress_update = {
                             "total_rows": len(rows),
-                            "processed": idx + 1,
-                            "series_created": series_created,
-                            "issues_created": issues_created,
-                            "variants_created": variants_created,
+                            "processed": processed,
+                            "resolved": resolved,
+                            "failed": failed,
                         }
                         await operations_manager.update_operation(
                             operation_uuid, "running", result=progress_update
                         )
 
-                except ValidationError as e:
+                except AdapterValidationError as e:
                     error_msg = f"Row {idx + 1} validation error: {e}"
                     logger.warning(error_msg)
-                    errors.append({"row": idx + 1, "error": error_msg})
+                    errors.append(
+                        {"row": idx + 1, "source_issue_id": None, "error": error_msg}
+                    )
+                    failed += 1
 
                 except Exception as e:
                     error_msg = f"Row {idx + 1} error: {e}"
                     logger.error(error_msg)
-                    errors.append({"row": idx + 1, "error": error_msg})
+                    source_issue_id = row.get("Core ComicID") if row else None
+                    errors.append(
+                        {
+                            "row": idx + 1,
+                            "source_issue_id": source_issue_id,
+                            "error": error_msg,
+                        }
+                    )
+                    failed += 1
 
             result_dict = {
                 "total_rows": len(rows),
-                "series_created": series_created,
-                "issues_created": issues_created,
-                "variants_created": variants_created,
+                "processed": processed,
+                "resolved": resolved,
+                "failed": failed,
                 "errors": errors,
-                "summary": (
-                    f"Imported {len(rows)} rows: {series_created} series, "
-                    f"{issues_created} issues, {variants_created} variants created. "
-                    f"{len(errors)} errors."
-                ),
+                "summary": f"Processed {len(rows)} CLZ rows: {resolved} resolved, {failed} failed. {len(errors)} errors.",
             }
 
             await operations_manager.mark_completed(operation_uuid, result_dict)
@@ -970,9 +1049,9 @@ async def import_clz_task(
                 "CLZ import task completed",
                 operation_id=operation_id,
                 total_rows=len(rows),
-                series_created=series_created,
-                issues_created=issues_created,
-                variants_created=variants_created,
+                processed=processed,
+                resolved=resolved,
+                failed=failed,
                 errors_count=len(errors),
             )
 

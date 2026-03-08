@@ -3,6 +3,7 @@
 This module provides FastAPI routers for the HTTP API:
 - identity_router: Identity resolution endpoints
 - jobs_router: Job management endpoints
+- import_router: Import endpoints for CSV files
 - all_routers: List of all available routers for bulk registration
 
 USAGE:
@@ -15,14 +16,17 @@ USAGE:
 
 from comic_identity_engine.api.routers.identity import router as identity_router
 from comic_identity_engine.api.routers.jobs import router as jobs_router
+from comic_identity_engine.api.routers.import_router import router as import_router
 
 all_routers = [
     identity_router,
     jobs_router,
+    import_router,
 ]
 
 __all__ = [
     "identity_router",
     "jobs_router",
+    "import_router",
     "all_routers",
 ]

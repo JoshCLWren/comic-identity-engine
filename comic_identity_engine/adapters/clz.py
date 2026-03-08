@@ -172,13 +172,10 @@ class CLZAdapter(SourceAdapter):
             raw_payload=row,
         )
 
-    def fetch_issue_from_csv_row(
-        self, source_issue_id: str, row: dict[str, str]
-    ) -> IssueCandidate:
+    def fetch_issue_from_csv_row(self, row: dict[str, str]) -> IssueCandidate:
         """Parse issue from CLZ CSV row.
 
         Args:
-            source_issue_id: CLZ issue identifier (e.g., row index or ID)
             row: Single CSV row as dictionary
 
         Returns:
@@ -189,6 +186,11 @@ class CLZAdapter(SourceAdapter):
         """
         if not row:
             raise ValidationError("CLZ CSV row is empty")
+
+        core_comic_id = row.get("Core ComicID")
+        if not core_comic_id:
+            raise ValidationError("CLZ issue missing required field: Core ComicID")
+        source_issue_id = str(core_comic_id).strip()
 
         series_title = self._extract_series_title(row)
         if not series_title:
