@@ -82,3 +82,6 @@ migrations/*.py
 # Logs
 *.log
 logs/
+
+# Local caches
+.cache/
