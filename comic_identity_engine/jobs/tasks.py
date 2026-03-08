@@ -20,6 +20,7 @@ USAGE:
 """
 
 import csv
+import inspect
 import json
 import tempfile
 import time
@@ -28,6 +29,7 @@ from pathlib import Path
 from typing import Any
 
 import structlog
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
 from comic_identity_engine.adapters import (
@@ -45,9 +47,11 @@ from comic_identity_engine.adapters import (
 )
 from comic_identity_engine.core.http_client import HttpClient
 from comic_identity_engine.database.connection import AsyncSessionLocal
+from comic_identity_engine.database.models import Operation
 from comic_identity_engine.database.repositories import (
     ExternalMappingRepository,
     IssueRepository,
+    OperationRepository,
     SeriesRunRepository,
     VariantRepository,
 )
@@ -978,6 +982,102 @@ async def bulk_resolve_task(
             return {"error": error_msg, "error_type": "unexpected_error"}
 
 
+def _build_clz_import_summary(result: dict[str, Any]) -> str:
+    """Build a human-readable summary for CLZ import progress."""
+    total_rows = int(result.get("total_rows", 0) or 0)
+    processed = int(result.get("processed", 0) or 0)
+    resolved = int(result.get("resolved", 0) or 0)
+    failed = int(result.get("failed", 0) or 0)
+    error_count = len(result.get("errors", []))
+
+    if processed < total_rows:
+        return (
+            f"Processed {processed}/{total_rows} CLZ rows: "
+            f"{resolved} resolved, {failed} failed. {error_count} errors so far."
+        )
+
+    return (
+        f"Processed {processed} CLZ rows: "
+        f"{resolved} resolved, {failed} failed. {error_count} errors."
+    )
+
+
+async def _record_clz_row_result(
+    operation_id: uuid.UUID,
+    row_result: dict[str, Any],
+) -> None:
+    """Persist CLZ row-task progress onto the parent import operation."""
+    try:
+        async with AsyncSessionLocal() as session:
+            repo = OperationRepository(session)
+
+            stmt = (
+                select(Operation)
+                .where(Operation.id == operation_id)
+                .with_for_update()
+            )
+            query_result = await session.execute(stmt)
+            operation = query_result.scalar_one_or_none()
+            if inspect.isawaitable(operation):
+                operation = await operation
+
+            # Broad session mocks used in task unit tests won't yield a real
+            # Operation model here; skip the persistence path in that case.
+            if operation is None or not isinstance(operation, Operation):
+                return
+
+            if operation.status in {"completed", "failed"}:
+                return
+
+            current_result = dict(operation.result or {})
+            total_rows = int(current_result.get("total_rows", 0) or 0)
+            processed = int(current_result.get("processed", 0) or 0) + 1
+            resolved = int(current_result.get("resolved", 0) or 0)
+            failed = int(current_result.get("failed", 0) or 0)
+            errors = list(current_result.get("errors", []) or [])
+
+            if row_result.get("resolved"):
+                resolved += 1
+            else:
+                failed += 1
+                errors.append(
+                    {
+                        "row": row_result.get("row_index"),
+                        "source_issue_id": row_result.get("source_issue_id"),
+                        "error": row_result.get("error", "Unknown error"),
+                    }
+                )
+
+            updated_result = {
+                **current_result,
+                "total_rows": total_rows,
+                "processed": processed,
+                "resolved": resolved,
+                "failed": failed,
+                "errors": errors,
+                "progress": (processed / total_rows) if total_rows else 0.0,
+            }
+            updated_result["summary"] = _build_clz_import_summary(updated_result)
+
+            new_status = (
+                "completed" if total_rows and processed >= total_rows else "running"
+            )
+
+            await repo.update_status(
+                operation=operation,
+                status=new_status,
+                result=updated_result,
+            )
+            await session.commit()
+    except Exception as e:
+        logger.warning(
+            "Failed to record CLZ row progress",
+            operation_id=str(operation_id),
+            row_index=row_result.get("row_index"),
+            error=str(e),
+        )
+
+
 async def resolve_clz_row_task(
     ctx: dict[str, Any],
     row_data: dict[str, str],
@@ -1019,8 +1119,9 @@ async def resolve_clz_row_task(
         >>> print(result["resolved"])
         True
     """
+    operation_uuid = uuid.UUID(operation_id)
     async with AsyncSessionLocal() as session:
-        operation_uuid = uuid.UUID(operation_id)
+        row_result: dict[str, Any]
         try:
             logger.info(
                 "Processing CLZ row",
@@ -1044,7 +1145,7 @@ async def resolve_clz_row_task(
                     source_issue_id=source_issue_id,
                     issue_id=str(existing_mapping.issue_id),
                 )
-                return {
+                row_result = {
                     "row_index": row_index,
                     "source_issue_id": source_issue_id,
                     "resolved": True,
@@ -1052,6 +1153,8 @@ async def resolve_clz_row_task(
                     "existing_mapping": True,
                     "cross_platform_found": 0,
                 }
+                await _record_clz_row_result(operation_uuid, row_result)
+                return row_result
 
             from comic_identity_engine.services import ParsedUrl
 
@@ -1080,12 +1183,14 @@ async def resolve_clz_row_task(
                     source_issue_id=source_issue_id,
                     error=error_msg,
                 )
-                return {
+                row_result = {
                     "row_index": row_index,
                     "source_issue_id": source_issue_id,
                     "resolved": False,
                     "error": error_msg,
                 }
+                await _record_clz_row_result(operation_uuid, row_result)
+                return row_result
 
             source_mapping_action = await _ensure_source_mapping(
                 mapping_repo=mapping_repo,
@@ -1116,7 +1221,7 @@ async def resolve_clz_row_task(
 
             await session.commit()
 
-            return {
+            row_result = {
                 "row_index": row_index,
                 "source_issue_id": source_issue_id,
                 "resolved": True,
@@ -1124,16 +1229,20 @@ async def resolve_clz_row_task(
                 "existing_mapping": False,
                 "cross_platform_found": cross_platform_count,
             }
+            await _record_clz_row_result(operation_uuid, row_result)
+            return row_result
 
         except AdapterValidationError as e:
             error_msg = f"Row {row_index} validation error: {e}"
             logger.warning(error_msg, operation_id=operation_id)
-            return {
+            row_result = {
                 "row_index": row_index,
                 "source_issue_id": row_data.get("Core ComicID"),
                 "resolved": False,
                 "error": error_msg,
             }
+            await _record_clz_row_result(operation_uuid, row_result)
+            return row_result
 
         except Exception as e:
             error_msg = f"Row {row_index} error: {e}"
@@ -1142,12 +1251,14 @@ async def resolve_clz_row_task(
                 operation_id=operation_id,
                 error_type=type(e).__name__,
             )
-            return {
+            row_result = {
                 "row_index": row_index,
                 "source_issue_id": row_data.get("Core ComicID"),
                 "resolved": False,
                 "error": error_msg,
             }
+            await _record_clz_row_result(operation_uuid, row_result)
+            return row_result
 
 
 async def import_clz_task(
@@ -1202,9 +1313,24 @@ async def import_clz_task(
             adapter = CLZAdapter()
             rows = adapter.load_csv_from_file(csv_path)
 
-            from comic_identity_engine.jobs.queue import JobQueue
+            result_dict = {
+                "total_rows": len(rows),
+                "processed": 0,
+                "resolved": 0,
+                "failed": 0,
+                "errors": [],
+                "progress": 0.0,
+                "summary": f"Enqueued {len(rows)} CLZ row tasks for processing",
+            }
 
-            queue = JobQueue()
+            await operations_manager.update_operation(
+                operation_uuid,
+                "running",
+                result=result_dict,
+            )
+            await session.commit()
+
+            from comic_identity_engine.jobs.queue import JobQueue
 
             logger.info(
                 "Enqueueing CLZ row tasks",
@@ -1213,30 +1339,27 @@ async def import_clz_task(
             )
 
             jobs = []
-            for idx, row in enumerate(rows):
-                job = await queue.enqueue_resolve_clz_row(
-                    row_data=row,
-                    row_index=idx + 1,
-                    operation_id=operation_uuid,
-                )
-                jobs.append(job)
+            queue = JobQueue()
+            try:
+                for idx, row in enumerate(rows):
+                    job = await queue.enqueue_resolve_clz_row(
+                        row_data=row,
+                        row_index=idx + 1,
+                        operation_id=operation_uuid,
+                    )
+                    jobs.append(job)
+            finally:
+                close = getattr(queue, "close", None)
+                if callable(close):
+                    maybe_awaitable = close()
+                    if inspect.isawaitable(maybe_awaitable):
+                        await maybe_awaitable
 
             logger.info(
                 "All CLZ row tasks enqueued",
                 operation_id=operation_id,
                 job_count=len(jobs),
             )
-
-            result_dict = {
-                "total_rows": len(rows),
-                "resolved": 0,
-                "failed": 0,
-                "errors": [],
-                "summary": f"Enqueued {len(rows)} CLZ row tasks for processing",
-            }
-
-            await operations_manager.mark_completed(operation_uuid, result_dict)
-            await session.commit()
 
             logger.info(
                 "CLZ import orchestration completed",

@@ -66,6 +66,9 @@ async def import_clz(
         operation = await operations_manager.create_operation(
             operation_type="import_clz",
             input_data={"csv_path": request.file_path},
+            # Import retries for the same file path should create fresh work.
+            # Reusing a stale "running" operation can deadlock after queue loss.
+            force=True,
         )
 
         # Only enqueue job if operation is not already completed or running

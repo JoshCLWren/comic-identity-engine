@@ -10,7 +10,6 @@ USAGE:
     cie-import-clz collection.csv --api-url http://localhost:8000
 """
 
-import asyncio
 import sys
 from pathlib import Path
 
@@ -180,69 +179,6 @@ def cli_import_clz(
         sys.exit(1)
 
 
-def _count_completed_jobs_from_redis(operation_id: str) -> int:
-    """Count completed arq jobs for the given operation ID.
-
-    This function queries Redis to count how many resolve_clz_row_task
-    jobs have been completed for the given operation.
-
-    Args:
-        operation_id: UUID of the parent import operation
-
-    Returns:
-        Number of completed jobs for this operation
-    """
-
-    async def _count() -> int:
-        from arq import create_pool
-        from arq.connections import RedisSettings
-        from comic_identity_engine.config import get_settings
-
-        try:
-            settings = get_settings()
-            redis_settings = RedisSettings.from_dsn(settings.arq.queue_url)
-            pool = await create_pool(redis_settings)
-
-            job_results = await pool.all_job_results()
-            await pool.aclose()
-
-            completed_count = 0
-            for job_result in job_results:
-                if job_result.function == "resolve_clz_row_task":
-                    job_operation_id = job_result.kwargs.get("operation_id")
-                    if job_operation_id == operation_id:
-                        completed_count += 1
-
-            return completed_count
-        except Exception:
-            return 0
-
-    try:
-        return asyncio.run(_count())
-    except RuntimeError:
-        return 0
-    except Exception:
-        return 0
-
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            import concurrent.futures
-
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(asyncio.run, _count())
-                return future.result()
-        else:
-            return asyncio.run(_count())
-    except Exception:
-        return 0
-
-    try:
-        return asyncio.run(_count())
-    except Exception:
-        return 0
-
-
 def _poll_import_operation(
     client: httpx.Client,
     api_url: str,
@@ -272,9 +208,6 @@ def _poll_import_operation(
     """
     import time
 
-    from comic_identity_engine.database.connection import AsyncSessionLocal
-    from comic_identity_engine.database.repositories import OperationRepository
-
     start_time = time.time()
     poll_interval = 0.5
 
@@ -303,10 +236,9 @@ def _poll_import_operation(
             response_obj = data.get("response") or {}
 
             total_rows = response_obj.get("total_rows", 0)
+            processed = response_obj.get("processed", 0)
 
             if total_rows > 0:
-                processed = _count_completed_jobs_from_redis(operation_id)
-
                 if verbose and processed > 0:
                     progress.update(
                         task,

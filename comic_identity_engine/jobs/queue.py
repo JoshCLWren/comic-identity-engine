@@ -380,7 +380,11 @@ class JobQueue:
         clean up resources.
         """
         if self._redis_pool is not None:
-            await self._redis_pool.close()
+            aclose = getattr(self._redis_pool, "aclose", None)
+            if callable(aclose):
+                await aclose()
+            else:
+                await self._redis_pool.close()
             self._redis_pool = None
             logger.debug("Closed Redis connection pool")
 

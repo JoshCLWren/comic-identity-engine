@@ -53,7 +53,7 @@ X-Men,10,Marvel,1992,clz-010,April 1992,012345678901"""
         ) as mock_ops_manager_class:
             mock_ops_manager = Mock()
             mock_ops_manager.mark_running = AsyncMock()
-            mock_ops_manager.mark_completed = AsyncMock()
+            mock_ops_manager.update_operation = AsyncMock()
             mock_ops_manager_class.return_value = mock_ops_manager
 
             with patch(
@@ -92,10 +92,11 @@ X-Men,10,Marvel,1992,clz-010,April 1992,012345678901"""
                     )
 
         assert result["total_rows"] == 10
+        assert result["processed"] == 0
         assert "summary" in result
         assert "Enqueued 10 CLZ row tasks" in result["summary"]
         assert mock_queue.enqueue_resolve_clz_row.call_count == 10
-        mock_ops_manager.mark_completed.assert_called_once()
+        mock_ops_manager.update_operation.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -119,7 +120,7 @@ class TestResolveClzRow:
         ) as mock_ops_manager_class:
             mock_ops_manager = Mock()
             mock_ops_manager.mark_running = AsyncMock()
-            mock_ops_manager.mark_completed = AsyncMock()
+            mock_ops_manager.update_operation = AsyncMock()
             mock_ops_manager_class.return_value = mock_ops_manager
 
             with patch(
@@ -248,7 +249,7 @@ class TestClzImportMedium:
         ) as mock_ops_manager_class:
             mock_ops_manager = Mock()
             mock_ops_manager.mark_running = AsyncMock()
-            mock_ops_manager.mark_completed = AsyncMock()
+            mock_ops_manager.update_operation = AsyncMock()
             mock_ops_manager_class.return_value = mock_ops_manager
 
             with patch(
@@ -285,5 +286,7 @@ class TestClzImportMedium:
                     )
 
         assert result["total_rows"] == 100
+        assert result["processed"] == 0
         assert "Enqueued 100 CLZ row tasks" in result["summary"]
         assert mock_queue.enqueue_resolve_clz_row.call_count == 100
+        mock_ops_manager.update_operation.assert_called_once()

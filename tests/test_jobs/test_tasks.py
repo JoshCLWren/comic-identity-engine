@@ -828,6 +828,7 @@ X-Men,2,Marvel,1991,clz-002"""
 
         # Orchestrator returns immediately with enqueue confirmation
         assert result["total_rows"] == 2
+        assert result["processed"] == 0
         assert result["resolved"] == 0  # Orchestrator doesn't process rows
         assert result["failed"] == 0
         assert len(result["errors"]) == 0
@@ -837,7 +838,7 @@ X-Men,2,Marvel,1991,clz-002"""
         assert mock_queue.enqueue_resolve_clz_row.call_count == 2
 
         mock_ops_manager.mark_running.assert_called_once()
-        mock_ops_manager.mark_completed.assert_called_once()
+        mock_ops_manager.update_operation.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_import_clz_task_file_not_found(
@@ -1696,8 +1697,8 @@ X-Men,1,Marvel,1991,clz-001"""
                     )
 
         assert result["total_rows"] == 1
-        assert result["processed"] == 1
-        assert result["resolved"] == 1  # Existing mapping counts as resolved
+        assert result["processed"] == 0
+        assert result["resolved"] == 0
         assert result["failed"] == 0
         assert len(result["errors"]) == 0
 
@@ -1776,13 +1777,10 @@ X-Men,1,Marvel,1991,clz-001"""
                         )
 
         assert result["total_rows"] == 1
-        assert result["processed"] == 1
+        assert result["processed"] == 0
         assert result["resolved"] == 0
-        assert result["failed"] == 1
-        assert len(result["errors"]) == 1
-        assert result["errors"][0]["row"] == 1
-        assert result["errors"][0]["source_issue_id"] == "clz-001"
-        assert "Failed to resolve issue" in result["errors"][0]["error"]
+        assert result["failed"] == 0
+        assert len(result["errors"]) == 0
 
     @pytest.mark.asyncio
     async def test_import_clz_task_progress_update(
@@ -1993,11 +1991,10 @@ X-Men,2,Marvel,1991,clz-002"""
                                 )
 
             assert result["total_rows"] == 2
-            assert result["processed"] == 1
-            assert result["resolved"] == 1
-            assert result["failed"] == 1
-            assert len(result["errors"]) == 1
-            assert "Row 2 error" in result["errors"][0]["error"]
+            assert result["processed"] == 0
+            assert result["resolved"] == 0
+            assert result["failed"] == 0
+            assert len(result["errors"]) == 0
 
 
 class TestReconcileTaskEdgeCases:

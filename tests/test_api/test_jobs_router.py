@@ -541,6 +541,7 @@ class TestImportClzValid:
                     mock_ops.create_operation.assert_called_once_with(
                         operation_type="import_clz",
                         input_data={"filename": "data.csv"},
+                        force=True,
                     )
 
 

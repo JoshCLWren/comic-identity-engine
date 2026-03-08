@@ -139,6 +139,9 @@ async def create_import_clz_job(
         operation = await operations_manager.create_operation(
             operation_type="import_clz",
             input_data={"filename": file.filename},
+            # Import retries for the same file should create fresh work instead
+            # of reusing a stale operation record.
+            force=True,
         )
 
         await queue.enqueue_import_clz(
@@ -203,6 +206,11 @@ async def get_job_status(
             completed = operation.result["completed"]
             if total > 0:
                 progress = completed / total
+        elif "total_rows" in operation.result and "processed" in operation.result:
+            total_rows = operation.result["total_rows"]
+            processed = operation.result["processed"]
+            if total_rows > 0:
+                progress = processed / total_rows
 
     return JobStatusResponse(
         operation_id=operation.id,
