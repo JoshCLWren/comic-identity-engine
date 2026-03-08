@@ -268,6 +268,111 @@ class JobQueue:
             operation_id=str(operation_id),
         )
 
+    async def enqueue_resolve_clz_row(
+        self,
+        row_data: dict[str, str],
+        row_index: int,
+        operation_id: uuid.UUID,
+    ) -> Job:
+        """Enqueue a CLZ CSV row resolution job.
+
+        Args:
+            row_data: Single CSV row as dictionary
+            row_index: Row index (1-based) for error reporting
+            operation_id: UUID of the parent import operation
+
+        Returns:
+            arq Job instance.
+
+        Raises:
+            ConnectionError: If unable to connect to Redis.
+
+        Examples:
+            >>> job = await queue.enqueue_resolve_clz_row(
+            ...     {"Core ComicID": "123", "Series": "X-Men"},
+            ...     1,
+            ...     operation_id
+            ... )
+        """
+        pool = await self._get_pool()
+
+        logger.info(
+            "Enqueueing CLZ row resolution job",
+            row_index=row_index,
+            source_issue_id=row_data.get("Core ComicID"),
+            operation_id=str(operation_id),
+        )
+
+        return await pool.enqueue_job(
+            "resolve_clz_row_task",
+            row_data=row_data,
+            row_index=row_index,
+            operation_id=str(operation_id),
+        )
+
+    async def enqueue_http_request(
+        self,
+        url: str,
+        method: str = "GET",
+        operation_id: uuid.UUID | None = None,
+        platform: str | None = None,
+        headers: dict[str, str] | None = None,
+        params: dict[str, Any] | None = None,
+        json_data: dict[str, Any] | None = None,
+        verify_ssl: bool = True,
+    ) -> Job:
+        """Enqueue an HTTP request job.
+
+        This method enqueues a single HTTP request as an independent task,
+        allowing for fine-grained parallelism and error handling.
+
+        Args:
+            url: URL to request
+            method: HTTP method (default: "GET")
+            operation_id: UUID of the operation tracking this job (auto-generated if not provided)
+            platform: Platform identifier for rate limiting (optional)
+            headers: Optional HTTP headers
+            params: Optional query parameters
+            json_data: Optional JSON body for POST/PUT/PATCH requests
+            verify_ssl: Whether to verify SSL certificates (default: True)
+
+        Returns:
+            arq Job instance.
+
+        Raises:
+            ConnectionError: If unable to connect to Redis.
+
+        Examples:
+            >>> job = await queue.enqueue_http_request(
+            ...     "https://www.comics.org/issue/123/?format=json"
+            ... )
+            >>> print(job.job_id)
+        """
+        pool = await self._get_pool()
+
+        op_id = operation_id or uuid.uuid4()
+
+        logger.info(
+            "Enqueueing HTTP request job",
+            url=url,
+            method=method,
+            operation_id=str(op_id),
+            platform=platform,
+            verify_ssl=verify_ssl,
+        )
+
+        return await pool.enqueue_job(
+            "http_request_task",
+            url=url,
+            method=method,
+            operation_id=str(op_id),
+            platform=platform,
+            headers=headers,
+            params=params,
+            json_data=json_data,
+            verify_ssl=verify_ssl,
+        )
+
     async def close(self) -> None:
         """Close the Redis connection pool.
 

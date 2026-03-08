@@ -22,6 +22,7 @@ USAGE:
 import csv
 import json
 import tempfile
+import time
 import uuid
 from pathlib import Path
 from typing import Any
@@ -42,6 +43,7 @@ from comic_identity_engine.adapters import (
     SourceError,
     ValidationError as AdapterValidationError,
 )
+from comic_identity_engine.core.http_client import HttpClient
 from comic_identity_engine.database.connection import AsyncSessionLocal
 from comic_identity_engine.database.repositories import (
     ExternalMappingRepository,
@@ -147,6 +149,160 @@ def get_adapter(platform: str) -> SourceAdapter:
     http_client = HttpClient(platform=platform, verify_ssl=should_verify)
 
     return adapter_class(http_client=http_client)
+
+
+async def http_request_task(
+    ctx: dict[str, Any],
+    url: str,
+    method: str = "GET",
+    operation_id: str | None = None,
+    platform: str | None = None,
+    headers: dict[str, str] | None = None,
+    params: dict[str, Any] | None = None,
+    json_data: dict[str, Any] | None = None,
+    verify_ssl: bool = True,
+) -> dict[str, Any]:
+    """Execute a single HTTP request as an independent task.
+
+    This task performs one HTTP request and returns the response details.
+    It's designed to be the atomic unit of work for HTTP operations, allowing
+    for fine-grained parallelism and error handling.
+
+    Args:
+        ctx: ARQ context dictionary
+        url: URL to request
+        method: HTTP method (default: "GET")
+        operation_id: UUID of the operation to track (optional, auto-generated if not provided)
+        platform: Platform identifier for rate limiting (default: extract from URL)
+        headers: Optional HTTP headers
+        params: Optional query parameters
+        json_data: Optional JSON body for POST/PUT/PATCH requests
+        verify_ssl: Whether to verify SSL certificates (default: True)
+
+    Returns:
+        Dictionary with request results:
+        - success: True if request succeeded
+        - status_code: HTTP status code
+        - content: Response content as string
+        - elapsed_ms: Request duration in milliseconds
+        - error: Error message if request failed
+        - operation_id: UUID of the operation
+
+    Raises:
+        No exceptions raised - all errors are caught and returned in the result dict.
+
+    Examples:
+        >>> result = await http_request_task(
+        ...     {},
+        ...     "https://www.comics.org/issue/125295/?format=json",
+        ...     "GET"
+        ... )
+        >>> print(result["success"])
+        True
+        >>> print(result["status_code"])
+        200
+    """
+    async with AsyncSessionLocal() as session:
+        operation_uuid = None
+        operations_manager = None
+        start_time = None
+
+        try:
+            operation_uuid = (
+                uuid.uuid4() if not operation_id else uuid.UUID(operation_id)
+            )
+            operations_manager = OperationsManager(session)
+
+            await operations_manager.mark_running(operation_uuid)
+            await session.commit()
+
+            start_time = time.time()
+
+            logger.info(
+                "Starting HTTP request task",
+                operation_id=str(operation_uuid),
+                url=url,
+                method=method,
+                platform=platform,
+            )
+
+            if platform is None:
+                platform = "default"
+
+            async with HttpClient(platform=platform, verify_ssl=verify_ssl) as client:
+                if method.upper() == "GET":
+                    response = await client.get(url, params=params, headers=headers)
+                elif method.upper() == "POST":
+                    response = await client.post(
+                        url, params=params, headers=headers, json=json_data
+                    )
+                elif method.upper() == "PUT":
+                    response = await client.put(
+                        url, params=params, headers=headers, json=json_data
+                    )
+                elif method.upper() == "PATCH":
+                    response = await client.patch(
+                        url, params=params, headers=headers, json=json_data
+                    )
+                elif method.upper() == "DELETE":
+                    response = await client.delete(url, params=params, headers=headers)
+                else:
+                    raise ValueError(f"Unsupported HTTP method: {method}")
+
+            elapsed_ms = (time.time() - start_time) * 1000
+
+            result_dict = {
+                "success": True,
+                "status_code": response.status_code,
+                "content": response.text,
+                "elapsed_ms": round(elapsed_ms, 2),
+                "error": None,
+                "operation_id": str(operation_uuid),
+            }
+
+            await operations_manager.mark_completed(operation_uuid, result_dict)
+            await session.commit()
+
+            logger.info(
+                "HTTP request task completed",
+                operation_id=str(operation_uuid),
+                url=url,
+                method=method,
+                status_code=response.status_code,
+                elapsed_ms=elapsed_ms,
+            )
+
+            return result_dict
+
+        except Exception as e:
+            elapsed_ms = (time.time() - start_time) * 1000 if start_time else 0
+
+            error_msg = f"HTTP request failed: {e}"
+            logger.error(
+                "HTTP request task failed",
+                operation_id=str(operation_uuid) if operation_uuid else None,
+                url=url,
+                method=method,
+                error=str(e),
+                error_type=type(e).__name__,
+                elapsed_ms=elapsed_ms,
+            )
+
+            result_dict = {
+                "success": False,
+                "status_code": None,
+                "content": None,
+                "elapsed_ms": round(elapsed_ms, 2),
+                "error": error_msg,
+                "error_type": type(e).__name__,
+                "operation_id": str(operation_uuid) if operation_uuid else None,
+            }
+
+            if operation_uuid and operations_manager:
+                await operations_manager.mark_failed(operation_uuid, error_msg)
+                await session.commit()
+
+            return result_dict
 
 
 async def resolve_identity_task(
@@ -822,15 +978,221 @@ async def bulk_resolve_task(
             return {"error": error_msg, "error_type": "unexpected_error"}
 
 
+async def resolve_clz_row_task(
+    ctx: dict[str, Any],
+    row_data: dict[str, str],
+    row_index: int,
+    operation_id: str,
+) -> dict[str, Any]:
+    """Resolve a single CLZ CSV row using identity resolution pipeline.
+
+    This task processes one CLZ CSV row by checking for existing mappings,
+    resolving the identity, creating CLZ external mappings, and running
+    cross-platform search.
+
+    Args:
+        ctx: ARQ context dictionary
+        row_data: Single CSV row as dictionary
+        row_index: Row index (1-based) for error reporting
+        operation_id: UUID of the parent import operation
+
+    Returns:
+        Dictionary with row resolution results:
+        - row_index: Row number (1-based)
+        - source_issue_id: CLZ Comic ID
+        - resolved: True if successfully resolved
+        - issue_id: Canonical issue UUID (if resolved)
+        - existing_mapping: True if found existing mapping
+        - cross_platform_found: Number of platforms found
+        - error: Error message (if failed)
+
+    Raises:
+        No exceptions raised - all errors are caught and returned in result.
+
+    Examples:
+        >>> result = await resolve_clz_row_task(
+        ...     {},
+        ...     {"Core ComicID": "123", "Series": "X-Men", "Issue": "1"},
+        ...     1,
+        ...     "550e8400-e29b-41d4-a716-446655440000"
+        ... )
+        >>> print(result["resolved"])
+        True
+    """
+    async with AsyncSessionLocal() as session:
+        operation_uuid = uuid.UUID(operation_id)
+        try:
+            logger.info(
+                "Processing CLZ row",
+                operation_id=operation_id,
+                row=row_index,
+                source_issue_id=row_data.get("Core ComicID"),
+            )
+
+            adapter = CLZAdapter()
+            issue_candidate = adapter.fetch_issue_from_csv_row(row_data)
+            source_issue_id = issue_candidate.source_issue_id
+
+            mapping_repo = ExternalMappingRepository(session)
+            existing_mapping = await mapping_repo.find_by_source("clz", source_issue_id)
+
+            if existing_mapping is not None:
+                logger.info(
+                    "Existing CLZ mapping found",
+                    operation_id=operation_id,
+                    row=row_index,
+                    source_issue_id=source_issue_id,
+                    issue_id=str(existing_mapping.issue_id),
+                )
+                return {
+                    "row_index": row_index,
+                    "source_issue_id": source_issue_id,
+                    "resolved": True,
+                    "issue_id": str(existing_mapping.issue_id),
+                    "existing_mapping": True,
+                    "cross_platform_found": 0,
+                }
+
+            from comic_identity_engine.services import ParsedUrl
+
+            parsed_url = ParsedUrl(
+                platform="clz",
+                source_issue_id=source_issue_id,
+                source_series_id=issue_candidate.source_series_id,
+            )
+
+            resolver = IdentityResolver(session)
+            result = await resolver.resolve_issue(
+                parsed_url=parsed_url,
+                upc=issue_candidate.upc,
+                series_title=issue_candidate.series_title,
+                series_start_year=issue_candidate.series_start_year,
+                issue_number=issue_candidate.issue_number,
+                cover_date=issue_candidate.cover_date,
+            )
+
+            if not result.issue_id:
+                error_msg = f"Failed to resolve issue: {result.explanation}"
+                logger.warning(
+                    "Failed to resolve CLZ row",
+                    operation_id=operation_id,
+                    row=row_index,
+                    source_issue_id=source_issue_id,
+                    error=error_msg,
+                )
+                return {
+                    "row_index": row_index,
+                    "source_issue_id": source_issue_id,
+                    "resolved": False,
+                    "error": error_msg,
+                }
+
+            source_mapping_action = await _ensure_source_mapping(
+                mapping_repo=mapping_repo,
+                issue_id=result.issue_id,
+                source="clz",
+                source_issue_id=source_issue_id,
+                source_series_id=issue_candidate.source_series_id,
+            )
+
+            if source_mapping_action == "created":
+                logger.info(
+                    "Created CLZ external mapping",
+                    operation_id=operation_id,
+                    row=row_index,
+                    source_issue_id=source_issue_id,
+                    issue_id=str(result.issue_id),
+                )
+            else:
+                logger.info(
+                    "Reused existing CLZ external mapping",
+                    operation_id=operation_id,
+                    row=row_index,
+                    source_issue_id=source_issue_id,
+                    issue_id=str(result.issue_id),
+                )
+
+            cross_platform_count = 0
+            try:
+                from comic_identity_engine.services.platform_searcher import (
+                    PlatformSearcher,
+                )
+
+                operations_manager = OperationsManager(session)
+                searcher = PlatformSearcher(session)
+                cross_platform_result = await searcher.search_all_platforms(
+                    issue_id=result.issue_id,
+                    series_title=issue_candidate.series_title,
+                    issue_number=issue_candidate.issue_number,
+                    year=issue_candidate.series_start_year,
+                    publisher=issue_candidate.publisher,
+                    operation_id=operation_uuid,
+                    source_platform="clz",
+                    operations_manager=operations_manager,
+                )
+
+                cross_platform_count = len(cross_platform_result.get("urls", {}))
+                logger.info(
+                    "Cross-platform search completed",
+                    operation_id=operation_id,
+                    row=row_index,
+                    issue_id=str(result.issue_id),
+                    found_platforms=list(cross_platform_result.get("urls", {}).keys()),
+                )
+            except Exception as e:
+                logger.warning(
+                    "Cross-platform search failed, continuing without it",
+                    operation_id=operation_id,
+                    row=row_index,
+                    issue_id=str(result.issue_id),
+                    error=str(e),
+                )
+
+            await session.commit()
+
+            return {
+                "row_index": row_index,
+                "source_issue_id": source_issue_id,
+                "resolved": True,
+                "issue_id": str(result.issue_id),
+                "existing_mapping": False,
+                "cross_platform_found": cross_platform_count,
+            }
+
+        except AdapterValidationError as e:
+            error_msg = f"Row {row_index} validation error: {e}"
+            logger.warning(error_msg, operation_id=operation_id)
+            return {
+                "row_index": row_index,
+                "source_issue_id": row_data.get("Core ComicID"),
+                "resolved": False,
+                "error": error_msg,
+            }
+
+        except Exception as e:
+            error_msg = f"Row {row_index} error: {e}"
+            logger.error(
+                error_msg,
+                operation_id=operation_id,
+                error_type=type(e).__name__,
+            )
+            return {
+                "row_index": row_index,
+                "source_issue_id": row_data.get("Core ComicID"),
+                "resolved": False,
+                "error": error_msg,
+            }
+
+
 async def import_clz_task(
     ctx: dict[str, Any],
     csv_path: str,
     operation_id: str,
 ) -> dict[str, Any]:
-    """Import comic data from CLZ CSV export using identity resolution pipeline.
+    """Import comic data from CLZ CSV export using task-based parallel processing.
 
-    This task loads a CLZ CSV file and uses the IdentityResolver to find/create
-    canonical issues, creates external mappings, and runs cross-platform search.
+    This task loads a CLZ CSV file and enqueues one task per row for parallel
+    processing. It aggregates results and tracks progress.
 
     Args:
         ctx: ARQ context dictionary
@@ -840,7 +1202,6 @@ async def import_clz_task(
     Returns:
         Dictionary with import results:
         - total_rows: Total number of rows in CSV
-        - processed: Number of rows processed
         - resolved: Number of issues successfully resolved
         - failed: Number of issues that failed to resolve
         - errors: List of errors encountered
@@ -858,15 +1219,16 @@ async def import_clz_task(
         >>> print(result["resolved"])
         5
     """
+    operation_uuid = uuid.UUID(operation_id)
     async with AsyncSessionLocal() as session:
         try:
-            operation_uuid = uuid.UUID(operation_id)
             operations_manager = OperationsManager(session)
 
             await operations_manager.mark_running(operation_uuid)
+            await session.commit()
 
             logger.info(
-                "Starting CLZ import task",
+                "Starting CLZ import task (orchestrator)",
                 operation_id=operation_id,
                 csv_path=csv_path,
             )
@@ -874,185 +1236,47 @@ async def import_clz_task(
             adapter = CLZAdapter()
             rows = adapter.load_csv_from_file(csv_path)
 
-            mapping_repo = ExternalMappingRepository(session)
-            resolver = IdentityResolver(session)
+            from comic_identity_engine.jobs.queue import JobQueue
 
-            processed = 0
-            resolved = 0
-            failed = 0
-            errors = []
+            queue = JobQueue()
 
+            logger.info(
+                "Enqueueing CLZ row tasks",
+                operation_id=operation_id,
+                total_rows=len(rows),
+            )
+
+            jobs = []
             for idx, row in enumerate(rows):
-                try:
-                    issue_candidate = adapter.fetch_issue_from_csv_row(row)
-                    source_issue_id = issue_candidate.source_issue_id
+                job = await queue.enqueue_resolve_clz_row(
+                    row_data=row,
+                    row_index=idx + 1,
+                    operation_id=operation_uuid,
+                )
+                jobs.append(job)
 
-                    existing_mapping = await mapping_repo.find_by_source(
-                        "clz", source_issue_id
-                    )
-
-                    if existing_mapping is not None:
-                        logger.info(
-                            "Existing CLZ mapping found",
-                            operation_id=operation_id,
-                            row=idx + 1,
-                            source_issue_id=source_issue_id,
-                            issue_id=str(existing_mapping.issue_id),
-                        )
-                        resolved += 1
-                    else:
-                        from comic_identity_engine.services import ParsedUrl
-
-                        parsed_url = ParsedUrl(
-                            platform="clz",
-                            source_issue_id=source_issue_id,
-                            source_series_id=issue_candidate.source_series_id,
-                        )
-
-                        result = await resolver.resolve_issue(
-                            parsed_url=parsed_url,
-                            upc=issue_candidate.upc,
-                            series_title=issue_candidate.series_title,
-                            series_start_year=issue_candidate.series_start_year,
-                            issue_number=issue_candidate.issue_number,
-                            cover_date=issue_candidate.cover_date,
-                        )
-
-                        if result.issue_id:
-                            source_mapping_action = await _ensure_source_mapping(
-                                mapping_repo=mapping_repo,
-                                issue_id=result.issue_id,
-                                source="clz",
-                                source_issue_id=source_issue_id,
-                                source_series_id=issue_candidate.source_series_id,
-                            )
-
-                            if source_mapping_action == "created":
-                                logger.info(
-                                    "Created CLZ external mapping",
-                                    operation_id=operation_id,
-                                    row=idx + 1,
-                                    source_issue_id=source_issue_id,
-                                    issue_id=str(result.issue_id),
-                                )
-                            else:
-                                logger.info(
-                                    "Reused existing CLZ external mapping",
-                                    operation_id=operation_id,
-                                    row=idx + 1,
-                                    source_issue_id=source_issue_id,
-                                    issue_id=str(result.issue_id),
-                                )
-
-                            try:
-                                from comic_identity_engine.services.platform_searcher import (
-                                    PlatformSearcher,
-                                )
-
-                                searcher = PlatformSearcher(session)
-                                cross_platform_result = (
-                                    await searcher.search_all_platforms(
-                                        issue_id=result.issue_id,
-                                        series_title=issue_candidate.series_title,
-                                        issue_number=issue_candidate.issue_number,
-                                        year=issue_candidate.series_start_year,
-                                        publisher=issue_candidate.publisher,
-                                        operation_id=operation_uuid,
-                                        source_platform="clz",
-                                        operations_manager=operations_manager,
-                                    )
-                                )
-
-                                logger.info(
-                                    "Cross-platform search completed",
-                                    operation_id=operation_id,
-                                    row=idx + 1,
-                                    issue_id=str(result.issue_id),
-                                    found_platforms=list(
-                                        cross_platform_result.get("urls", {}).keys()
-                                    ),
-                                )
-                            except Exception as e:
-                                logger.warning(
-                                    "Cross-platform search failed, continuing without it",
-                                    operation_id=operation_id,
-                                    row=idx + 1,
-                                    issue_id=str(result.issue_id),
-                                    error=str(e),
-                                )
-
-                            resolved += 1
-                        else:
-                            error_msg = f"Failed to resolve issue: {result.explanation}"
-                            logger.warning(
-                                "Failed to resolve CLZ row",
-                                operation_id=operation_id,
-                                row=idx + 1,
-                                source_issue_id=source_issue_id,
-                                error=error_msg,
-                            )
-                            errors.append(
-                                {
-                                    "row": idx + 1,
-                                    "source_issue_id": source_issue_id,
-                                    "error": error_msg,
-                                }
-                            )
-                            failed += 1
-
-                    processed += 1
-
-                    if processed % 10 == 0:
-                        progress_update = {
-                            "total_rows": len(rows),
-                            "processed": processed,
-                            "resolved": resolved,
-                            "failed": failed,
-                        }
-                        await operations_manager.update_operation(
-                            operation_uuid, "running", result=progress_update
-                        )
-
-                except AdapterValidationError as e:
-                    error_msg = f"Row {idx + 1} validation error: {e}"
-                    logger.warning(error_msg)
-                    errors.append(
-                        {"row": idx + 1, "source_issue_id": None, "error": error_msg}
-                    )
-                    failed += 1
-
-                except Exception as e:
-                    error_msg = f"Row {idx + 1} error: {e}"
-                    logger.error(error_msg)
-                    source_issue_id = row.get("Core ComicID") if row else None
-                    errors.append(
-                        {
-                            "row": idx + 1,
-                            "source_issue_id": source_issue_id,
-                            "error": error_msg,
-                        }
-                    )
-                    failed += 1
+            logger.info(
+                "All CLZ row tasks enqueued",
+                operation_id=operation_id,
+                job_count=len(jobs),
+            )
 
             result_dict = {
                 "total_rows": len(rows),
-                "processed": processed,
-                "resolved": resolved,
-                "failed": failed,
-                "errors": errors,
-                "summary": f"Processed {len(rows)} CLZ rows: {resolved} resolved, {failed} failed. {len(errors)} errors.",
+                "resolved": 0,
+                "failed": 0,
+                "errors": [],
+                "summary": f"Enqueued {len(rows)} CLZ row tasks for processing",
             }
 
             await operations_manager.mark_completed(operation_uuid, result_dict)
+            await session.commit()
 
             logger.info(
-                "CLZ import task completed",
+                "CLZ import orchestration completed",
                 operation_id=operation_id,
                 total_rows=len(rows),
-                processed=processed,
-                resolved=resolved,
-                failed=failed,
-                errors_count=len(errors),
+                enqueued_jobs=len(jobs),
             )
 
             return result_dict
@@ -1065,6 +1289,7 @@ async def import_clz_task(
                 error=error_msg,
             )
             await _mark_failed_safe(session, operation_uuid, error_msg)
+            await session.commit()
             return {"error": error_msg, "error_type": "file_not_found"}
 
         except ValidationError as e:
@@ -1075,6 +1300,7 @@ async def import_clz_task(
                 error=error_msg,
             )
             await _mark_failed_safe(session, operation_uuid, error_msg)
+            await session.commit()
             return {"error": error_msg, "error_type": "validation_error"}
 
         except SQLAlchemyError as e:
@@ -1085,6 +1311,7 @@ async def import_clz_task(
                 error=error_msg,
             )
             await _mark_failed_safe(session, operation_uuid, error_msg)
+            await session.commit()
             return {"error": error_msg, "error_type": "database_error"}
 
         except Exception as e:
@@ -1096,6 +1323,7 @@ async def import_clz_task(
                 error_type=type(e).__name__,
             )
             await _mark_failed_safe(session, operation_uuid, error_msg)
+            await session.commit()
             return {"error": error_msg, "error_type": "unexpected_error"}
 
 
@@ -1419,3 +1647,179 @@ async def _mark_failed_safe(
             operation_id=str(operation_id),
             error=str(e),
         )
+
+
+async def http_request_task(
+    ctx: dict[str, Any],
+    url: str,
+    method: str = "GET",
+    operation_id: str = "",
+    platform: str | None = None,
+    headers: dict[str, str] | None = None,
+    params: dict[str, Any] | None = None,
+    json_data: dict[str, Any] | None = None,
+    verify_ssl: bool = True,
+) -> dict[str, Any]:
+    """Execute a single HTTP request as an independent task.
+
+    This is the atomic task unit - one HTTP request to a platform.
+    All platform adapters should use this for maximum parallelism.
+
+    Args:
+        ctx: ARQ context dictionary
+        url: URL to request
+        method: HTTP method (GET, POST, etc.)
+        operation_id: UUID of the operation tracking this request
+        platform: Platform code (e.g., "gcd", "locg", "ccl", "aa", "cpg", "hip")
+        headers: Optional HTTP headers
+        params: Optional query parameters
+        json_data: Optional JSON body for POST requests
+        verify_ssl: Whether to verify SSL certificates
+
+    Returns:
+        Dictionary with:
+            - url: str - The requested URL
+            - status_code: int - HTTP status code
+            - content: str - Response body text
+            - elapsed_ms: int - Request duration in milliseconds
+            - success: bool - True if 2xx status code
+            - error: str | None - Error message if failed
+
+    Raises:
+        No exceptions raised - all errors are caught and operation marked as failed.
+
+    Examples:
+        >>> result = await http_request_task(
+        ...     {},
+        ...     "https://www.comics.org/issue/125295/?format=json",
+        ...     operation_id=str(uuid.uuid4()),
+        ...     platform="gcd"
+        ... )
+        >>> print(result["status_code"])
+        200
+    """
+    async with AsyncSessionLocal() as session:
+        try:
+            import httpx
+
+            from comic_identity_engine.services.operations import OperationsManager
+
+            operation_uuid = uuid.UUID(operation_id)
+            operations_manager = OperationsManager(session)
+
+            await operations_manager.mark_running(operation_uuid)
+
+            logger.info(
+                "HTTP request task starting",
+                operation_id=operation_id,
+                platform=platform,
+                url=url,
+                method=method,
+            )
+
+            start_time = time.time()
+
+            try:
+                async with httpx.AsyncClient(verify=verify_ssl) as client:
+                    if method.upper() == "GET":
+                        response = await client.get(
+                            url, headers=headers, params=params, timeout=30.0
+                        )
+                    elif method.upper() == "POST":
+                        response = await client.post(
+                            url,
+                            headers=headers,
+                            params=params,
+                            json=json_data,
+                            timeout=30.0,
+                        )
+                    else:
+                        raise ValueError(f"Unsupported HTTP method: {method}")
+
+                elapsed_ms = int((time.time() - start_time) * 1000)
+                content = response.text
+
+                result = {
+                    "url": url,
+                    "status_code": response.status_code,
+                    "content": content,
+                    "elapsed_ms": elapsed_ms,
+                    "success": 200 <= response.status_code < 300,
+                    "error": None,
+                }
+
+                logger.info(
+                    "HTTP request succeeded",
+                    operation_id=operation_id,
+                    url=url,
+                    status_code=response.status_code,
+                    elapsed_ms=elapsed_ms,
+                )
+
+                await operations_manager.mark_completed(operation_uuid, result)
+                await session.commit()
+
+                return result
+
+            except httpx.HTTPError as e:
+                elapsed_ms = int((time.time() - start_time) * 1000)
+                error_msg = f"HTTP request failed: {e}"
+
+                result = {
+                    "url": url,
+                    "status_code": None,
+                    "content": None,
+                    "elapsed_ms": elapsed_ms,
+                    "success": False,
+                    "error": error_msg,
+                }
+
+                logger.error(
+                    "HTTP request failed",
+                    operation_id=operation_id,
+                    url=url,
+                    error=str(e),
+                    elapsed_ms=elapsed_ms,
+                )
+
+                await operations_manager.mark_failed(operation_uuid, error_msg)
+                await session.commit()
+
+                return result
+
+        except ValueError as e:
+            error_msg = f"Invalid HTTP method or parameters: {e}"
+            logger.error(
+                "HTTP request task failed - validation error",
+                operation_id=operation_id,
+                error=error_msg,
+            )
+            await _mark_failed_safe(
+                session,
+                operation_uuid,
+                error_msg,
+                result={"error_type": "validation_error", "url": url},
+            )
+            await session.commit()
+            return {"error": error_msg, "error_type": "validation_error"}
+
+        except Exception as e:
+            error_msg = f"Unexpected error during HTTP request: {e}"
+            logger.error(
+                "HTTP request task failed - unexpected error",
+                operation_id=operation_id,
+                error=error_msg,
+                error_type=type(e).__name__,
+            )
+            await _mark_failed_safe(
+                session,
+                operation_uuid,
+                error_msg,
+                result={
+                    "error_type": "unexpected_error",
+                    "exception_type": type(e).__name__,
+                    "url": url,
+                },
+            )
+            await session.commit()
+            return {"error": error_msg, "error_type": "unexpected_error"}

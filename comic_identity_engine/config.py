@@ -102,10 +102,20 @@ class ArqSettings(BaseSettings):
         description="arq queue name used for enqueueing and worker consumption",
         json_schema_extra={"env": "ARQ_QUEUE_NAME"},
     )
+    arq_queue_size: int = Field(
+        default=10000,
+        description="Maximum number of tasks in queue (0 = unlimited)",
+        json_schema_extra={"env": "ARQ_QUEUE_SIZE"},
+    )
     arq_max_jobs: int = Field(
-        default=10,
-        description="Maximum number of concurrent jobs",
+        default=100,
+        description="Maximum number of concurrent jobs processed per poll cycle",
         json_schema_extra={"env": "ARQ_MAX_JOBS"},
+    )
+    arq_poll_interval: float = Field(
+        default=0.1,
+        description="Queue polling interval in seconds (100ms = high throughput)",
+        json_schema_extra={"env": "ARQ_POLL_INTERVAL"},
     )
     arq_job_timeout: int = Field(
         default=300,

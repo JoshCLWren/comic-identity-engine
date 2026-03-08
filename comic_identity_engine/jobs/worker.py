@@ -27,8 +27,10 @@ from comic_identity_engine.config import get_settings
 from comic_identity_engine.jobs.tasks import (
     bulk_resolve_task,
     export_task,
+    http_request_task,
     import_clz_task,
     reconcile_task,
+    resolve_clz_row_task,
     resolve_identity_task,
 )
 
@@ -137,8 +139,10 @@ class WorkerSettings:
         resolve_identity_task,
         bulk_resolve_task,
         import_clz_task,
+        resolve_clz_row_task,
         export_task,
         reconcile_task,
+        http_request_task,
     ]
 
 
