@@ -23,7 +23,7 @@ from arq import create_pool
 from arq.connections import RedisSettings as ArqRedisSettings
 from arq.worker import Worker
 
-from comic_identity_engine.config import get_settings
+from comic_identity_engine.config import get_database_settings, get_settings
 from comic_identity_engine.jobs.tasks import (
     bulk_resolve_task,
     export_task,
@@ -66,12 +66,19 @@ logger = structlog.get_logger(__name__)
 _received_signals = []
 
 
+def cap_worker_max_jobs(configured_max_jobs: int, db_pool_capacity: int) -> int:
+    """Cap worker concurrency so it cannot exceed DB pool capacity."""
+    return min(configured_max_jobs, db_pool_capacity)
+
+
 async def _on_worker_startup(ctx: dict[str, Any]) -> None:
     """Log when the arq worker has fully initialized and is ready for jobs."""
     logger.info(
         "Worker started successfully",
         queue_name=WorkerSettings.queue_name,
         max_jobs=WorkerSettings.max_jobs,
+        configured_max_jobs=WorkerSettings.configured_max_jobs,
+        db_pool_capacity=WorkerSettings.db_pool_capacity,
         job_timeout=WorkerSettings.job_timeout,
         functions_count=len(WorkerSettings.functions),
         redis_host=WorkerSettings.redis_settings.host,
@@ -130,11 +137,15 @@ class WorkerSettings:
     """
 
     # Class-level attributes required by arq CLI
-    redis_settings = ArqRedisSettings.from_dsn(get_settings().arq.queue_url)
-    queue_name = get_settings().arq.arq_queue_name
-    max_jobs = get_settings().arq.arq_max_jobs
-    job_timeout = get_settings().arq.arq_job_timeout
-    keep_result = get_settings().arq.arq_keep_result
+    _settings = get_settings()
+    _database_settings = get_database_settings()
+    redis_settings = ArqRedisSettings.from_dsn(_settings.arq.queue_url)
+    queue_name = _settings.arq.arq_queue_name
+    configured_max_jobs = _settings.arq.arq_max_jobs
+    db_pool_capacity = _database_settings.pool_capacity
+    max_jobs = cap_worker_max_jobs(configured_max_jobs, db_pool_capacity)
+    job_timeout = _settings.arq.arq_job_timeout
+    keep_result = _settings.arq.arq_keep_result
     functions = [
         resolve_identity_task,
         bulk_resolve_task,
@@ -184,6 +195,8 @@ def run_worker() -> None:
         redis_url=WorkerSettings.redis_settings.host,
         queue_name=WorkerSettings.queue_name,
         max_jobs=WorkerSettings.max_jobs,
+        configured_max_jobs=WorkerSettings.configured_max_jobs,
+        db_pool_capacity=WorkerSettings.db_pool_capacity,
         job_timeout=WorkerSettings.job_timeout,
         functions_count=len(WorkerSettings.functions),
     )

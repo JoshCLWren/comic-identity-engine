@@ -20,7 +20,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class DatabaseSettings(BaseSettings):
     """Database configuration settings."""
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        extra="ignore",
+        populate_by_name=True,
+    )
 
     database_url: str = Field(
         ...,
@@ -31,6 +35,24 @@ class DatabaseSettings(BaseSettings):
         default=None,
         description="Database URL for testing (overrides DATABASE_URL in tests)",
         json_schema_extra={"env": "TEST_DATABASE_URL"},
+    )
+    pool_size: int = Field(
+        default=10,
+        alias="DB_POOL_SIZE",
+        ge=1,
+        description="SQLAlchemy connection pool size",
+    )
+    max_overflow: int = Field(
+        default=20,
+        alias="DB_MAX_OVERFLOW",
+        ge=0,
+        description="Additional temporary SQLAlchemy connections allowed beyond pool_size",
+    )
+    pool_timeout: int = Field(
+        default=30,
+        alias="DB_POOL_TIMEOUT",
+        gt=0,
+        description="Seconds to wait for a SQLAlchemy pooled connection before timing out",
     )
 
     @property
@@ -46,6 +68,11 @@ class DatabaseSettings(BaseSettings):
         elif url.startswith("postgres://"):
             return url.replace("postgres://", "postgresql+asyncpg://", 1)
         return url
+
+    @property
+    def pool_capacity(self) -> int:
+        """Get the maximum number of concurrent checked-out DB connections."""
+        return self.pool_size + self.max_overflow
 
 
 class RedisSettings(BaseSettings):

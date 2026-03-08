@@ -1,15 +1,20 @@
 """Tests for arq worker configuration."""
 
 import logging
+import os
 from unittest.mock import AsyncMock, Mock, patch
+
 import pytest
 from arq.connections import RedisSettings as ArqRedisSettings
 from arq.worker import Worker
 
-from comic_identity_engine.jobs.worker import (
+os.environ.setdefault("DATABASE_URL", "postgresql://user:pass@localhost/test_db")
+
+from comic_identity_engine.jobs.worker import (  # noqa: E402
     WorkerSettings,
     _configure_logging,
     _on_worker_startup,
+    cap_worker_max_jobs,
     create_redis_pool,
     create_worker,
     main,
@@ -17,7 +22,6 @@ from comic_identity_engine.jobs.worker import (
 )
 
 
-# Test constants
 TEST_REDIS_URL = "redis://localhost:6379/0"
 TEST_QUEUE_NAME = "cie:test:queue"
 TEST_MAX_JOBS = 10
@@ -47,6 +51,18 @@ def mock_arq_redis_settings():
     return redis_settings
 
 
+class TestWorkerConcurrencyCap:
+    """Tests for worker concurrency capping."""
+
+    def test_cap_worker_max_jobs_caps_to_db_pool_capacity(self):
+        """Configured concurrency should not exceed DB pool capacity."""
+        assert cap_worker_max_jobs(configured_max_jobs=100, db_pool_capacity=30) == 30
+
+    def test_cap_worker_max_jobs_respects_lower_worker_limit(self):
+        """Configured concurrency below the cap should be preserved."""
+        assert cap_worker_max_jobs(configured_max_jobs=12, db_pool_capacity=30) == 12
+
+
 class TestCreateRedisPool:
     """Tests for create_redis_pool function."""
 
@@ -57,9 +73,7 @@ class TestCreateRedisPool:
         """Test successful Redis pool creation."""
         mock_pool = AsyncMock()
 
-        with patch(
-            "comic_identity_engine.jobs.worker.get_settings"
-        ) as mock_get_settings:
+        with patch("comic_identity_engine.jobs.worker.get_settings") as mock_get_settings:
             mock_get_settings.return_value = mock_settings
             with patch(
                 "comic_identity_engine.jobs.worker.ArqRedisSettings.from_dsn"
@@ -81,11 +95,11 @@ class TestCreateRedisPool:
                     )
 
     @pytest.mark.asyncio
-    async def test_create_redis_pool_connection_error(self, mock_settings):
+    async def test_create_redis_pool_connection_error(
+        self, mock_settings, mock_arq_redis_settings
+    ):
         """Test Redis pool creation with connection error."""
-        with patch(
-            "comic_identity_engine.jobs.worker.get_settings"
-        ) as mock_get_settings:
+        with patch("comic_identity_engine.jobs.worker.get_settings") as mock_get_settings:
             mock_get_settings.return_value = mock_settings
             with patch(
                 "comic_identity_engine.jobs.worker.ArqRedisSettings.from_dsn"
@@ -107,20 +121,28 @@ class TestWorkerSettings:
         """Test WorkerSettings exposes the expected class-level attributes."""
         assert isinstance(WorkerSettings.queue_name, str)
         assert WorkerSettings.queue_name
+        assert isinstance(WorkerSettings.configured_max_jobs, int)
+        assert isinstance(WorkerSettings.db_pool_capacity, int)
         assert isinstance(WorkerSettings.max_jobs, int)
+        assert WorkerSettings.max_jobs == cap_worker_max_jobs(
+            WorkerSettings.configured_max_jobs,
+            WorkerSettings.db_pool_capacity,
+        )
+        assert WorkerSettings.max_jobs <= WorkerSettings.db_pool_capacity
         assert isinstance(WorkerSettings.job_timeout, int)
         assert isinstance(WorkerSettings.keep_result, int)
         assert isinstance(WorkerSettings.functions, list)
-        assert len(WorkerSettings.functions) == 5
+        assert len(WorkerSettings.functions) == 7
 
     def test_worker_settings_functions_list(self):
         """Test WorkerSettings has correct task functions."""
-        # Verify the functions list contains the expected tasks
         from comic_identity_engine.jobs.tasks import (
             bulk_resolve_task,
             export_task,
+            http_request_task,
             import_clz_task,
             reconcile_task,
+            resolve_clz_row_task,
             resolve_identity_task,
         )
 
@@ -128,8 +150,10 @@ class TestWorkerSettings:
             resolve_identity_task,
             bulk_resolve_task,
             import_clz_task,
+            resolve_clz_row_task,
             export_task,
             reconcile_task,
+            http_request_task,
         ]
         assert WorkerSettings.functions == expected_functions
 
@@ -137,7 +161,7 @@ class TestWorkerSettings:
 class TestCreateWorker:
     """Tests for create_worker function."""
 
-    def test_create_worker_uses_class_settings(self, mock_arq_redis_settings):
+    def test_create_worker_uses_class_settings(self):
         """Test worker creation uses WorkerSettings class attributes."""
         with patch("comic_identity_engine.jobs.worker.Worker") as mock_worker_class:
             mock_worker = Mock(spec=Worker)
@@ -158,7 +182,7 @@ class TestCreateWorker:
 
     @pytest.mark.asyncio
     async def test_worker_startup_logs_success(self):
-        """The startup hook should emit a clear ready log."""
+        """The startup hook should emit the effective concurrency cap."""
         with patch("comic_identity_engine.jobs.worker.logger") as mock_logger:
             await _on_worker_startup({})
 
@@ -166,6 +190,8 @@ class TestCreateWorker:
                 "Worker started successfully",
                 queue_name=WorkerSettings.queue_name,
                 max_jobs=WorkerSettings.max_jobs,
+                configured_max_jobs=WorkerSettings.configured_max_jobs,
+                db_pool_capacity=WorkerSettings.db_pool_capacity,
                 job_timeout=WorkerSettings.job_timeout,
                 functions_count=len(WorkerSettings.functions),
                 redis_host=WorkerSettings.redis_settings.host,
@@ -175,7 +201,7 @@ class TestCreateWorker:
 class TestRunWorker:
     """Tests for run_worker function."""
 
-    def test_run_worker_success(self, mock_arq_redis_settings):
+    def test_run_worker_success(self):
         """Test successful worker execution."""
         mock_worker = Mock(spec=Worker)
         mock_worker.run = Mock()
@@ -188,9 +214,18 @@ class TestRunWorker:
                 run_worker()
 
                 mock_worker.run.assert_called_once()
-                assert mock_logger.info.call_count >= 1
+                mock_logger.info.assert_any_call(
+                    "Starting arq worker",
+                    redis_url=WorkerSettings.redis_settings.host,
+                    queue_name=WorkerSettings.queue_name,
+                    max_jobs=WorkerSettings.max_jobs,
+                    configured_max_jobs=WorkerSettings.configured_max_jobs,
+                    db_pool_capacity=WorkerSettings.db_pool_capacity,
+                    job_timeout=WorkerSettings.job_timeout,
+                    functions_count=len(WorkerSettings.functions),
+                )
 
-    def test_run_worker_keyboard_interrupt(self, mock_arq_redis_settings):
+    def test_run_worker_keyboard_interrupt(self):
         """Test worker handles keyboard interrupt."""
         mock_worker = Mock(spec=Worker)
         mock_worker.run = Mock(side_effect=KeyboardInterrupt())
@@ -199,7 +234,6 @@ class TestRunWorker:
             "comic_identity_engine.jobs.worker.create_worker",
             return_value=mock_worker,
         ):
-            # KeyboardInterrupt should propagate from worker.run
             with pytest.raises(KeyboardInterrupt):
                 run_worker()
 
@@ -234,7 +268,10 @@ class TestMain:
                 with pytest.raises(RuntimeError, match="Worker failed"):
                     main()
 
-                mock_logger.error.assert_called_once()
+                mock_logger.error.assert_called_once_with(
+                    "Worker failed",
+                    error=str(error),
+                )
 
 
 class TestLoggingConfiguration:

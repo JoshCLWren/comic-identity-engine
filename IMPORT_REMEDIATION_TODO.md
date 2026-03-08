@@ -14,10 +14,10 @@ Status markers:
 - Import submission currently lacks useful resume semantics for same-file retries.
 
 ## Priority 0: Stop Active Data Damage
-- [ ] Cap worker concurrency to the database pool.
+- [x] Cap worker concurrency to the database pool.
   Success criteria:
   No `QueuePool limit of size 10 overflow 20 reached` errors during a multi-worker import.
-- [ ] Make database pool sizing configurable in application settings and engine setup.
+- [x] Make database pool sizing configurable in application settings and engine setup.
   Success criteria:
   `pool_size`, `max_overflow`, and `pool_timeout` are controlled by env/config instead of hardcoded values.
 

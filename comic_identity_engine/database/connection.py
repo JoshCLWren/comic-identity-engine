@@ -17,6 +17,7 @@ USED BY:
 
 import logging
 from collections.abc import AsyncIterator
+from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
@@ -37,13 +38,22 @@ _redacted_async_url = make_url(ASYNC_DATABASE_URL).render_as_string(hide_passwor
 logger.info(f"Database URL configured: {_redacted_database_url}")
 logger.info(f"Async database URL: {_redacted_async_url}")
 
+
+def get_async_engine_options() -> dict[str, Any]:
+    """Build SQLAlchemy async engine options from configured DB settings."""
+    db_settings = get_database_settings()
+    return {
+        "pool_recycle": 3600,
+        "pool_size": db_settings.pool_size,
+        "max_overflow": db_settings.max_overflow,
+        "pool_timeout": db_settings.pool_timeout,
+        "pool_pre_ping": True,
+    }
+
+
 async_engine = create_async_engine(
     ASYNC_DATABASE_URL,
-    pool_recycle=3600,
-    pool_size=10,
-    max_overflow=20,
-    pool_timeout=30,
-    pool_pre_ping=True,
+    **get_async_engine_options(),
 )
 
 AsyncSessionLocal = async_sessionmaker(
