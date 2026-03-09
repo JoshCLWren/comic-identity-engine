@@ -1006,20 +1006,12 @@ def _validate_clz_row_for_import(
     Returns:
         None if row passes validation, or dict with 'error' and 'category' keys
     """
-    # Check for required fields that will cause validation errors
+    # Check for required fields that will cause immediate failures
     series_title = (row.get("Series") or "").strip()
     if not series_title:
         return {
             "error": f"Row {row_index} validation error: Missing required field 'Series'",
             "category": "missing_series",
-        }
-
-    # Check if Year field is empty - this will fail in identity resolver
-    year_str = row.get("Year", "").strip()
-    if not year_str:
-        return {
-            "error": f"Row {row_index} validation error: Cannot create a canonical issue without a source series start year; manual review is required",
-            "category": "missing_series_year",
         }
 
     # Check for Issue field
@@ -1029,6 +1021,9 @@ def _validate_clz_row_for_import(
             "error": f"Row {row_index} validation error: Missing required field 'Issue'",
             "category": "missing_issue",
         }
+
+    # Don't pre-filter rows with empty Year - let identity resolver try
+    # It might succeed by finding the series by title or existing mapping
 
     # If all validations pass, return None (row is good to process)
     return None
