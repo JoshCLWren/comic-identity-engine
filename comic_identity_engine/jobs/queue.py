@@ -381,21 +381,15 @@ class JobQueue:
         """Return queued job depth, optionally scoped to a specific operation.
 
         Uses Redis LLEN to avoid race conditions from fetching job metadata.
-        For operation-scoped counts, uses a cached counter to avoid O(n) scans.
+        ArqRedis pool directly exposes Redis commands like llen().
         """
         pool = await self._get_pool()
-
-        # Get raw Redis pool
-        redis_pool = getattr(pool, "pool", None) or getattr(pool, "_redis", None)
-        if redis_pool is None:
-            logger.warning("Unable to access Redis pool for queue depth")
-            return 0
 
         if operation_id is None:
             # Total queue depth - just count items in the list
             queue_key = f"arq:queue:{self._queue_name}"
             try:
-                depth = await redis_pool.llen(queue_key)
+                depth = await pool.llen(queue_key)
                 return depth
             except Exception as e:
                 logger.warning("Failed to get queue depth", error=str(e))
