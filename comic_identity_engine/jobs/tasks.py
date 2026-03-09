@@ -542,6 +542,11 @@ async def resolve_identity_task(
                 series_start_year=candidate.series_start_year,
                 issue_number=candidate.issue_number,
                 cover_date=candidate.cover_date,
+                variant_suffix=(
+                    getattr(candidate, "variant_suffix", None)
+                    or getattr(parsed_url, "variant_suffix", None)
+                ),
+                variant_name=getattr(candidate, "variant_name", None),
             )
 
             # Create external mapping if successful
@@ -1207,6 +1212,8 @@ async def resolve_clz_row_task(
                 series_start_year=issue_candidate.series_start_year,
                 issue_number=issue_candidate.issue_number,
                 cover_date=issue_candidate.cover_date,
+                variant_suffix=issue_candidate.variant_suffix,
+                variant_name=getattr(issue_candidate, "variant_name", None),
             )
 
             if not result.issue_id:
@@ -1270,6 +1277,19 @@ async def resolve_clz_row_task(
             return row_result
 
         except AdapterValidationError as e:
+            error_msg = f"Row {row_index} validation error: {e}"
+            logger.warning(error_msg, operation_id=operation_id)
+            row_result = {
+                "row_index": row_index,
+                "row_key": build_clz_row_key(row_data.get("Core ComicID"), row_index),
+                "source_issue_id": row_data.get("Core ComicID"),
+                "resolved": False,
+                "error": error_msg,
+            }
+            await _record_clz_row_result(operation_uuid, row_result)
+            return row_result
+
+        except ValidationError as e:
             error_msg = f"Row {row_index} validation error: {e}"
             logger.warning(error_msg, operation_id=operation_id)
             row_result = {

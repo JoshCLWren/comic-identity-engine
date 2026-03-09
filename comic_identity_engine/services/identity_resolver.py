@@ -15,7 +15,7 @@ ALGORITHM PRIORITY:
 2. Series + issue + year → 0.95 confidence
 3. Series + issue (no year) → 0.85 confidence
 4. Fuzzy title similarity (Jaro-Winkler) → 0.70 confidence
-5. No match → create new → 1.00 confidence
+5. No match → create new when source metadata is complete
 """
 
 import re
@@ -39,6 +39,7 @@ from comic_identity_engine.errors import (
     DuplicateEntityError,
     RepositoryError,
     ResolutionError,
+    ValidationError,
 )
 
 if TYPE_CHECKING:
@@ -47,6 +48,10 @@ if TYPE_CHECKING:
 
 
 logger = structlog.get_logger(__name__)
+
+PLACEHOLDER_SERIES_TITLES = {
+    "unknown series",
+}
 
 
 @dataclass
@@ -133,6 +138,8 @@ class IdentityResolver:
         series_start_year: Optional[int] = None,
         issue_number: Optional[str] = None,
         cover_date: Optional[date] = None,
+        variant_suffix: Optional[str] = None,
+        variant_name: Optional[str] = None,
     ) -> ResolutionResult:
         """Resolve comic issue identity from parsed URL and metadata.
 
@@ -143,12 +150,16 @@ class IdentityResolver:
             series_start_year: Optional series start year
             issue_number: Optional issue number
             cover_date: Optional cover date
+            variant_suffix: Optional variant suffix
+            variant_name: Optional human-readable variant name
 
         Returns:
             ResolutionResult with match details
 
         Raises:
-            ResolutionError: If resolution fails
+            ResolutionError: If repository access or matching fails unexpectedly
+            ValidationError: If the source metadata is too weak or ambiguous to
+                create a canonical issue safely
         """
         logger.info(
             "Starting identity resolution",
@@ -156,6 +167,8 @@ class IdentityResolver:
             source_issue_id=parsed_url.source_issue_id,
         )
 
+        normalized_variant_suffix = self._normalize_optional_text(variant_suffix)
+        normalized_variant_name = self._normalize_optional_text(variant_name)
         candidates: list[MatchCandidate] = []
 
         try:
@@ -288,6 +301,12 @@ class IdentityResolver:
                 valid_issue_matches = [c for c in candidates if c.issue_id is not None]
                 if valid_issue_matches:
                     best = max(valid_issue_matches, key=lambda c: c.overall_confidence)
+                    variant_note = await self._handle_variant_conflict(
+                        issue_id=best.issue_id,
+                        incoming_upc=upc,
+                        variant_suffix=normalized_variant_suffix,
+                        variant_name=normalized_variant_name,
+                    )
                     logger.info(
                         "Found valid issue match",
                         num_candidates=len(candidates),
@@ -300,7 +319,11 @@ class IdentityResolver:
                         issue_id=best.issue_id,
                         matches=candidates,
                         best_match=best,
-                        explanation=f"Matched by {best.match_reason} (confidence: {best.overall_confidence:.2f})",
+                        explanation=(
+                            f"Matched by {best.match_reason} "
+                            f"(confidence: {best.overall_confidence:.2f})"
+                            f"{variant_note}"
+                        ),
                     )
                 else:
                     logger.info(
@@ -309,19 +332,43 @@ class IdentityResolver:
                     )
 
             logger.info("No matches found, creating new issue")
+            (
+                creation_series_title,
+                creation_series_start_year,
+                creation_issue_number,
+            ) = self._validate_creation_inputs(
+                series_title=series_title,
+                series_start_year=series_start_year,
+                issue_number=issue_number,
+            )
             created = await self._create_new_issue(
-                series_title or "Unknown Series",
-                series_start_year or 2000,
-                issue_number or "1",
+                creation_series_title,
+                creation_series_start_year,
+                creation_issue_number,
                 cover_date,
                 upc,
             )
 
+            if normalized_variant_suffix:
+                variant_note = await self._ensure_variant(
+                    issue_id=created.id,
+                    variant_suffix=normalized_variant_suffix,
+                    variant_name=normalized_variant_name,
+                )
+            else:
+                variant_note = ""
+
             return ResolutionResult(
                 issue_id=created.id,
                 created_new=True,
-                explanation=f"Created new issue for {parsed_url.platform}:{parsed_url.source_issue_id}",
+                explanation=(
+                    f"Created new issue for {parsed_url.platform}:"
+                    f"{parsed_url.source_issue_id}{variant_note}"
+                ),
             )
+
+        except ValidationError:
+            raise
 
         except (RepositoryError, SQLAlchemyError, ResolutionError) as e:
             logger.error(
@@ -574,6 +621,101 @@ class IdentityResolver:
         )
 
         return issue
+
+    def _validate_creation_inputs(
+        self,
+        *,
+        series_title: Optional[str],
+        series_start_year: Optional[int],
+        issue_number: Optional[str],
+    ) -> tuple[str, int, str]:
+        """Reject placeholder metadata before creating a canonical issue."""
+        normalized_title = re.sub(r"\s+", " ", (series_title or "")).strip()
+        normalized_issue_number = (issue_number or "").strip()
+
+        if not normalized_title or normalized_title.lower() in PLACEHOLDER_SERIES_TITLES:
+            raise ValidationError(
+                "Cannot create a canonical issue from placeholder series metadata; "
+                "manual review is required"
+            )
+        if series_start_year is None:
+            raise ValidationError(
+                "Cannot create a canonical issue without a source series start year; "
+                "manual review is required"
+            )
+        if not normalized_issue_number:
+            raise ValidationError(
+                "Cannot create a canonical issue without an issue number; "
+                "manual review is required"
+            )
+
+        return normalized_title, series_start_year, normalized_issue_number
+
+    def _normalize_optional_text(self, value: Any) -> Optional[str]:
+        """Normalize optional text inputs and ignore mock placeholders."""
+        if not isinstance(value, str):
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+    async def _handle_variant_conflict(
+        self,
+        *,
+        issue_id: Optional[uuid.UUID],
+        incoming_upc: Optional[str],
+        variant_suffix: Optional[str],
+        variant_name: Optional[str],
+    ) -> str:
+        """Reject ambiguous duplicate issues or capture them as variants."""
+        if issue_id is None or not incoming_upc:
+            return ""
+
+        matched_issue = await self.issue_repo.find_with_variants(issue_id)
+        if matched_issue is None or not matched_issue.upc or matched_issue.upc == incoming_upc:
+            return ""
+
+        if not variant_suffix:
+            raise ValidationError(
+                "Matched canonical issue has a different UPC and no variant suffix "
+                "was provided; reject this row for review instead of merging it "
+                "into the base issue"
+            )
+
+        return await self._ensure_variant(
+            issue_id=matched_issue.id,
+            variant_suffix=variant_suffix,
+            variant_name=variant_name,
+        )
+
+    async def _ensure_variant(
+        self,
+        *,
+        issue_id: uuid.UUID,
+        variant_suffix: str,
+        variant_name: Optional[str],
+    ) -> str:
+        """Create or reuse a variant marker on the canonical issue."""
+        existing_variant = await self.variant_repo.find_by_issue_and_suffix(
+            issue_id,
+            variant_suffix,
+        )
+        if existing_variant is None:
+            try:
+                await self.variant_repo.create(
+                    issue_id=issue_id,
+                    variant_suffix=variant_suffix,
+                    variant_name=variant_name,
+                )
+            except DuplicateEntityError:
+                logger.info(
+                    "Reused canonical variant created by concurrent worker",
+                    issue_id=str(issue_id),
+                    variant_suffix=variant_suffix,
+                )
+        elif existing_variant.variant_name is None and variant_name:
+            existing_variant.variant_name = variant_name
+
+        return f"; variant {variant_suffix} recorded on canonical issue"
 
     async def search_cross_platform(
         self,

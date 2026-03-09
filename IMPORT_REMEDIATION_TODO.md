@@ -53,18 +53,18 @@ Status markers:
   Concurrent imports refetch the winner instead of creating sibling `issues`.
 
 ## Priority 3: Improve Matching Quality
-- [ ] Revisit fallback canonical creation for `"Unknown Series"` and year `2000`.
+- [x] Revisit fallback canonical creation for `"Unknown Series"` and year `2000`.
   Success criteria:
   Weak matches no longer silently create garbage canonicals with default metadata.
-- [ ] Distinguish true issue duplicates from unmodeled variants.
+- [x] Distinguish true issue duplicates from unmodeled variants.
   Success criteria:
   Rows with different UPCs but same canonical issue identity are either modeled as variants or rejected for review.
 
 ## Priority 4: Repair Existing Damage
-- [ ] Add duplicate-audit tooling for `series_runs` and `issues`.
+- [x] Add duplicate-audit tooling for `series_runs` and `issues`.
   Success criteria:
   Tool reports duplicate groups, mappings, and proposed merge targets.
-- [ ] Add dedupe/merge tooling to re-point mappings and remove loser rows.
+- [x] Add dedupe/merge tooling to re-point mappings and remove loser rows.
   Success criteria:
   Existing duplicate canonicals can be merged safely in a repeatable way.
 

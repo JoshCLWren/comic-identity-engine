@@ -22,6 +22,9 @@ from comic_identity_engine.services.url_builder import (
 from comic_identity_engine.services.operations import (
     OperationsManager,
 )
+from comic_identity_engine.services.canonical_repair import (
+    CanonicalRepairService,
+)
 
 __all__ = [
     "parse_url",
@@ -31,4 +34,5 @@ __all__ = [
     "MatchCandidate",
     "build_urls",
     "OperationsManager",
+    "CanonicalRepairService",
 ]

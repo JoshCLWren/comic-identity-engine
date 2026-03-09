@@ -11,7 +11,7 @@ from comic_identity_engine.services.identity_resolver import (
     MatchCandidate,
 )
 from comic_identity_engine.services.url_parser import ParsedUrl
-from comic_identity_engine.errors import ResolutionError
+from comic_identity_engine.errors import ResolutionError, ValidationError
 
 # Fixed UUIDs for deterministic tests
 FIXED_SERIES_RUN_ID = uuid.UUID("00000000-0000-4000-8000-000000000001")
@@ -103,6 +103,7 @@ class TestIdentityResolver:
 
         mock_issue_repo = MagicMock()
         mock_issue_repo.find_by_upc = AsyncMock(return_value=sample_issue)
+        mock_issue_repo.find_with_variants = AsyncMock(return_value=sample_issue)
         mock_issue_repo_cls.return_value = mock_issue_repo
 
         resolver = IdentityResolver(mock_session)
@@ -133,6 +134,7 @@ class TestIdentityResolver:
         mock_issue_repo = MagicMock()
         mock_issue_repo.find_by_upc = AsyncMock(return_value=None)
         mock_issue_repo.find_by_number = AsyncMock(return_value=sample_issue)
+        mock_issue_repo.find_with_variants = AsyncMock(return_value=sample_issue)
         mock_issue_repo_cls.return_value = mock_issue_repo
 
         mock_series_repo = MagicMock()
@@ -285,6 +287,7 @@ class TestIdentityResolver:
 
         mock_issue_repo = MagicMock()
         mock_issue_repo.find_by_upc = AsyncMock(return_value=None)
+        mock_issue_repo.find_by_number = AsyncMock(return_value=None)
         mock_issue_repo_cls.return_value = mock_issue_repo
 
         mock_series_repo = MagicMock()
@@ -313,12 +316,54 @@ class TestIdentityResolver:
         parsed_url = ParsedUrl(platform="gcd", source_issue_id="999999")
 
         result = await resolver.resolve_issue(
-            parsed_url, series_title="Unknown Series", issue_number="1"
+            parsed_url,
+            series_title="X-Men",
+            series_start_year=1991,
+            issue_number="1",
         )
 
         assert result.created_new is True
         assert result.issue_id == new_issue.id
         assert "created new issue" in result.explanation.lower()
+
+    @patch("comic_identity_engine.services.identity_resolver.ExternalMappingRepository")
+    @patch("comic_identity_engine.services.identity_resolver.IssueRepository")
+    @patch("comic_identity_engine.services.identity_resolver.SeriesRunRepository")
+    async def test_resolve_rejects_placeholder_creation_metadata(
+        self,
+        mock_series_repo_cls,
+        mock_issue_repo_cls,
+        mock_mapping_repo_cls,
+        mock_session,
+    ):
+        """Placeholder metadata should not create a new canonical issue."""
+        mock_mapping_repo = MagicMock()
+        mock_mapping_repo.find_by_source = AsyncMock(return_value=None)
+        mock_mapping_repo_cls.return_value = mock_mapping_repo
+
+        mock_issue_repo = MagicMock()
+        mock_issue_repo.find_by_upc = AsyncMock(return_value=None)
+        mock_issue_repo_cls.return_value = mock_issue_repo
+
+        mock_series_repo = MagicMock()
+        mock_series_repo.find_by_title = AsyncMock(return_value=None)
+        mock_series_repo_cls.return_value = mock_series_repo
+
+        mock_result = MagicMock()
+        mock_scalars = MagicMock()
+        mock_scalars.all = MagicMock(return_value=[])
+        mock_result.scalars = MagicMock(return_value=mock_scalars)
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        resolver = IdentityResolver(mock_session)
+        parsed_url = ParsedUrl(platform="gcd", source_issue_id="999999")
+
+        with pytest.raises(ValidationError, match="placeholder series metadata"):
+            await resolver.resolve_issue(
+                parsed_url,
+                series_title="Unknown Series",
+                issue_number="1",
+            )
 
 
 @pytest.mark.asyncio
@@ -377,14 +422,14 @@ class TestFuzzyMatching:
     @patch("comic_identity_engine.services.identity_resolver.ExternalMappingRepository")
     @patch("comic_identity_engine.services.identity_resolver.IssueRepository")
     @patch("comic_identity_engine.services.identity_resolver.SeriesRunRepository")
-    async def test_fuzzy_match_without_issue_number_creates_new_issue(
+    async def test_fuzzy_match_without_issue_number_requires_manual_review(
         self,
         mock_series_repo_cls,
         mock_issue_repo_cls,
         mock_mapping_repo_cls,
         mock_session,
     ):
-        """Test fuzzy matching without issue number creates new issue (series-only matches are invalid)."""
+        """Series-only fuzzy matches should not create placeholder canonicals."""
         from unittest.mock import AsyncMock, MagicMock
 
         mock_mapping_repo = MagicMock()
@@ -426,22 +471,20 @@ class TestFuzzyMatching:
         resolver = IdentityResolver(mock_session)
         parsed_url = ParsedUrl(platform="gcd", source_issue_id="999999")
 
-        result = await resolver.resolve_issue(parsed_url, series_title="X-Men")
-
-        assert result.created_new is True
-        assert result.issue_id == new_issue.id
+        with pytest.raises(ValidationError, match="start year"):
+            await resolver.resolve_issue(parsed_url, series_title="X-Men")
 
     @patch("comic_identity_engine.services.identity_resolver.ExternalMappingRepository")
     @patch("comic_identity_engine.services.identity_resolver.IssueRepository")
     @patch("comic_identity_engine.services.identity_resolver.SeriesRunRepository")
-    async def test_fuzzy_match_below_threshold_returns_no_candidates(
+    async def test_fuzzy_match_below_threshold_requires_manual_review(
         self,
         mock_series_repo_cls,
         mock_issue_repo_cls,
         mock_mapping_repo_cls,
         mock_session,
     ):
-        """Test fuzzy matches below 0.85 threshold are not returned."""
+        """A fuzzy miss without issue metadata should fail closed."""
         from unittest.mock import AsyncMock, MagicMock
 
         mock_mapping_repo = MagicMock()
@@ -478,10 +521,8 @@ class TestFuzzyMatching:
         resolver = IdentityResolver(mock_session)
         parsed_url = ParsedUrl(platform="gcd", source_issue_id="999999")
 
-        result = await resolver.resolve_issue(parsed_url, series_title="Superman")
-
-        assert result.created_new is True
-        assert result.issue_id == new_issue.id
+        with pytest.raises(ValidationError, match="start year"):
+            await resolver.resolve_issue(parsed_url, series_title="Superman")
 
     @patch("comic_identity_engine.services.identity_resolver.ExternalMappingRepository")
     @patch("comic_identity_engine.services.identity_resolver.IssueRepository")
@@ -619,6 +660,94 @@ class TestFuzzyMatching:
         for candidate in result.matches:
             assert "fuzzy title match" in candidate.match_reason.lower()
             assert candidate.issue_confidence >= 0.70 * 0.85
+
+    @patch("comic_identity_engine.services.identity_resolver.ExternalMappingRepository")
+    @patch("comic_identity_engine.services.identity_resolver.IssueRepository")
+    @patch("comic_identity_engine.services.identity_resolver.SeriesRunRepository")
+    async def test_rejects_upc_conflict_without_variant_suffix(
+        self,
+        mock_series_repo_cls,
+        mock_issue_repo_cls,
+        mock_mapping_repo_cls,
+        mock_session,
+        sample_issue,
+    ):
+        """Different UPCs without variant metadata should be rejected."""
+        mock_mapping_repo = MagicMock()
+        mock_mapping_repo.find_by_source = AsyncMock(return_value=None)
+        mock_mapping_repo_cls.return_value = mock_mapping_repo
+
+        mock_issue_repo = MagicMock()
+        mock_issue_repo.find_by_upc = AsyncMock(return_value=None)
+        mock_issue_repo.find_by_number = AsyncMock(return_value=sample_issue)
+        mock_issue_repo.find_with_variants = AsyncMock(return_value=sample_issue)
+        mock_issue_repo_cls.return_value = mock_issue_repo
+
+        mock_series_repo = MagicMock()
+        mock_series_repo.find_by_title = AsyncMock(return_value=sample_issue.series_run)
+        mock_series_repo_cls.return_value = mock_series_repo
+
+        resolver = IdentityResolver(mock_session)
+        parsed_url = ParsedUrl(platform="gcd", source_issue_id="125295")
+
+        with pytest.raises(ValidationError, match="different UPC"):
+            await resolver.resolve_issue(
+                parsed_url,
+                upc="different-upc",
+                series_title="X-Men",
+                series_start_year=1991,
+                issue_number="-1",
+            )
+
+    @patch("comic_identity_engine.services.identity_resolver.ExternalMappingRepository")
+    @patch("comic_identity_engine.services.identity_resolver.VariantRepository")
+    @patch("comic_identity_engine.services.identity_resolver.IssueRepository")
+    @patch("comic_identity_engine.services.identity_resolver.SeriesRunRepository")
+    async def test_records_variant_on_upc_conflict_with_variant_suffix(
+        self,
+        mock_series_repo_cls,
+        mock_issue_repo_cls,
+        mock_variant_repo_cls,
+        mock_mapping_repo_cls,
+        mock_session,
+        sample_issue,
+    ):
+        """Variant metadata should convert a UPC conflict into a tracked variant."""
+        mock_mapping_repo = MagicMock()
+        mock_mapping_repo.find_by_source = AsyncMock(return_value=None)
+        mock_mapping_repo_cls.return_value = mock_mapping_repo
+
+        mock_variant_repo = MagicMock()
+        mock_variant_repo.find_by_issue_and_suffix = AsyncMock(return_value=None)
+        mock_variant_repo.create = AsyncMock()
+        mock_variant_repo_cls.return_value = mock_variant_repo
+
+        mock_issue_repo = MagicMock()
+        mock_issue_repo.find_by_upc = AsyncMock(return_value=None)
+        mock_issue_repo.find_by_number = AsyncMock(return_value=sample_issue)
+        mock_issue_repo.find_with_variants = AsyncMock(return_value=sample_issue)
+        mock_issue_repo_cls.return_value = mock_issue_repo
+
+        mock_series_repo = MagicMock()
+        mock_series_repo.find_by_title = AsyncMock(return_value=sample_issue.series_run)
+        mock_series_repo_cls.return_value = mock_series_repo
+
+        resolver = IdentityResolver(mock_session)
+        parsed_url = ParsedUrl(platform="gcd", source_issue_id="125295")
+
+        result = await resolver.resolve_issue(
+            parsed_url,
+            upc="different-upc",
+            series_title="X-Men",
+            series_start_year=1991,
+            issue_number="-1",
+            variant_suffix="B",
+            variant_name="Variant Cover",
+        )
+
+        assert result.issue_id == sample_issue.id
+        assert "variant B recorded" in result.explanation
+        mock_variant_repo.create.assert_awaited_once()
 
     @patch("comic_identity_engine.services.identity_resolver.ExternalMappingRepository")
     async def test_resolve_issue_raises_resolution_error_on_exception(
