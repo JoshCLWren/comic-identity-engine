@@ -161,7 +161,7 @@ class CLZAdapter(SourceAdapter):
             )
 
         publisher = row.get("Publisher")
-        year_began = self._parse_year(row.get("Year"))
+        year_began = self._parse_year(row.get("Year") or row.get("Release Year"))
 
         return SeriesCandidate(
             source=self.SOURCE,
@@ -214,13 +214,13 @@ class CLZAdapter(SourceAdapter):
             )
 
         publisher = row.get("Publisher")
-        year_began = self._parse_year(row.get("Year"))
+        year_began = self._parse_year(row.get("Year") or row.get("Release Year"))
 
         cover_date = self._parse_date(row.get("Cover Date"))
         publication_date = self._parse_date(row.get("Release Date"))
 
-        price = self._parse_price(row.get("Price"))
-        page_count = self._parse_page_count(row.get("Pages"))
+        price = self._parse_price(row.get("Price") or row.get("Cover Price"))
+        page_count = self._parse_page_count(row.get("Pages") or row.get("No. of Pages"))
         upc = self._clean_upc(row.get("Barcode") or row.get("UPC"))
 
         variant_suffix = parse_result.variant_suffix
