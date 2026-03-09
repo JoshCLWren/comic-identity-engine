@@ -85,3 +85,4 @@ logs/
 
 # Local caches
 .cache/
+*.html
