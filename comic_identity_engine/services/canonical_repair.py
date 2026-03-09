@@ -491,6 +491,8 @@ class CanonicalRepairService:
             "merged_issue_ids": merged_issue_ids,
             "upc_conflicts": upc_conflicts,
             "variant_conflicts": variant_conflicts,
+            "requires_manual_review": len(upc_conflicts) > 0
+            or len(variant_conflicts) > 0,
         }
 
     def _entity_sort_key(self, entity: SeriesRun | Issue) -> tuple[datetime, str]:

@@ -201,6 +201,21 @@ class OperationsManager:
 
         if existing.status == "failed":
             resumed_result = dict(operation.result or {})
+            row_results = resumed_result.get("row_results", {})
+            if retry_failed_only:
+                failed_row_count = sum(
+                    1
+                    for row_result in row_results.values()
+                    if row_result and not row_result.get("resolved")
+                )
+                if failed_row_count == 0:
+                    logger.info(
+                        "No failed rows to retry in checksum-addressed import",
+                        operation_id=str(operation.id),
+                        file_checksum=file_checksum,
+                    )
+                    return operation, False
+
             resumed_result["active_row_keys"] = []
             resumed_result["resume_count"] = (
                 int(resumed_result.get("resume_count", 0) or 0) + 1

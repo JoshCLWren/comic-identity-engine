@@ -855,7 +855,7 @@ class TestSeriesRunRepositoryErrorPaths:
 
     @pytest.mark.asyncio
     async def test_create_duplicate_series_run(self, mock_session: AsyncMock) -> None:
-        """Test creating a duplicate series run from the pre-insert lookup."""
+        """Test creating a duplicate series run raises IntegrityError."""
         repo = SeriesRunRepository(mock_session)
         existing_series = SeriesRun(
             id=uuid.uuid4(),
@@ -866,6 +866,12 @@ class TestSeriesRunRepositoryErrorPaths:
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = existing_series
         mock_session.execute.return_value = mock_result
+        mock_session.flush = AsyncMock(
+            side_effect=_integrity_error(
+                'duplicate key value violates unique constraint "uq_series_runs_title_start_year"',
+                constraint_name="uq_series_runs_title_start_year",
+            )
+        )
 
         with pytest.raises(DuplicateEntityError) as exc_info:
             await repo.create(title="X-Men", start_year=1991)
@@ -873,7 +879,7 @@ class TestSeriesRunRepositoryErrorPaths:
         assert "Series run with title=X-Men" in str(exc_info.value)
         assert exc_info.value.entity_type == "SeriesRun"
         assert exc_info.value.existing_id == str(existing_series.id)
-        mock_session.flush.assert_not_called()
+        mock_session.flush.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_create_duplicate_series_run_integrity_error(
@@ -989,7 +995,7 @@ class TestIssueRepositoryErrorPaths:
 
     @pytest.mark.asyncio
     async def test_create_duplicate_issue(self, mock_session: AsyncMock) -> None:
-        """Test creating a duplicate canonical issue from the pre-insert lookup."""
+        """Test creating a duplicate canonical issue raises IntegrityError."""
         repo = IssueRepository(mock_session)
         series_run_id = uuid.uuid4()
         existing_issue = Issue(
@@ -1001,6 +1007,12 @@ class TestIssueRepositoryErrorPaths:
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = existing_issue
         mock_session.execute.return_value = mock_result
+        mock_session.flush = AsyncMock(
+            side_effect=_integrity_error(
+                'duplicate key value violates unique constraint "uq_issues_series_run_id_issue_number"',
+                constraint_name="uq_issues_series_run_id_issue_number",
+            )
+        )
 
         with pytest.raises(DuplicateEntityError) as exc_info:
             await repo.create(series_run_id=series_run_id, issue_number="-1")
@@ -1008,7 +1020,7 @@ class TestIssueRepositoryErrorPaths:
         assert "Issue with series_run_id" in str(exc_info.value)
         assert exc_info.value.entity_type == "Issue"
         assert exc_info.value.existing_id == str(existing_issue.id)
-        mock_session.flush.assert_not_called()
+        mock_session.flush.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_create_duplicate_issue_integrity_error(

@@ -27,6 +27,8 @@ def upgrade() -> None:
     """Perform database upgrade."""
     op.execute(
         """
+        BEGIN;
+
         CREATE TEMP TABLE tmp_series_resolution ON COMMIT DROP AS
         SELECT
             sr.id AS source_series_id,
@@ -35,10 +37,7 @@ def upgrade() -> None:
                 ORDER BY sr.created_at, sr.id
             ) AS target_series_id
         FROM series_runs AS sr;
-        """
-    )
-    op.execute(
-        """
+
         CREATE TEMP TABLE tmp_series_publisher_fallback ON COMMIT DROP AS
         SELECT DISTINCT ON (resolution.target_series_id)
             resolution.target_series_id,
@@ -48,19 +47,12 @@ def upgrade() -> None:
             ON source.id = resolution.source_series_id
         WHERE source.publisher IS NOT NULL
         ORDER BY resolution.target_series_id, source.created_at, source.id;
-        """
-    )
-    op.execute(
-        """
+
         UPDATE series_runs AS winner
         SET publisher = COALESCE(winner.publisher, fallback.publisher)
         FROM tmp_series_publisher_fallback AS fallback
         WHERE winner.id = fallback.target_series_id;
-        """
-    )
 
-    op.execute(
-        """
         CREATE TEMP TABLE tmp_issue_resolution ON COMMIT DROP AS
         SELECT
             issue.id AS source_issue_id,
@@ -72,10 +64,7 @@ def upgrade() -> None:
         FROM issues AS issue
         JOIN tmp_series_resolution AS series_resolution
             ON series_resolution.source_series_id = issue.series_run_id;
-        """
-    )
-    op.execute(
-        """
+
         CREATE TEMP TABLE tmp_issue_cover_date_fallback ON COMMIT DROP AS
         SELECT DISTINCT ON (resolution.target_issue_id)
             resolution.target_issue_id,
@@ -85,10 +74,7 @@ def upgrade() -> None:
             ON source.id = resolution.source_issue_id
         WHERE source.cover_date IS NOT NULL
         ORDER BY resolution.target_issue_id, source.created_at, source.id;
-        """
-    )
-    op.execute(
-        """
+
         CREATE TEMP TABLE tmp_issue_upc_fallback ON COMMIT DROP AS
         SELECT DISTINCT ON (resolution.target_issue_id)
             resolution.target_issue_id,
@@ -98,27 +84,17 @@ def upgrade() -> None:
             ON source.id = resolution.source_issue_id
         WHERE source.upc IS NOT NULL
         ORDER BY resolution.target_issue_id, source.created_at, source.id;
-        """
-    )
-    op.execute(
-        """
+
         UPDATE issues AS winner
         SET cover_date = COALESCE(winner.cover_date, fallback.cover_date)
         FROM tmp_issue_cover_date_fallback AS fallback
         WHERE winner.id = fallback.target_issue_id;
-        """
-    )
-    op.execute(
-        """
+
         UPDATE issues AS winner
         SET upc = COALESCE(winner.upc, fallback.upc)
         FROM tmp_issue_upc_fallback AS fallback
         WHERE winner.id = fallback.target_issue_id;
-        """
-    )
 
-    op.execute(
-        """
         CREATE TEMP TABLE tmp_variant_resolution ON COMMIT DROP AS
         SELECT
             variant.id AS source_variant_id,
@@ -130,62 +106,43 @@ def upgrade() -> None:
         FROM variants AS variant
         JOIN tmp_issue_resolution AS issue_resolution
             ON issue_resolution.source_issue_id = variant.issue_id;
-        """
-    )
-    op.execute(
-        """
+
         UPDATE variants AS variant
         SET issue_id = resolution.target_issue_id
         FROM tmp_variant_resolution AS resolution
         WHERE variant.id = resolution.source_variant_id
           AND variant.id = resolution.target_variant_id
           AND variant.issue_id <> resolution.target_issue_id;
-        """
-    )
-    op.execute(
-        """
+
         DELETE FROM variants AS variant
         USING tmp_variant_resolution AS resolution
         WHERE variant.id = resolution.source_variant_id
           AND variant.id <> resolution.target_variant_id;
-        """
-    )
 
-    op.execute(
-        """
         UPDATE external_mappings AS mapping
         SET issue_id = resolution.target_issue_id
         FROM tmp_issue_resolution AS resolution
         WHERE mapping.issue_id = resolution.source_issue_id
           AND mapping.issue_id <> resolution.target_issue_id;
-        """
-    )
 
-    op.execute(
-        """
         DELETE FROM issues AS issue
         USING tmp_issue_resolution AS resolution
         WHERE issue.id = resolution.source_issue_id
           AND resolution.source_issue_id <> resolution.target_issue_id;
-        """
-    )
-    op.execute(
-        """
+
         UPDATE issues AS issue
         SET series_run_id = resolution.target_series_id
         FROM tmp_issue_resolution AS resolution
         WHERE issue.id = resolution.source_issue_id
           AND resolution.source_issue_id = resolution.target_issue_id
           AND issue.series_run_id <> resolution.target_series_id;
-        """
-    )
 
-    op.execute(
-        """
         DELETE FROM series_runs AS series
         USING tmp_series_resolution AS resolution
         WHERE series.id = resolution.source_series_id
           AND resolution.source_series_id <> resolution.target_series_id;
+
+        COMMIT;
         """
     )
 

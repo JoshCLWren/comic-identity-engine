@@ -93,8 +93,6 @@ def cli_import_clz(
         cie-import-clz clz_export.csv --no-wait
         cie-import-clz clz_export.csv --verbose
     """
-    console = Console(stderr=True)
-
     if csv_path and operation_id:
         raise click.UsageError(
             "Provide either a CSV path or --operation-id/--attach, not both."
@@ -105,6 +103,8 @@ def cli_import_clz(
         )
     if retry_failed_only and not csv_path:
         raise click.UsageError("--retry-failed-only requires a CSV path submission.")
+
+    console = Console(stderr=True)
 
     csv_file: Path | None = None
     if csv_path:

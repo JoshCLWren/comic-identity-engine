@@ -18,7 +18,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint, func
+from sqlalchemy import DateTime, ForeignKey, Index, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -39,6 +39,11 @@ class SeriesRun(Base):
             "title",
             "start_year",
             name="uq_series_runs_title_start_year",
+        ),
+        Index(
+            "ix_series_runs_title_start_year",
+            "title",
+            "start_year",
         ),
     )
 
@@ -91,6 +96,11 @@ class Issue(Base):
             "series_run_id",
             "issue_number",
             name="uq_issues_series_run_id_issue_number",
+        ),
+        Index(
+            "ix_issues_series_run_id_issue_number",
+            "series_run_id",
+            "issue_number",
         ),
     )
 

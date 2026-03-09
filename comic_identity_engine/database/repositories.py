@@ -128,19 +128,6 @@ class SeriesRunRepository:
             DuplicateEntityError: If a series run with the same title and year exists
             RepositoryError: If another database operation fails
         """
-        existing = await self.find_by_title(title, start_year)
-        if existing is not None:
-            logger.warning(
-                "Duplicate series run attempt: title=%s, start_year=%s",
-                title,
-                start_year,
-            )
-            raise DuplicateEntityError(
-                f"Series run with title={title} and start_year={start_year} already exists",
-                entity_type="SeriesRun",
-                existing_id=str(existing.id),
-            )
-
         series_run = SeriesRun(
             title=title,
             start_year=start_year,
@@ -159,11 +146,19 @@ class SeriesRunRepository:
                 "series_runs",
                 ("title", "start_year"),
             ):
-                logger.warning(
-                    "Integrity error creating duplicate series run: title=%s, start_year=%s",
-                    title,
-                    start_year,
-                )
+                existing = await self.find_by_title(title, start_year)
+                if existing:
+                    logger.warning(
+                        "Integrity error creating duplicate series run: title=%s, start_year=%s",
+                        title,
+                        start_year,
+                    )
+                    raise DuplicateEntityError(
+                        f"Series run with title={title} and start_year={start_year} already exists",
+                        entity_type="SeriesRun",
+                        existing_id=str(existing.id),
+                        original_error=e,
+                    ) from e
                 raise DuplicateEntityError(
                     f"Series run with title={title} and start_year={start_year} already exists",
                     entity_type="SeriesRun",
@@ -312,20 +307,6 @@ class IssueRepository:
             DuplicateEntityError: If an issue with the same series and number exists
             RepositoryError: If another database operation fails
         """
-        existing = await self.find_by_number(series_run_id, issue_number)
-        if existing is not None:
-            logger.warning(
-                "Duplicate issue attempt: series_run_id=%s, issue_number=%s",
-                series_run_id,
-                issue_number,
-            )
-            raise DuplicateEntityError(
-                "Issue with "
-                f"series_run_id={series_run_id} and issue_number={issue_number} already exists",
-                entity_type="Issue",
-                existing_id=str(existing.id),
-            )
-
         issue = Issue(
             series_run_id=series_run_id,
             issue_number=issue_number,
@@ -347,11 +328,20 @@ class IssueRepository:
                 "issues",
                 ("series_run_id", "issue_number"),
             ):
-                logger.warning(
-                    "Integrity error creating duplicate issue: series_run_id=%s, issue_number=%s",
-                    series_run_id,
-                    issue_number,
-                )
+                existing = await self.find_by_number(series_run_id, issue_number)
+                if existing:
+                    logger.warning(
+                        "Integrity error creating duplicate issue: series_run_id=%s, issue_number=%s",
+                        series_run_id,
+                        issue_number,
+                    )
+                    raise DuplicateEntityError(
+                        "Issue with "
+                        f"series_run_id={series_run_id} and issue_number={issue_number} already exists",
+                        entity_type="Issue",
+                        existing_id=str(existing.id),
+                        original_error=e,
+                    ) from e
                 raise DuplicateEntityError(
                     "Issue with "
                     f"series_run_id={series_run_id} and issue_number={issue_number} already exists",
