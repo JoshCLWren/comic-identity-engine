@@ -32,8 +32,12 @@ from comic_identity_engine.services.operations import OperationsManager
 __all__ = ["get_db", "get_job_queue", "get_operations_manager", "get_identity_resolver"]
 
 
-async def get_job_queue() -> AsyncGenerator[JobQueue, None]:
-    """Get the JobQueue instance for enqueueing background jobs.
+# Global singleton instance
+_job_queue: JobQueue | None = None
+
+
+async def get_job_queue() -> JobQueue:
+    """Get the shared JobQueue singleton instance.
 
     Returns:
         JobQueue instance for managing background job queue.
@@ -47,11 +51,21 @@ async def get_job_queue() -> AsyncGenerator[JobQueue, None]:
             job = await queue.enqueue_resolve(url, operation_id)
             return {"job_id": job.job_id}
     """
-    queue = JobQueue()
-    try:
-        yield queue
-    finally:
-        await queue.close()
+    global _job_queue
+    if _job_queue is None:
+        _job_queue = JobQueue()
+    return _job_queue
+
+
+async def close_job_queue() -> None:
+    """Close the JobQueue singleton connection pool.
+
+    Should be called during application shutdown.
+    """
+    global _job_queue
+    if _job_queue is not None:
+        await _job_queue.close()
+        _job_queue = None
 
 
 async def get_operations_manager(

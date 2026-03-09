@@ -183,7 +183,8 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     - Test database connection
 
     On shutdown:
-    - Close Redis connection
+    - Close Redis cache connection
+    - Close job queue connection
     """
     settings = get_settings()
 
@@ -196,6 +197,10 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     yield
 
     await redis_cache.close()
+
+    from comic_identity_engine.api.dependencies import close_job_queue
+
+    await close_job_queue()
 
 
 def create_app() -> FastAPI:
