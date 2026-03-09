@@ -991,6 +991,49 @@ async def bulk_resolve_task(
             return {"error": error_msg, "error_type": "unexpected_error"}
 
 
+def _validate_clz_row_for_import(
+    row: dict[str, str], row_index: int
+) -> dict[str, Any] | None:
+    """Pre-flight validation to skip rows that will fail during processing.
+
+    This prevents enqueuing worker jobs for rows that require manual review,
+    saving processing time and reducing log noise.
+
+    Args:
+        row: CSV row dictionary
+        row_index: Row number for error reporting
+
+    Returns:
+        None if row passes validation, or dict with 'error' and 'category' keys
+    """
+    # Check for required fields that will cause validation errors
+    series_title = (row.get("Series") or "").strip()
+    if not series_title:
+        return {
+            "error": f"Row {row_index} validation error: Missing required field 'Series'",
+            "category": "missing_series",
+        }
+
+    # Check if Year field is empty - this will fail in identity resolver
+    year_str = row.get("Year", "").strip()
+    if not year_str:
+        return {
+            "error": f"Row {row_index} validation error: Cannot create a canonical issue without a source series start year; manual review is required",
+            "category": "missing_series_year",
+        }
+
+    # Check for Issue field
+    issue_number = (row.get("Issue") or "").strip()
+    if not issue_number:
+        return {
+            "error": f"Row {row_index} validation error: Missing required field 'Issue'",
+            "category": "missing_issue",
+        }
+
+    # If all validations pass, return None (row is good to process)
+    return None
+
+
 def _build_clz_import_summary(result: dict[str, Any]) -> str:
     """Build a human-readable summary for CLZ import progress."""
     total_rows = int(result.get("total_rows", 0) or 0)
@@ -1492,17 +1535,56 @@ async def import_clz_task(
                 }
             )
 
-            remaining_rows: list[tuple[int, dict[str, str], str]] = []
+            # Pre-flight validation: filter rows that will fail before enqueuing
+            validated_rows: list[tuple[int, dict[str, str], str]] = []
+            skipped_rows: list[tuple[int, dict[str, str], str, dict[str, Any]]] = []
+
             for row_index, row in enumerate(rows, start=1):
                 source_issue_id = (row.get("Core ComicID") or "").strip() or None
                 row_key = build_clz_row_key(source_issue_id, row_index)
+
+                # Skip already processed rows
                 if row_key in row_results:
                     continue
-                remaining_rows.append((row_index, row, row_key))
+
+                # Pre-flight validation check
+                validation_error = _validate_clz_row_for_import(row, row_index)
+                if validation_error:
+                    # Mark as failed immediately without enqueueing
+                    skipped_rows.append((row_index, row, row_key, validation_error))
+                else:
+                    validated_rows.append((row_index, row, row_key))
+
+            # Record skipped rows as failures
+            for row_index, row, row_key, error_info in skipped_rows:
+                row_result = {
+                    "row_index": row_index,
+                    "row_key": row_key,
+                    "source_issue_id": row.get("Core ComicID", "").strip(),
+                    "resolved": False,
+                    "error": error_info["error"],
+                    "skipped_reason": error_info["category"],
+                }
+                row_results[row_key] = row_result
+
+            if skipped_rows:
+                logger.info(
+                    "Pre-flight validation skipped rows requiring manual review",
+                    operation_id=operation_id,
+                    skipped_count=len(skipped_rows),
+                    will_enqueue=len(validated_rows),
+                )
+
+            # Update counts after skipping
+            processed, resolved, failed, errors = _summarize_clz_row_results(
+                row_results
+            )
+
+            remaining_rows = validated_rows
 
             if remaining_rows:
                 result_dict["summary"] = (
-                    f"Enqueued {len(remaining_rows)} pending CLZ row tasks for processing"
+                    f"Enqueued {len(remaining_rows)} pending CLZ row tasks for processing ({len(skipped_rows)} skipped)"
                 )
             else:
                 result_dict["summary"] = _build_clz_import_summary(result_dict)
