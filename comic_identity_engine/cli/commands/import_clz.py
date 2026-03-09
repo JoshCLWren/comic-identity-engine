@@ -12,6 +12,7 @@ USAGE:
 """
 
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import click
@@ -136,6 +137,11 @@ def cli_import_clz(
     try:
         with httpx.Client(timeout=30.0) as client:
             if normalized_operation_id is None:
+                # csv_file is guaranteed to be set here since operation_id is None
+                assert csv_file is not None, (
+                    "csv_file must be set when operation_id is None"
+                )
+
                 if verbose or debug:
                     console.print("[dim]Submitting CSV to API...[/dim]")
 
@@ -327,6 +333,306 @@ def _poll_import_operation(
     )
 
 
+def _generate_html_report(operation_id: str, result: dict) -> Path:
+    """Generate an HTML report with full import details.
+
+    Args:
+        operation_id: Operation UUID for filename
+        result: Result dictionary with all import data
+
+    Returns:
+        Path to the generated HTML report
+    """
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    report_filename = f"clz-import-report-{operation_id[:8]}-{timestamp}.html"
+    report_path = Path.cwd() / report_filename
+
+    total_rows = result.get("total_rows", 0)
+    processed = result.get("processed", 0)
+    resolved = result.get("resolved", 0)
+    failed = result.get("failed", 0)
+    errors = result.get("errors", [])
+    error_summary = result.get("error_summary", [])
+
+    success_rate = (resolved / processed * 100) if processed > 0 else 0
+
+    html_content = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CLZ Import Report - {operation_id[:8]}</title>
+    <style>
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
+
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f5f5;
+            padding: 20px;
+        }}
+
+        .container {{
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }}
+
+        h1 {{
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }}
+
+        .subtitle {{
+            color: #7f8c8d;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }}
+
+        h2 {{
+            color: #2c3e50;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            font-size: 20px;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }}
+
+        .metrics-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }}
+
+        .metric-card {{
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }}
+
+        .metric-card.success {{
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }}
+
+        .metric-card.warning {{
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }}
+
+        .metric-card.error {{
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+        }}
+
+        .metric-label {{
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            opacity: 0.9;
+            margin-bottom: 5px;
+        }}
+
+        .metric-value {{
+            font-size: 32px;
+            font-weight: bold;
+        }}
+
+        table {{
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }}
+
+        th {{
+            background: #34495e;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+        }}
+
+        td {{
+            padding: 12px;
+            border-bottom: 1px solid #ecf0f1;
+        }}
+
+        tr:hover {{
+            background: #f8f9fa;
+        }}
+
+        .error-summary-table tr:last-child td {{
+            border-bottom: none;
+        }}
+
+        .category-badge {{
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }}
+
+        .category-missing_year {{ background: #ffeaa7; color: #d35400; }}
+        .category-duplicate {{ background: #fab1a0; color: #c0392b; }}
+        .category-validation {{ background: #74b9ff; color: #0984e3; }}
+        .category-resolution {{ background: #a29bfe; color: #6c5ce7; }}
+        .category-network {{ background: #55efc4; color: #00b894; }}
+        .category-timeout {{ background: #fdcb6e; color: #e17055; }}
+        .category-other {{ background: #b2bec3; color: #636e72; }}
+
+        .sample-rows {{
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            background: #f8f9fa;
+            padding: 4px 8px;
+            border-radius: 4px;
+            color: #495057;
+        }}
+
+        .error-details-table td {{
+            font-size: 13px;
+        }}
+
+        .error-message {{
+            max-width: 600px;
+            word-wrap: break-word;
+        }}
+
+        .footer {{
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #ecf0f1;
+            text-align: center;
+            color: #95a5a6;
+            font-size: 12px;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 CLZ Import Report</h1>
+        <p class="subtitle">Operation: {operation_id} | Generated: {timestamp}</p>
+
+        <h2>📈 Summary Metrics</h2>
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-label">Total Rows</div>
+                <div class="metric-value">{total_rows:,}</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Processed</div>
+                <div class="metric-value">{processed:,}</div>
+            </div>
+            <div class="metric-card success">
+                <div class="metric-label">Resolved</div>
+                <div class="metric-value">{resolved:,}</div>
+            </div>
+            <div class="metric-card warning">
+                <div class="metric-label">Failed</div>
+                <div class="metric-value">{failed:,}</div>
+            </div>
+            <div class="metric-card error">
+                <div class="metric-label">Errors</div>
+                <div class="metric-value">{len(errors):,}</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Success Rate</div>
+                <div class="metric-value">{success_rate:.1f}%</div>
+            </div>
+        </div>
+"""
+
+    # Add error summary section if there are errors
+    if error_summary:
+        html_content += """
+        <h2>📋 Error Summary by Category</h2>
+        <table class="error-summary-table">
+            <thead>
+                <tr>
+                    <th>Category</th>
+                    <th>Count</th>
+                    <th>Sample Row Numbers</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+"""
+        for category_data in error_summary:
+            category = category_data["category"]
+            count = category_data["count"]
+            sample_rows = category_data.get("sample_rows", [])
+            description = category_data.get("description", "")
+
+            html_content += f"""
+                <tr>
+                    <td><span class="category-badge category-{category}">{category}</span></td>
+                    <td>{count:,}</td>
+                    <td><span class="sample-rows">{sample_rows[:10]}</span></td>
+                    <td>{description}</td>
+                </tr>
+"""
+        html_content += """
+            </tbody>
+        </table>
+"""
+
+    # Add detailed error table if there are errors
+    if errors:
+        html_content += """
+        <h2>❌ Detailed Error List</h2>
+        <table class="error-details-table">
+            <thead>
+                <tr>
+                    <th style="width: 80px;">Row</th>
+                    <th style="width: 150px;">Category</th>
+                    <th>Error Message</th>
+                </tr>
+            </thead>
+            <tbody>
+"""
+        for error in errors:
+            row = error.get("row", "Unknown")
+            msg = error.get("error", "Unknown error")
+            category = _get_error_category(msg)
+
+            html_content += f"""
+                <tr>
+                    <td><strong>{row}</strong></td>
+                    <td><span class="category-badge category-{category}">{category}</span></td>
+                    <td class="error-message">{msg}</td>
+                </tr>
+"""
+        html_content += """
+            </tbody>
+        </table>
+"""
+
+    html_content += f"""
+        <div class="footer">
+            <p>Generated by Comic Identity Engine CLZ Import Tool</p>
+            <p>Operation ID: {operation_id}</p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
+    report_path.write_text(html_content, encoding="utf-8")
+    return report_path
+
+
 def _display_import_result(
     data: dict, console: Console, *, verbose: bool = False
 ) -> None:
@@ -365,42 +671,17 @@ def _display_import_result(
 
     console.print(table)
 
-    if errors:
-        console.print()
+    # Generate HTML report with full details
+    operation_id = data.get("name", "unknown")
+    report_path = _generate_html_report(operation_id, result)
 
-        # Show error summary first
-        error_summary = result.get("error_summary", [])
-        if error_summary:
-            summary_table = Table(title="Error Summary", show_header=True)
-            summary_table.add_column("Category", style="cyan")
-            summary_table.add_column("Count", style="yellow", justify="right")
-            summary_table.add_column("Sample Rows", style="dim")
-            summary_table.add_column("Description", style="dim")
-
-            for category_data in error_summary:
-                summary_table.add_row(
-                    category_data["category"],
-                    str(category_data["count"]),
-                    str(category_data["sample_rows"][:5]),
-                    category_data["description"][:80],
-                )
-
-            console.print(summary_table)
-            console.print()
-
-        # Show all errors grouped by category
-        error_table = Table(show_header=True, header_style="bold red")
-        error_table.add_column("Row", style="cyan", no_wrap=True, width=6)
-        error_table.add_column("Category", style="yellow", width=20)
-        error_table.add_column("Error", style="red")
-
-        for error in errors:
-            row = str(error.get("row", "Unknown"))
-            msg = error.get("error", "Unknown error")
-            category = _get_error_category(msg)
-            error_table.add_row(row, category, msg[:150])
-
-        console.print(error_table)
+    console.print()
+    console.print(
+        f"[green]✓[/green] Detailed HTML report generated: [cyan]{report_path}[/cyan]"
+    )
+    console.print(
+        "[dim]Open the report in your browser to view full details and error breakdowns.[/dim]"
+    )
 
     if verbose:
         console.print()
