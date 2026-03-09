@@ -24,6 +24,8 @@ from rich.progress import (
     TextColumn,
     BarColumn,
     TaskProgressColumn,
+    TimeRemainingColumn,
+    MofNCompleteColumn,
 )
 from rich.table import Table
 
@@ -275,17 +277,22 @@ def _poll_import_operation(
 
     start_time = time.time()
     poll_interval = 0.5
+    last_processed = 0
+    last_update_time = start_time
 
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
         BarColumn(),
         TaskProgressColumn(),
+        MofNCompleteColumn(),
+        TimeRemainingColumn(),
         console=console,
+        refresh_per_second=4,
     ) as progress:
         task = progress.add_task(
             f"[cyan]Importing {display_name}[/cyan]",
-            total=100,
+            total=None,  # Will be set when we know total_rows
         )
 
         last_metadata = {}
@@ -301,21 +308,73 @@ def _poll_import_operation(
 
             total_rows = response_obj.get("total_rows", 0)
             processed = response_obj.get("processed", 0)
+            resolved = response_obj.get("resolved", 0)
+            failed = response_obj.get("failed", 0)
 
             if total_rows > 0:
-                if verbose and processed > 0:
-                    progress.update(
-                        task,
-                        completed=processed,
-                        total=total_rows,
-                        description=f"[cyan]Importing {display_name}[/cyan] ({processed}/{total_rows} rows processed)",
-                    )
+                # Calculate progress stats
+                current_time = time.time()
+                elapsed_since_last_update = current_time - last_update_time
+                rows_since_last_update = processed - last_processed
+
+                # Calculate rows per second
+                if elapsed_since_last_update > 0 and rows_since_last_update > 0:
+                    rows_per_sec = rows_since_last_update / elapsed_since_last_update
+                elif processed > 0 and (current_time - start_time) > 0:
+                    rows_per_sec = processed / (current_time - start_time)
                 else:
-                    progress.update(
-                        task,
-                        completed=processed,
-                        total=total_rows,
-                    )
+                    rows_per_sec = 0
+
+                # Calculate average time per row
+                if processed > 0:
+                    avg_time_per_row = (current_time - start_time) / processed
+                else:
+                    avg_time_per_row = 0
+
+                # Calculate remaining rows
+                remaining_rows = total_rows - processed
+
+                # Calculate ETA
+                if rows_per_sec > 0 and remaining_rows > 0:
+                    eta_seconds = remaining_rows / rows_per_sec
+                else:
+                    eta_seconds = None
+
+                # Update task with new total if not set
+                if (
+                    progress.tasks[0].total is None
+                    or progress.tasks[0].total != total_rows
+                ):
+                    progress.update(task, total=total_rows)
+
+                # Build description with stats
+                stats_parts = []
+                if verbose:
+                    stats_parts.append(f"{processed}/{total_rows} rows")
+                    stats_parts.append(f"{resolved} ✓")
+                    if failed > 0:
+                        stats_parts.append(f"{failed} ✗")
+                    if rows_per_sec > 0:
+                        stats_parts.append(f"{rows_per_sec:.1f}/s")
+                    if avg_time_per_row > 0:
+                        stats_parts.append(f"{avg_time_per_row * 1000:.0f}ms/row")
+                else:
+                    stats_parts.append(f"{processed}/{total_rows}")
+                    if rows_per_sec > 0:
+                        stats_parts.append(f"{rows_per_sec:.1f}/s")
+
+                description = f"[cyan]Importing {display_name}[/cyan] " + ", ".join(
+                    stats_parts
+                )
+
+                progress.update(
+                    task,
+                    completed=processed,
+                    description=description,
+                )
+
+                last_processed = processed
+                last_update_time = current_time
 
             if data.get("done"):
                 if data.get("error"):
