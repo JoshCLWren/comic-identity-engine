@@ -622,6 +622,7 @@ class TestBulkResolveTask:
             "comic_identity_engine.jobs.tasks.OperationsManager"
         ) as mock_ops_manager_class:
             mock_ops_manager = Mock()
+            mock_ops_manager.get_operation = AsyncMock(return_value=None)
             mock_ops_manager.mark_running = AsyncMock()
             mock_ops_manager.mark_completed = AsyncMock()
             mock_ops_manager.update_operation = AsyncMock()
@@ -670,6 +671,7 @@ class TestBulkResolveTask:
             "comic_identity_engine.jobs.tasks.OperationsManager"
         ) as mock_ops_manager_class:
             mock_ops_manager = Mock()
+            mock_ops_manager.get_operation = AsyncMock(return_value=None)
             mock_ops_manager.mark_running = AsyncMock()
             mock_ops_manager.mark_completed = AsyncMock()
             mock_ops_manager.update_operation = AsyncMock()
@@ -781,6 +783,7 @@ X-Men,2,Marvel,1991,clz-002"""
             "comic_identity_engine.jobs.tasks.OperationsManager"
         ) as mock_ops_manager_class:
             mock_ops_manager = Mock()
+            mock_ops_manager.get_operation = AsyncMock(return_value=None)
             mock_ops_manager.mark_running = AsyncMock()
             mock_ops_manager.mark_completed = AsyncMock()
             mock_ops_manager.update_operation = AsyncMock()
@@ -832,7 +835,7 @@ X-Men,2,Marvel,1991,clz-002"""
         assert result["resolved"] == 0  # Orchestrator doesn't process rows
         assert result["failed"] == 0
         assert len(result["errors"]) == 0
-        assert "Enqueued 2 CLZ row tasks" in result["summary"]
+        assert "Enqueued 2 pending CLZ row tasks" in result["summary"]
 
         # Verify tasks were enqueued
         assert mock_queue.enqueue_resolve_clz_row.call_count == 2
@@ -849,6 +852,7 @@ X-Men,2,Marvel,1991,clz-002"""
             "comic_identity_engine.jobs.tasks.OperationsManager"
         ) as mock_ops_manager_class:
             mock_ops_manager = Mock()
+            mock_ops_manager.get_operation = AsyncMock(return_value=None)
             mock_ops_manager.mark_running = AsyncMock()
             mock_ops_manager_class.return_value = mock_ops_manager
 
@@ -887,6 +891,7 @@ X-Men,2,Marvel,1991,clz-002"""
             "comic_identity_engine.jobs.tasks.OperationsManager"
         ) as mock_ops_manager_class:
             mock_ops_manager = Mock()
+            mock_ops_manager.get_operation = AsyncMock(return_value=None)
             mock_ops_manager.mark_running = AsyncMock()
             mock_ops_manager_class.return_value = mock_ops_manager
 
@@ -924,6 +929,7 @@ X-Men,2,Marvel,1991,clz-002"""
             "comic_identity_engine.jobs.tasks.OperationsManager"
         ) as mock_ops_manager_class:
             mock_ops_manager = Mock()
+            mock_ops_manager.get_operation = AsyncMock(return_value=None)
             mock_ops_manager.mark_running = AsyncMock(
                 side_effect=SQLAlchemyError("Connection lost")
             )
@@ -1523,6 +1529,7 @@ class TestErrorTypeCoverage:
                 "comic_identity_engine.jobs.tasks.OperationsManager"
             ) as mock_ops_manager_class:
                 mock_ops_manager = Mock()
+                mock_ops_manager.get_operation = AsyncMock(return_value=None)
 
                 if expected_type == "file_not_found":
                     mock_ops_manager.mark_running = AsyncMock()
@@ -1644,6 +1651,7 @@ X-Men,1,Marvel,1991,clz-001"""
             "comic_identity_engine.jobs.tasks.OperationsManager"
         ) as mock_ops_manager_class:
             mock_ops_manager = Mock()
+            mock_ops_manager.get_operation = AsyncMock(return_value=None)
             mock_ops_manager.mark_running = AsyncMock()
             mock_ops_manager.mark_completed = AsyncMock()
             mock_ops_manager.update_operation = AsyncMock()
@@ -1716,6 +1724,7 @@ X-Men,1,Marvel,1991,clz-001"""
             "comic_identity_engine.jobs.tasks.OperationsManager"
         ) as mock_ops_manager_class:
             mock_ops_manager = Mock()
+            mock_ops_manager.get_operation = AsyncMock(return_value=None)
             mock_ops_manager.mark_running = AsyncMock()
             mock_ops_manager.mark_completed = AsyncMock()
             mock_ops_manager.update_operation = AsyncMock()
@@ -1797,6 +1806,7 @@ X-Men,1,Marvel,1991,clz-001"""
             "comic_identity_engine.jobs.tasks.OperationsManager"
         ) as mock_ops_manager_class:
             mock_ops_manager = Mock()
+            mock_ops_manager.get_operation = AsyncMock(return_value=None)
             mock_ops_manager.mark_running = AsyncMock()
             mock_ops_manager.mark_completed = AsyncMock()
             mock_ops_manager.update_operation = AsyncMock()
@@ -1896,6 +1906,7 @@ X-Men,2,Marvel,1991,clz-002"""
             "comic_identity_engine.jobs.tasks.OperationsManager"
         ) as mock_ops_manager_class:
             mock_ops_manager = Mock()
+            mock_ops_manager.get_operation = AsyncMock(return_value=None)
             mock_ops_manager.mark_running = AsyncMock()
             mock_ops_manager.mark_completed = AsyncMock()
             mock_ops_manager.update_operation = AsyncMock()

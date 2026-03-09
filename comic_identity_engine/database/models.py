@@ -34,6 +34,13 @@ class SeriesRun(Base):
     """
 
     __tablename__ = "series_runs"
+    __table_args__ = (
+        UniqueConstraint(
+            "title",
+            "start_year",
+            name="uq_series_runs_title_start_year",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -79,6 +86,13 @@ class Issue(Base):
     """
 
     __tablename__ = "issues"
+    __table_args__ = (
+        UniqueConstraint(
+            "series_run_id",
+            "issue_number",
+            name="uq_issues_series_run_id_issue_number",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

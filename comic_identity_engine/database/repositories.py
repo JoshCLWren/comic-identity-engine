@@ -37,6 +37,28 @@ from comic_identity_engine.errors import (
 
 logger = logging.getLogger(__name__)
 
+SERIES_RUN_IDENTITY_CONSTRAINT = "uq_series_runs_title_start_year"
+ISSUE_IDENTITY_CONSTRAINT = "uq_issues_series_run_id_issue_number"
+
+
+def _is_unique_constraint_violation(
+    error: sqlalchemy_exc.IntegrityError,
+    constraint_name: str,
+    table_name: str,
+    columns: tuple[str, ...],
+) -> bool:
+    """Return True when an IntegrityError matches a specific unique constraint."""
+    diag = getattr(getattr(error, "orig", None), "diag", None)
+    if getattr(diag, "constraint_name", None) == constraint_name:
+        return True
+
+    message = str(getattr(error, "orig", error)).lower()
+    if constraint_name.lower() in message:
+        return True
+
+    sqlite_columns = [f"{table_name}.{column}".lower() for column in columns]
+    return all(column in message for column in sqlite_columns)
+
 
 class SeriesRunRepository:
     """Repository for SeriesRun entity operations."""
@@ -103,8 +125,22 @@ class SeriesRunRepository:
             Created SeriesRun entity
 
         Raises:
-            RepositoryError: If database operation fails
+            DuplicateEntityError: If a series run with the same title and year exists
+            RepositoryError: If another database operation fails
         """
+        existing = await self.find_by_title(title, start_year)
+        if existing is not None:
+            logger.warning(
+                "Duplicate series run attempt: title=%s, start_year=%s",
+                title,
+                start_year,
+            )
+            raise DuplicateEntityError(
+                f"Series run with title={title} and start_year={start_year} already exists",
+                entity_type="SeriesRun",
+                existing_id=str(existing.id),
+            )
+
         series_run = SeriesRun(
             title=title,
             start_year=start_year,
@@ -115,6 +151,30 @@ class SeriesRunRepository:
             await self.session.flush()
             await self.session.refresh(series_run)
             logger.info(f"Created series run: {series_run}")
+        except sqlalchemy_exc.IntegrityError as e:
+            await self.session.rollback()
+            if _is_unique_constraint_violation(
+                e,
+                SERIES_RUN_IDENTITY_CONSTRAINT,
+                "series_runs",
+                ("title", "start_year"),
+            ):
+                logger.warning(
+                    "Integrity error creating duplicate series run: title=%s, start_year=%s",
+                    title,
+                    start_year,
+                )
+                raise DuplicateEntityError(
+                    f"Series run with title={title} and start_year={start_year} already exists",
+                    entity_type="SeriesRun",
+                    original_error=e,
+                ) from e
+
+            logger.error(f"Error creating series run: {e}")
+            raise RepositoryError(
+                f"Failed to create series run: {title} ({start_year})",
+                original_error=e,
+            ) from e
         except sqlalchemy_exc.SQLAlchemyError as e:
             logger.error(f"Error creating series run: {e}")
             raise RepositoryError(
@@ -249,8 +309,23 @@ class IssueRepository:
             Created Issue entity
 
         Raises:
-            RepositoryError: If database operation fails
+            DuplicateEntityError: If an issue with the same series and number exists
+            RepositoryError: If another database operation fails
         """
+        existing = await self.find_by_number(series_run_id, issue_number)
+        if existing is not None:
+            logger.warning(
+                "Duplicate issue attempt: series_run_id=%s, issue_number=%s",
+                series_run_id,
+                issue_number,
+            )
+            raise DuplicateEntityError(
+                "Issue with "
+                f"series_run_id={series_run_id} and issue_number={issue_number} already exists",
+                entity_type="Issue",
+                existing_id=str(existing.id),
+            )
+
         issue = Issue(
             series_run_id=series_run_id,
             issue_number=issue_number,
@@ -264,6 +339,31 @@ class IssueRepository:
             logger.info(
                 f"Created issue: series_run_id={series_run_id}, issue_number={issue_number}"
             )
+        except sqlalchemy_exc.IntegrityError as e:
+            await self.session.rollback()
+            if _is_unique_constraint_violation(
+                e,
+                ISSUE_IDENTITY_CONSTRAINT,
+                "issues",
+                ("series_run_id", "issue_number"),
+            ):
+                logger.warning(
+                    "Integrity error creating duplicate issue: series_run_id=%s, issue_number=%s",
+                    series_run_id,
+                    issue_number,
+                )
+                raise DuplicateEntityError(
+                    "Issue with "
+                    f"series_run_id={series_run_id} and issue_number={issue_number} already exists",
+                    entity_type="Issue",
+                    original_error=e,
+                ) from e
+
+            logger.error(f"Error creating issue: {e}")
+            raise RepositoryError(
+                f"Failed to create issue: {issue_number}",
+                original_error=e,
+            ) from e
         except sqlalchemy_exc.SQLAlchemyError as e:
             logger.error(f"Error creating issue: {e}")
             raise RepositoryError(

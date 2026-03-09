@@ -8,8 +8,8 @@ Status markers:
 
 ## Current State
 - `external_mappings` are protected against duplicate `(source, source_issue_id)` rows.
-- Canonical `series_runs` and `issues` are not protected by database uniqueness today.
-- The live database already contains duplicate canonical rows.
+- Canonical `series_runs` and `issues` are protected by database uniqueness.
+- Migration `004_harden_canonical_uniqueness` consolidates existing duplicate canonical rows before enforcing uniqueness.
 - Multi-worker imports are overrunning the SQLAlchemy pool and producing `QueuePool limit` timeouts.
 - Import submission currently lacks useful resume semantics for same-file retries.
 
@@ -39,16 +39,16 @@ Status markers:
   CLI can monitor an existing operation id without re-posting the file.
 
 ## Priority 2: Make Canonical Creation Race-Safe
-- [ ] Add database uniqueness for `series_runs(title, start_year)`.
+- [x] Add database uniqueness for `series_runs(title, start_year)`.
   Success criteria:
   DB rejects duplicate canonical series rows for the same title/year.
-- [ ] Add database uniqueness for `issues(series_run_id, issue_number)`.
+- [x] Add database uniqueness for `issues(series_run_id, issue_number)`.
   Success criteria:
   DB rejects duplicate canonical issue rows within the same canonical series.
-- [ ] Make series creation race-safe.
+- [x] Make series creation race-safe.
   Success criteria:
   Concurrent imports refetch the winner instead of creating sibling `series_runs`.
-- [ ] Make issue creation race-safe.
+- [x] Make issue creation race-safe.
   Success criteria:
   Concurrent imports refetch the winner instead of creating sibling `issues`.
 

@@ -35,7 +35,11 @@ from comic_identity_engine.database.repositories import (
     SeriesRunRepository,
     VariantRepository,
 )
-from comic_identity_engine.errors import DuplicateEntityError, ResolutionError
+from comic_identity_engine.errors import (
+    DuplicateEntityError,
+    RepositoryError,
+    ResolutionError,
+)
 
 if TYPE_CHECKING:
     from comic_identity_engine.database.models import Issue
@@ -319,7 +323,7 @@ class IdentityResolver:
                 explanation=f"Created new issue for {parsed_url.platform}:{parsed_url.source_issue_id}",
             )
 
-        except (SQLAlchemyError, ResolutionError) as e:
+        except (RepositoryError, SQLAlchemyError, ResolutionError) as e:
             logger.error(
                 "Identity resolution failed",
                 error=str(e),
@@ -506,14 +510,61 @@ class IdentityResolver:
         """
         series = await self.series_repo.find_by_title(series_title, series_start_year)
         if not series:
-            series = await self.series_repo.create(series_title, series_start_year)
+            try:
+                series = await self.series_repo.create(series_title, series_start_year)
+            except DuplicateEntityError as e:
+                series = await self.series_repo.find_by_title(
+                    series_title,
+                    series_start_year,
+                )
+                if series is None:
+                    raise ResolutionError(
+                        "Series creation raced with another worker, "
+                        f"but the winner could not be refetched for {series_title} "
+                        f"({series_start_year})",
+                        original_error=e,
+                    ) from e
 
-        issue = await self.issue_repo.create(
-            series_run_id=series.id,
-            issue_number=issue_number,
-            cover_date=cover_date,
-            upc=upc,
-        )
+                logger.info(
+                    "Reused canonical series created by concurrent worker",
+                    series_id=str(series.id),
+                    series_title=series_title,
+                    series_start_year=series_start_year,
+                )
+
+        issue = await self.issue_repo.find_by_number(series.id, issue_number)
+        if issue:
+            logger.info(
+                "Reused canonical issue created by concurrent worker",
+                issue_id=str(issue.id),
+                series_id=str(series.id),
+                issue_number=issue_number,
+            )
+            return issue
+
+        try:
+            issue = await self.issue_repo.create(
+                series_run_id=series.id,
+                issue_number=issue_number,
+                cover_date=cover_date,
+                upc=upc,
+            )
+        except DuplicateEntityError as e:
+            issue = await self.issue_repo.find_by_number(series.id, issue_number)
+            if issue is None:
+                raise ResolutionError(
+                    "Issue creation raced with another worker, "
+                    f"but the winner could not be refetched for {series_title} "
+                    f"#{issue_number}",
+                    original_error=e,
+                ) from e
+
+            logger.info(
+                "Reused canonical issue after duplicate create",
+                issue_id=str(issue.id),
+                series_id=str(series.id),
+                issue_number=issue_number,
+            )
 
         logger.info(
             "Created new issue",
