@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Import remediation loop. Runs each remediation step through Codex CLI and
-# verifies the repo after every step to keep broken state from propagating.
+# Import remediation loop — the Ralph Wiggum loop.
+# Runs each remediation step through Codex CLI and verifies the repo after
+# every step to keep broken state from propagating.  Failed steps get up to
+# MAX_REPAIR_ATTEMPTS automated repair tries before the loop bails out.
 # Usage: bash scripts/import-remediation-loop.sh
 # Requires: codex CLI installed, authenticated (codex login)
 set -euo pipefail
@@ -12,7 +14,7 @@ BRANCH="import-remediation/complete-import-hardening"
 STEP_CHECK_SCRIPT="scripts/import-remediation-check.sh"
 FINAL_VERIFY_SCRIPT="scripts/import-remediation-verify.sh"
 BASE_HEAD_FILE=".git/import-remediation-base-head"
-LOG_DIR="/tmp"
+LOG_DIR="$(mktemp -d /tmp/import-remediation-XXXXXX)"
 MAX_REPAIR_ATTEMPTS=3
 
 if git checkout -b "${BRANCH}" 2>/dev/null; then
@@ -30,7 +32,7 @@ if [ ! -f "${BASE_HEAD_FILE}" ]; then
 fi
 
 repo_status() {
-  git status --porcelain=v1
+  git status --porcelain=v1 -uno
 }
 
 step_output_file() {
@@ -71,7 +73,7 @@ verify_step_commit() {
   current_head="$(git rev-parse HEAD)"
   if [ "${current_head}" = "${previous_head}" ]; then
     echo "Step ${step_name} did not create a new commit"
-    exit 1
+    return 1
   fi
 
   current_subject="$(git log -1 --pretty=%s)"
@@ -79,12 +81,12 @@ verify_step_commit() {
     echo "Step ${step_name} produced unexpected commit message"
     echo "Expected: ${expected_commit}"
     echo "Actual:   ${current_subject}"
-    exit 1
+    return 1
   fi
 
-  if ! git show --name-only --format= "${current_head}" | rg -Fxq "${TRACKER}"; then
+  if ! git show --name-only --format= "${current_head}" | grep -Fxq "${TRACKER}"; then
     echo "Step ${step_name} commit did not update ${TRACKER}"
-    exit 1
+    return 1
   fi
 
   current_status="$(repo_status)"
@@ -94,7 +96,7 @@ verify_step_commit() {
     printf '%s\n' "${baseline_status}"
     echo "Current status:"
     printf '%s\n' "${current_status}"
-    exit 1
+    return 1
   fi
 }
 
@@ -146,8 +148,9 @@ STEPS=(
   "step6|Complete import remediation hardening coverage|Finish Priority 5 in ${TRACKER}. Add concurrency/resume tests and operational visibility for imports. Update tracker markers and run the relevant focused test suite for this step. Leave final full verification to ${FINAL_VERIFY_SCRIPT}. Commit with message 'Complete import remediation hardening coverage'. Read AGENTS.md and ${TRACKER} first."
 )
 
-echo "=== Import Remediation Loop ==="
+echo "=== Import Remediation Loop (Ralph Wiggum Edition) ==="
 echo "Tracker: ${TRACKER}"
+echo "Log dir: ${LOG_DIR}"
 echo "Steps: ${#STEPS[@]}"
 echo "Max repair attempts per step: ${MAX_REPAIR_ATTEMPTS}"
 echo ""
@@ -179,26 +182,30 @@ for entry in "${STEPS[@]}"; do
         -o "${output_file}" \
         "${prompt}"
       then
-        echo "${name} completed"
-        verify_step_commit "${name}" "${expected_commit}" "${previous_head}" "${baseline_status}"
+        echo "${name} codex exec completed"
+      else
+        echo "${name} codex exec failed (exit $?)"
+      fi
+
+      if verify_step_commit "${name}" "${expected_commit}" "${previous_head}" "${baseline_status}"; then
+        echo "✅ ${name} commit verified"
         step_commit="$(find_step_commit "${expected_commit}")"
       else
-        exit_code=$?
         repair_attempt=$((repair_attempt + 1))
         if [ "${repair_attempt}" -gt "${MAX_REPAIR_ATTEMPTS}" ]; then
-          echo "${name} failed after ${MAX_REPAIR_ATTEMPTS} repair attempts"
+          echo "❌ ${name} failed after ${MAX_REPAIR_ATTEMPTS} repair attempts"
           echo "   Check ${output_file} for details"
-          exit "${exit_code}"
+          exit 1
         fi
 
-        echo "${name} execution failed; attempting automated repair (${repair_attempt}/${MAX_REPAIR_ATTEMPTS})"
+        echo "${name} commit verification failed; attempting automated repair (${repair_attempt}/${MAX_REPAIR_ATTEMPTS})"
         attempt_step_repair \
           "${name}" \
           "${expected_commit}" \
           "${prompt}" \
           "" \
           "${repair_attempt}" \
-          "execution" \
+          "commit-verification" \
           "${output_file}"
         continue
       fi
@@ -207,17 +214,16 @@ for entry in "${STEPS[@]}"; do
     echo "Running remediation check for ${name}"
 
     if run_step_check "${name}" "${step_commit}"; then
-      echo "Verification passed for ${name}"
+      echo "✅ Verification passed for ${name}"
       echo ""
       break
     fi
 
-    exit_code=$?
     repair_attempt=$((repair_attempt + 1))
     if [ "${repair_attempt}" -gt "${MAX_REPAIR_ATTEMPTS}" ]; then
-      echo "Verification failed for ${name} after ${MAX_REPAIR_ATTEMPTS} repair attempts"
-      echo "Fix the repo state before continuing to the next step"
-      exit "${exit_code}"
+      echo "❌ Verification failed for ${name} after ${MAX_REPAIR_ATTEMPTS} repair attempts"
+      echo "   Fix the repo state before continuing to the next step"
+      exit 1
     fi
 
     echo "Verification failed for ${name}; attempting automated repair (${repair_attempt}/${MAX_REPAIR_ATTEMPTS})"

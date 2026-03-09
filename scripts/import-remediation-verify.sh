@@ -48,7 +48,7 @@ echo "Running branch-wide Python lint for remediation changes"
 lint_branch_python_files
 
 echo "Checking remediation tracker is fully complete"
-if rg -n '^- \[\s\]|^- \[-\]|^- \[!\]' IMPORT_REMEDIATION_TODO.md; then
+if grep -Pn '^- \[\s\]|^- \[-\]|^- \[!\]' IMPORT_REMEDIATION_TODO.md; then
   echo "IMPORT_REMEDIATION_TODO.md still has unfinished items"
   exit 1
 fi
