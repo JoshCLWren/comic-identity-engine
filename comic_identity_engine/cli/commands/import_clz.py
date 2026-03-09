@@ -501,22 +501,6 @@ def _generate_html_report(operation_id: str, result: dict) -> Path:
             color: #495057;
         }}
 
-        .error-details-table td {{
-            font-size: 12px;
-            padding: 10px 8px;
-        }}
-
-        .error-details-table th {{
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }}
-
-        .error-message {{
-            max-width: 400px;
-            word-wrap: break-word;
-        }}
-
         .footer {{
             margin-top: 40px;
             padding-top: 20px;
@@ -599,43 +583,187 @@ def _generate_html_report(operation_id: str, result: dict) -> Path:
     if errors:
         html_content += """
         <h2>❌ Detailed Error List</h2>
-        <table class="error-details-table">
-            <thead>
-                <tr>
-                    <th style="width: 60px;">Row</th>
-                    <th style="width: 120px;">Category</th>
-                    <th style="width: 200px;">Series</th>
-                    <th style="width: 100px;">Issue</th>
-                    <th style="width: 150px;">Publisher</th>
-                    <th style="width: 80px;">Year</th>
-                    <th>Error Message</th>
-                </tr>
-            </thead>
-            <tbody>
+        <style>
+            .error-card {
+                border: 1px solid #e0e0e0;
+                border-radius: 8px;
+                margin-bottom: 20px;
+                background: white;
+                overflow: hidden;
+            }
+            .error-header {
+                background: #f8f9fa;
+                padding: 15px 20px;
+                border-bottom: 1px solid #e0e0e0;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            .error-title {
+                display: flex;
+                align-items: center;
+                gap: 15px;
+            }
+            .error-row-num {
+                font-size: 24px;
+                font-weight: bold;
+                color: #2c3e50;
+                min-width: 60px;
+            }
+            .copy-button {
+                background: #3498db;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 13px;
+                font-weight: 600;
+                transition: background 0.2s;
+            }
+            .copy-button:hover {
+                background: #2980b9;
+            }
+            .copy-button.copied {
+                background: #27ae60;
+            }
+            .error-body {
+                padding: 20px;
+            }
+            .error-message-box {
+                background: #fee;
+                border-left: 4px solid #e74c3c;
+                padding: 12px 15px;
+                margin-bottom: 15px;
+                border-radius: 4px;
+            }
+            .error-message-box strong {
+                color: #c0392b;
+                display: block;
+                margin-bottom: 5px;
+                font-size: 12px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+            .row-data-table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-top: 15px;
+            }
+            .row-data-table th {
+                background: #ecf0f1;
+                color: #2c3e50;
+                padding: 8px 12px;
+                text-align: left;
+                font-weight: 600;
+                font-size: 12px;
+                text-transform: uppercase;
+                border: 1px solid #ddd;
+            }
+            .row-data-table td {
+                padding: 10px 12px;
+                border: 1px solid #ddd;
+                font-size: 13px;
+                font-family: 'Courier New', monospace;
+            }
+            .row-data-table tr:nth-child(even) {
+                background: #f8f9fa;
+            }
+            .key-column {
+                font-weight: 600;
+                color: #2c3e50;
+                width: 30%;
+            }
+        </style>
 """
+        row_num = 0
         for error in errors:
-            row = error.get("row", "Unknown")
+            row_num += 1
+            row_idx = error.get("row", "Unknown")
             msg = error.get("error", "Unknown error")
             category = _get_error_category(msg)
-            series = error.get("series", "")
-            issue = error.get("issue", "")
-            publisher = error.get("publisher", "")
-            year = error.get("year", "")
+            row_data = error.get("row_data", {})
+            source_issue_id = error.get("source_issue_id", "")
+
+            # Build copy prompt data
+            row_data_str = "\n".join(
+                [f"  {k}: {v}" for k, v in sorted(row_data.items()) if v]
+            )
+            copy_data = f"""Row {row_idx} - CLZ Import Error
+
+Error:
+  {msg}
+
+Row Data:
+{row_data_str}
+
+Investigation Request:
+Please analyze this CLZ import error and suggest fixes. Consider:
+1. Is the error due to missing or invalid data?
+2. Can this be resolved with better matching logic?
+3. Should this row be manually reviewed?
+4. What specific changes would fix this?"""
+
+            # Build row data HTML table
+            row_data_html = ""
+            for key, value in sorted(row_data.items()):
+                if value:  # Only show non-empty values
+                    row_data_html += f"""
+                    <tr>
+                        <td class="key-column">{key}</td>
+                        <td>{value}</td>
+                    </tr>"""
 
             html_content += f"""
-                <tr>
-                    <td><strong>{row}</strong></td>
-                    <td><span class="category-badge category-{category}">{category}</span></td>
-                    <td>{series}</td>
-                    <td>{issue}</td>
-                    <td>{publisher}</td>
-                    <td>{year}</td>
-                    <td class="error-message">{msg}</td>
-                </tr>
+        <div class="error-card">
+            <div class="error-header">
+                <div class="error-title">
+                    <div class="error-row-num">#{row_idx}</div>
+                    <span class="category-badge category-{category}">{category}</span>
+                </div>
+                <button class="copy-button" onclick="copyToClipboard(this, `{copy_data.replace("`", "\\`")}`)">
+                    📋 Copy for LLM
+                </button>
+            </div>
+            <div class="error-body">
+                <div class="error-message-box">
+                    <strong>Error Message</strong>
+                    {msg}
+                </div>
+                <table class="row-data-table">
+                    <thead>
+                        <tr>
+                            <th class="key-column">Field</th>
+                            <th>Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {row_data_html}
+                    </tbody>
+                </table>
+            </div>
+        </div>
 """
         html_content += """
-            </tbody>
-        </table>
+        <script>
+            function copyToClipboard(button, text) {
+                navigator.clipboard.writeText(text).then(() => {
+                    const originalText = button.innerHTML;
+                    button.innerHTML = "✓ Copied!";
+                    button.classList.add("copied");
+                    setTimeout(() => {
+                        button.innerHTML = originalText;
+                        button.classList.remove("copied");
+                    }, 2000);
+                }).catch(err => {
+                    console.error("Failed to copy:", err);
+                    button.innerHTML = "❌ Failed";
+                    setTimeout(() => {
+                        button.innerHTML = "📋 Copy for LLM";
+                    }, 2000);
+                });
+            }
+        </script>
 """
 
     html_content += f"""

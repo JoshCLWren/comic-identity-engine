@@ -70,10 +70,7 @@ def apply_clz_import_visibility(result: dict[str, Any]) -> dict[str, Any]:
                 "row": row_result.get("row_index"),
                 "error": row_result.get("error"),
                 "source_issue_id": row_result.get("source_issue_id"),
-                "series": row_result.get("series"),
-                "issue": row_result.get("issue"),
-                "publisher": row_result.get("publisher"),
-                "year": row_result.get("year"),
+                "row_data": row_result.get("row_data", {}),
             }
             errors.append(error_entry)
 
