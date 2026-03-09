@@ -192,6 +192,42 @@ class OperationsManager:
                 )
                 return operation, True
 
+        # Resume pending/running operations that were interrupted
+        if existing.status in {"pending", "running"}:
+            resumed_result = dict(operation.result or {})
+            active_row_keys = set(resumed_result.get("active_row_keys", []) or [])
+
+            # Clear stale active rows that were lost when workers were killed
+            if active_row_keys:
+                resumed_result["active_row_keys"] = []
+                resumed_result["active_row_count"] = 0
+
+                logger.info(
+                    "Cleared stale active rows on checksum-addressed import",
+                    operation_id=str(operation.id),
+                    operation_type=operation.operation_type,
+                    stale_active_rows=len(active_row_keys),
+                    status=operation.status,
+                )
+
+            # Mark as pending to trigger re-enqueue
+            if existing.status == "running":
+                operation = await self.operation_repo.update_status(
+                    existing,
+                    status="pending",
+                    result=resumed_result,
+                )
+                logger.info(
+                    "Resumed interrupted checksum-addressed import",
+                    operation_id=str(operation.id),
+                    operation_type=operation.operation_type,
+                    status=operation.status,
+                )
+                return operation, True
+
+            # Already pending, will re-enqueue remaining rows
+            should_enqueue = True
+
         if merged_result != (existing.result or {}):
             operation = await self.operation_repo.update_status(
                 existing,
