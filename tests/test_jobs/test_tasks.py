@@ -1698,11 +1698,22 @@ X-Men,1,Marvel,1991,clz-001"""
                     )
                     mock_mapping_repo_class.return_value = mock_mapping_repo
 
-                    result = await import_clz_task(
-                        {},
-                        str(csv_file),
-                        str(TEST_OPERATION_ID),
-                    )
+                    with patch(
+                        "comic_identity_engine.jobs.queue.JobQueue"
+                    ) as mock_queue_class:
+                        mock_queue = Mock()
+                        mock_queue.enqueue_resolve_clz_row = AsyncMock()
+
+                        mock_job = Mock()
+                        mock_job.job_id = "test-job-id"
+                        mock_queue.enqueue_resolve_clz_row.return_value = mock_job
+                        mock_queue_class.return_value = mock_queue
+
+                        result = await import_clz_task(
+                            {},
+                            str(csv_file),
+                            str(TEST_OPERATION_ID),
+                        )
 
         assert result["total_rows"] == 1
         assert result["processed"] == 0
@@ -1779,11 +1790,22 @@ X-Men,1,Marvel,1991,clz-001"""
                         )
                         mock_resolver_class.return_value = mock_resolver
 
-                        result = await import_clz_task(
-                            {},
-                            str(csv_file),
-                            str(TEST_OPERATION_ID),
-                        )
+                        with patch(
+                            "comic_identity_engine.jobs.queue.JobQueue"
+                        ) as mock_queue_class:
+                            mock_queue = Mock()
+                            mock_queue.enqueue_resolve_clz_row = AsyncMock()
+
+                            mock_job = Mock()
+                            mock_job.job_id = "test-job-id"
+                            mock_queue.enqueue_resolve_clz_row.return_value = mock_job
+                            mock_queue_class.return_value = mock_queue
+
+                            result = await import_clz_task(
+                                {},
+                                str(csv_file),
+                                str(TEST_OPERATION_ID),
+                            )
 
         assert result["total_rows"] == 1
         assert result["processed"] == 0
@@ -1882,11 +1904,24 @@ X-Men,1,Marvel,1991,clz-001"""
                                 )
                                 mock_searcher_class.return_value = mock_searcher
 
-                                await import_clz_task(
-                                    {},
-                                    str(csv_file),
-                                    str(TEST_OPERATION_ID),
-                                )
+                                with patch(
+                                    "comic_identity_engine.jobs.queue.JobQueue"
+                                ) as mock_queue_class:
+                                    mock_queue = Mock()
+                                    mock_queue.enqueue_resolve_clz_row = AsyncMock()
+
+                                    mock_job = Mock()
+                                    mock_job.job_id = "test-job-id"
+                                    mock_queue.enqueue_resolve_clz_row.return_value = (
+                                        mock_job
+                                    )
+                                    mock_queue_class.return_value = mock_queue
+
+                                    await import_clz_task(
+                                        {},
+                                        str(csv_file),
+                                        str(TEST_OPERATION_ID),
+                                    )
 
             # Should update operation at least once at row 10
             assert mock_ops_manager.update_operation.call_count >= 1
@@ -1995,11 +2030,24 @@ X-Men,2,Marvel,1991,clz-002"""
                                 )
                                 mock_searcher_class.return_value = mock_searcher
 
-                                result = await import_clz_task(
-                                    {},
-                                    str(csv_file),
-                                    str(TEST_OPERATION_ID),
-                                )
+                                with patch(
+                                    "comic_identity_engine.jobs.queue.JobQueue"
+                                ) as mock_queue_class:
+                                    mock_queue = Mock()
+                                    mock_queue.enqueue_resolve_clz_row = AsyncMock()
+
+                                    mock_job = Mock()
+                                    mock_job.job_id = "test-job-id"
+                                    mock_queue.enqueue_resolve_clz_row.return_value = (
+                                        mock_job
+                                    )
+                                    mock_queue_class.return_value = mock_queue
+
+                                    result = await import_clz_task(
+                                        {},
+                                        str(csv_file),
+                                        str(TEST_OPERATION_ID),
+                                    )
 
             assert result["total_rows"] == 2
             assert result["processed"] == 0

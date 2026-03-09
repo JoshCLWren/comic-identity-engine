@@ -633,7 +633,10 @@ class IdentityResolver:
         normalized_title = re.sub(r"\s+", " ", (series_title or "")).strip()
         normalized_issue_number = (issue_number or "").strip()
 
-        if not normalized_title or normalized_title.lower() in PLACEHOLDER_SERIES_TITLES:
+        if (
+            not normalized_title
+            or normalized_title.lower() in PLACEHOLDER_SERIES_TITLES
+        ):
             raise ValidationError(
                 "Cannot create a canonical issue from placeholder series metadata; "
                 "manual review is required"
@@ -671,7 +674,11 @@ class IdentityResolver:
             return ""
 
         matched_issue = await self.issue_repo.find_with_variants(issue_id)
-        if matched_issue is None or not matched_issue.upc or matched_issue.upc == incoming_upc:
+        if (
+            matched_issue is None
+            or not matched_issue.upc
+            or matched_issue.upc == incoming_upc
+        ):
             return ""
 
         if not variant_suffix:

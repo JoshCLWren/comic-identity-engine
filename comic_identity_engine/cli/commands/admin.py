@@ -28,14 +28,8 @@ def _parse_uuid_values(values: Sequence[str], option_name: str) -> list[uuid.UUI
 
 def _print_summary(report: dict[str, object]) -> None:
     summary = dict(report.get("summary", {}) or {})
-    click.echo(
-        "Series duplicate groups: "
-        f"{summary.get('series_duplicate_groups', 0)}"
-    )
-    click.echo(
-        "Issue duplicate groups: "
-        f"{summary.get('issue_duplicate_groups', 0)}"
-    )
+    click.echo(f"Series duplicate groups: {summary.get('series_duplicate_groups', 0)}")
+    click.echo(f"Issue duplicate groups: {summary.get('issue_duplicate_groups', 0)}")
 
 
 async def _run_audit(

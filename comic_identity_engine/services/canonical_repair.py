@@ -253,7 +253,9 @@ class CanonicalRepairService:
             return True
         return False
 
-    def _serialize_series_group(self, series_runs: Sequence[SeriesRun]) -> dict[str, Any]:
+    def _serialize_series_group(
+        self, series_runs: Sequence[SeriesRun]
+    ) -> dict[str, Any]:
         ordered = sorted(series_runs, key=self._entity_sort_key)
         winner = ordered[0]
         return {
@@ -266,7 +268,9 @@ class CanonicalRepairService:
                     "publisher": series.publisher,
                     "created_at": self._isoformat(series.created_at),
                     "issue_count": len(series.issues),
-                    "issue_numbers": sorted(issue.issue_number for issue in series.issues),
+                    "issue_numbers": sorted(
+                        issue.issue_number for issue in series.issues
+                    ),
                     "mapping_count": sum(
                         len(issue.external_mappings) for issue in series.issues
                     ),
@@ -308,7 +312,10 @@ class CanonicalRepairService:
                         }
                         for mapping in sorted(
                             issue.external_mappings,
-                            key=lambda mapping: (mapping.source, mapping.source_issue_id),
+                            key=lambda mapping: (
+                                mapping.source,
+                                mapping.source_issue_id,
+                            ),
                         )
                     ],
                 }
@@ -384,7 +391,9 @@ class CanonicalRepairService:
                 )
 
             for loser_issue in list(loser.issues):
-                existing_winner_issue = winner_issues_by_number.get(loser_issue.issue_number)
+                existing_winner_issue = winner_issues_by_number.get(
+                    loser_issue.issue_number
+                )
                 if existing_winner_issue is not None:
                     await self._merge_issue_objects(
                         winner=existing_winner_issue,
@@ -421,7 +430,9 @@ class CanonicalRepairService:
         merged_issue_ids: list[str] = []
         upc_conflicts: list[dict[str, Any]] = []
         variant_conflicts: list[dict[str, Any]] = []
-        winner_variants = {variant.variant_suffix: variant for variant in winner.variants}
+        winner_variants = {
+            variant.variant_suffix: variant for variant in winner.variants
+        }
 
         for loser in losers:
             if winner.cover_date is None and loser.cover_date is not None:
