@@ -33,7 +33,10 @@ def build_clz_row_manifest(rows: list[dict[str, str]]) -> list[dict[str, Any]]:
 
 
 def apply_clz_import_visibility(result: dict[str, Any]) -> dict[str, Any]:
-    """Normalize derived CLZ import visibility counters."""
+    """Normalize derived CLZ import visibility counters.
+
+    Preserves errors array for API responses.
+    """
     normalized_result = dict(result)
     row_results = dict(normalized_result.get("row_results", {}) or {})
     total_rows = int(
@@ -57,6 +60,21 @@ def apply_clz_import_visibility(result: dict[str, Any]) -> dict[str, Any]:
     active_row_count = len(active_row_keys)
     pending_row_count = max(total_rows - processed - active_row_count, 0)
 
+    # Build errors array from row_results for API responses
+    errors = []
+    for row_key, row_result in row_results.items():
+        if "error" in row_result:
+            errors.append(
+                {
+                    "row": row_result.get("row_index"),
+                    "error": row_result.get("error"),
+                    "source_issue_id": row_result.get("source_issue_id"),
+                }
+            )
+
+    # Sort by row number for consistent ordering
+    errors.sort(key=lambda e: e.get("row", 0))
+
     normalized_result.update(
         {
             "processed": processed,
@@ -64,6 +82,7 @@ def apply_clz_import_visibility(result: dict[str, Any]) -> dict[str, Any]:
             "active_row_count": active_row_count,
             "pending_row_count": pending_row_count,
             "failed_row_count": failed,
+            "errors": errors,
         }
     )
     return normalized_result

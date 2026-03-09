@@ -348,12 +348,10 @@ def _display_import_result(
     table.add_column("Value", style="green")
 
     total_rows = result.get("total_rows", 0)
+    processed = result.get("processed", 0)
     resolved = result.get("resolved", 0)
     failed = result.get("failed", 0)
     errors = result.get("errors", [])
-    summary = result.get("summary", "")
-
-    processed = result.get("processed", resolved + failed)
 
     table.add_row("Total Rows", str(total_rows))
     table.add_row("Processed", str(processed))
@@ -367,24 +365,24 @@ def _display_import_result(
 
     console.print(table)
 
-    if summary:
-        console.print(f"\n[dim]{summary}[/dim]")
+    if errors:
+        console.print()
+        error_table = Table(show_header=True, header_style="bold red")
+        error_table.add_column("Row", style="dim")
+        error_table.add_column("Error")
 
-    if verbose and errors:
-        error_table = Table(title="Errors", show_header=True)
-        error_table.add_column("Row", style="cyan", no_wrap=True)
-        error_table.add_column("Error", style="red")
+        # Show all errors
+        for error in errors:
+            row_num = error.get("row", "N/A")
+            error_msg = error.get("error", "")
+            error_table.add_row(str(row_num), error_msg[:200])
 
-        for error in errors[:20]:
-            row = error.get("row", "Unknown")
-            msg = error.get("error", "Unknown error")
-            error_table.add_row(str(row), msg)
-
-        if len(errors) > 20:
-            error_table.add_row("...", f"and {len(errors) - 20} more errors")
-
-        console.print("\n")
         console.print(error_table)
+
+    if verbose:
+        console.print()
+        console.print("[dim]Raw response data:[/dim]")
+        console.print(result)
 
 
 if __name__ == "__main__":
