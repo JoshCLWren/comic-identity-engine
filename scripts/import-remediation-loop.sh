@@ -12,6 +12,8 @@ BRANCH="import-remediation/complete-import-hardening"
 STEP_CHECK_SCRIPT="scripts/import-remediation-check.sh"
 FINAL_VERIFY_SCRIPT="scripts/import-remediation-verify.sh"
 BASE_HEAD_FILE=".git/import-remediation-base-head"
+LOG_DIR="${CIE_IMPORT_REMEDIATION_LOG_DIR:-/tmp}"
+MAX_REPAIR_ATTEMPTS="${CIE_IMPORT_REMEDIATION_MAX_REPAIR_ATTEMPTS:-3}"
 
 if git checkout -b "${BRANCH}" 2>/dev/null; then
   git rev-parse HEAD > "${BASE_HEAD_FILE}"
@@ -29,6 +31,22 @@ fi
 
 repo_status() {
   git status --porcelain=v1
+}
+
+step_output_file() {
+  local step_name="$1"
+  echo "${LOG_DIR}/import-remediation-${step_name}.md"
+}
+
+step_check_log_file() {
+  local step_name="$1"
+  echo "${LOG_DIR}/import-remediation-${step_name}-check.log"
+}
+
+step_repair_output_file() {
+  local step_name="$1"
+  local attempt="$2"
+  echo "${LOG_DIR}/import-remediation-${step_name}-repair-${attempt}.md"
 }
 
 base_head() {
@@ -80,6 +98,40 @@ verify_step_commit() {
   fi
 }
 
+run_step_check() {
+  local step_name="$1"
+  local step_commit="$2"
+  local check_log
+
+  check_log="$(step_check_log_file "${step_name}")"
+  bash "${STEP_CHECK_SCRIPT}" "${step_name}" "${step_commit}" 2>&1 | tee "${check_log}"
+}
+
+attempt_step_repair() {
+  local step_name="$1"
+  local expected_commit="$2"
+  local step_prompt="$3"
+  local step_commit="$4"
+  local attempt="$5"
+  local failure_mode="$6"
+  local failure_log="$7"
+  local repair_output
+  local verification_command
+
+  repair_output="$(step_repair_output_file "${step_name}" "${attempt}")"
+
+  if [ -n "${step_commit}" ]; then
+    verification_command="bash ${STEP_CHECK_SCRIPT} ${step_name} ${step_commit}"
+  else
+    verification_command="bash ${STEP_CHECK_SCRIPT} ${step_name}"
+  fi
+
+  codex exec \
+    --full-auto \
+    -o "${repair_output}" \
+    "Repair ${step_name} after ${failure_mode} failure. Read AGENTS.md, ${TRACKER}, ${failure_log}, and the current branch state first. The original step prompt was: ${step_prompt} The required primary commit subject for this step is '${expected_commit}'. Do not move on to later steps. Make the smallest focused fix needed so ${verification_command} passes. If the primary commit does not exist yet, create it with the required subject. If you need a follow-up commit, use subject 'Repair ${step_name} verification'. Leave the worktree clean."
+}
+
 STEPS=(
   "step1|Cap import worker concurrency and configure DB pool|Fix Priority 0 in ${TRACKER}. Cap worker concurrency to fit the SQLAlchemy pool and make DB pool sizing configurable. Update the tracker status markers as you go. Add tests where appropriate. Run: uv run pytest tests/test_config.py tests/test_jobs/test_worker.py -q. Commit with message 'Cap import worker concurrency and configure DB pool'. Read AGENTS.md and ${TRACKER} first."
 
@@ -97,6 +149,7 @@ STEPS=(
 echo "=== Import Remediation Loop ==="
 echo "Tracker: ${TRACKER}"
 echo "Steps: ${#STEPS[@]}"
+echo "Max repair attempts per step: ${MAX_REPAIR_ATTEMPTS}"
 echo ""
 
 for entry in "${STEPS[@]}"; do
@@ -104,47 +157,79 @@ for entry in "${STEPS[@]}"; do
   remainder="${entry#*|}"
   expected_commit="${remainder%%|*}"
   prompt="${remainder#*|}"
-  step_commit="$(find_step_commit "${expected_commit}")"
+  step_commit=""
+  repair_attempt=0
 
   echo "=================================================="
   echo "Running: ${name}"
   echo "=================================================="
 
-  if [ -n "${step_commit}" ]; then
-    echo "Found existing commit for ${name}: ${step_commit}"
-  else
-    previous_head="$(git rev-parse HEAD)"
-    baseline_status="$(repo_status)"
+  while true; do
+    step_commit="$(find_step_commit "${expected_commit}")"
 
-    if codex exec \
-      --full-auto \
-      -o "/tmp/import-remediation-${name}.md" \
-      "${prompt}"
-    then
-      echo "${name} completed"
-      verify_step_commit "${name}" "${expected_commit}" "${previous_head}" "${baseline_status}"
-      step_commit="$(git rev-parse HEAD)"
+    if [ -n "${step_commit}" ]; then
+      echo "Found existing commit for ${name}: ${step_commit}"
     else
-      exit_code=$?
-      echo "${name} failed (exit code ${exit_code})"
-      echo "   Check /tmp/import-remediation-${name}.md for details"
-      echo "   Fix the issue manually, then re-run this script"
-      echo "   (completed steps will be skipped via git branch state)"
-      exit 1
+      previous_head="$(git rev-parse HEAD)"
+      baseline_status="$(repo_status)"
+      output_file="$(step_output_file "${name}")"
+
+      if codex exec \
+        --full-auto \
+        -o "${output_file}" \
+        "${prompt}"
+      then
+        echo "${name} completed"
+        verify_step_commit "${name}" "${expected_commit}" "${previous_head}" "${baseline_status}"
+        step_commit="$(find_step_commit "${expected_commit}")"
+      else
+        exit_code=$?
+        repair_attempt=$((repair_attempt + 1))
+        if [ "${repair_attempt}" -gt "${MAX_REPAIR_ATTEMPTS}" ]; then
+          echo "${name} failed after ${MAX_REPAIR_ATTEMPTS} repair attempts"
+          echo "   Check ${output_file} for details"
+          exit "${exit_code}"
+        fi
+
+        echo "${name} execution failed; attempting automated repair (${repair_attempt}/${MAX_REPAIR_ATTEMPTS})"
+        attempt_step_repair \
+          "${name}" \
+          "${expected_commit}" \
+          "${prompt}" \
+          "" \
+          "${repair_attempt}" \
+          "execution" \
+          "${output_file}"
+        continue
+      fi
     fi
-  fi
 
-  echo "Running remediation check for ${name}"
+    echo "Running remediation check for ${name}"
 
-  if bash "${STEP_CHECK_SCRIPT}" "${name}" "${step_commit}"; then
-    echo "Verification passed for ${name}"
-    echo ""
-  else
+    if run_step_check "${name}" "${step_commit}"; then
+      echo "Verification passed for ${name}"
+      echo ""
+      break
+    fi
+
     exit_code=$?
-    echo "Verification failed for ${name} (exit code ${exit_code})"
-    echo "Fix the repo state before continuing to the next step"
-    exit "${exit_code}"
-  fi
+    repair_attempt=$((repair_attempt + 1))
+    if [ "${repair_attempt}" -gt "${MAX_REPAIR_ATTEMPTS}" ]; then
+      echo "Verification failed for ${name} after ${MAX_REPAIR_ATTEMPTS} repair attempts"
+      echo "Fix the repo state before continuing to the next step"
+      exit "${exit_code}"
+    fi
+
+    echo "Verification failed for ${name}; attempting automated repair (${repair_attempt}/${MAX_REPAIR_ATTEMPTS})"
+    attempt_step_repair \
+      "${name}" \
+      "${expected_commit}" \
+      "${prompt}" \
+      "${step_commit}" \
+      "${repair_attempt}" \
+      "verification" \
+      "$(step_check_log_file "${name}")"
+  done
 done
 
 echo ""
