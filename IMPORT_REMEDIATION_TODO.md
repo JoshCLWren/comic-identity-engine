@@ -69,13 +69,13 @@ Status markers:
   Existing duplicate canonicals can be merged safely in a repeatable way.
 
 ## Priority 5: Test and Operations Hardening
-- [ ] Add tests for concurrent import races.
+- [x] Add tests for concurrent import races.
   Success criteria:
   Tests reproduce and then prevent duplicate series/issue creation under parallel workers.
-- [ ] Add tests for resume and retry flows.
+- [x] Add tests for resume and retry flows.
   Success criteria:
   Same-file resume and retry-failed-only flows are covered end-to-end.
-- [ ] Add import health visibility.
+- [x] Add import health visibility.
   Success criteria:
   Logs or status endpoints expose queue depth, active row count, failed row count, and retry state.
 

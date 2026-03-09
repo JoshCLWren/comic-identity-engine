@@ -13,6 +13,7 @@ USAGE:
 
 from typing import Annotated
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from comic_identity_engine.api.dependencies import (
@@ -25,10 +26,43 @@ from comic_identity_engine.api.schemas import (
 )
 from comic_identity_engine.errors import ValidationError
 from comic_identity_engine.jobs.queue import JobQueue
-from comic_identity_engine.services.imports import prepare_clz_import_from_path
+from comic_identity_engine.services.imports import (
+    apply_clz_import_visibility,
+    build_clz_import_health,
+    prepare_clz_import_from_path,
+)
 from comic_identity_engine.services.operations import OperationsManager
 
 router = APIRouter(prefix="/import", tags=["Import"])
+logger = structlog.get_logger(__name__)
+
+
+def _build_import_metadata(
+    *,
+    operation_status: str,
+    operation_result: dict[str, object] | None,
+    queue_depth: int | None = None,
+) -> dict[str, object]:
+    """Build import-specific metadata for operation responses."""
+    metadata: dict[str, object] = {
+        "status": operation_status,
+    }
+    if not isinstance(operation_result, dict):
+        return metadata
+
+    visible_result = apply_clz_import_visibility(operation_result)
+    for key in (
+        "file_checksum",
+        "file_size",
+        "total_rows",
+        "resume_count",
+        "retry_failed_count",
+    ):
+        if key in visible_result:
+            metadata[key] = visible_result[key]
+
+    metadata.update(build_clz_import_health(visible_result, queue_depth=queue_depth))
+    return metadata
 
 
 @router.post(
@@ -92,18 +126,13 @@ async def import_clz(
                 "file_checksum": prepared_import.file_checksum,
                 "file_size": prepared_import.file_size,
                 "total_rows": prepared_import.total_rows,
-                "resume_count": (
-                    operation.result.get("resume_count", 0)
-                    if isinstance(operation.result, dict)
-                    else 0
-                ),
-                "retry_failed_count": (
-                    operation.result.get("retry_failed_count", 0)
-                    if isinstance(operation.result, dict)
-                    else 0
-                ),
                 "retry_failed_only": request.retry_failed_only,
-                "status": operation.status,
+                **_build_import_metadata(
+                    operation_status=operation.status,
+                    operation_result=(
+                        operation.result if isinstance(operation.result, dict) else None
+                    ),
+                ),
             },
         )
 
@@ -128,6 +157,7 @@ async def import_clz(
 )
 async def get_import_clz_status(
     operation_id: str,
+    queue: Annotated[JobQueue, Depends(get_job_queue)],
     operations_manager: Annotated[OperationsManager, Depends(get_operations_manager)],
 ) -> OperationResponse:
     """Get the status of a CLZ import operation.
@@ -156,34 +186,41 @@ async def get_import_clz_status(
         )
 
     is_done = operation.status in ("completed", "failed")
+    queue_depth: int | None = 0 if is_done else None
+    if not is_done:
+        try:
+            queue_depth = await queue.get_queue_depth(operation_id=operation.id)
+        except ConnectionError as e:
+            logger.warning(
+                "Failed to inspect import queue depth",
+                operation_id=str(operation.id),
+                error=str(e),
+            )
 
     response: OperationResponse = OperationResponse(
         name=f"operations/{operation.id}",
         done=is_done,
         metadata={
             "operation_type": operation.operation_type,
-            "status": operation.status,
             "created_at": operation.created_at.isoformat()
             if operation.created_at
             else None,
             "updated_at": operation.updated_at.isoformat()
             if operation.updated_at
             else None,
+            **_build_import_metadata(
+                operation_status=operation.status,
+                operation_result=(
+                    operation.result if isinstance(operation.result, dict) else None
+                ),
+                queue_depth=queue_depth,
+            ),
         },
     )
 
     if isinstance(operation.result, dict):
-        for key in (
-            "file_checksum",
-            "file_size",
-            "total_rows",
-            "resume_count",
-            "retry_failed_count",
-        ):
-            if key in operation.result:
-                response.metadata[key] = operation.result[key]
-
-    if operation.result:
+        response.response = apply_clz_import_visibility(operation.result)
+    elif operation.result:
         response.response = operation.result
 
     if operation.status == "failed" and operation.error_message:

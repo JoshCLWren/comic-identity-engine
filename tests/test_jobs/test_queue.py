@@ -314,6 +314,75 @@ class TestEnqueueImportClz:
                     )
 
 
+class TestGetQueueDepth:
+    """Tests for queue depth inspection."""
+
+    @pytest.mark.asyncio
+    async def test_get_queue_depth_returns_total_depth(
+        self, mock_settings, mock_redis_pool, mock_arq_redis_settings
+    ):
+        """Queue depth without filters should count all queued jobs."""
+        queued_job_one = Mock()
+        queued_job_one.kwargs = {"operation_id": str(TEST_OPERATION_ID)}
+        queued_job_two = Mock()
+        queued_job_two.kwargs = {"operation_id": "other-operation"}
+        mock_redis_pool.queued_jobs = AsyncMock(
+            return_value=[queued_job_one, queued_job_two]
+        )
+
+        with patch(
+            "comic_identity_engine.jobs.queue.get_settings"
+        ) as mock_get_settings:
+            mock_get_settings.return_value = mock_settings
+            with patch(
+                "comic_identity_engine.jobs.queue.ArqRedisSettings.from_dsn"
+            ) as mock_from_dsn:
+                mock_from_dsn.return_value = mock_arq_redis_settings
+                with patch(
+                    "comic_identity_engine.jobs.queue.create_pool"
+                ) as mock_create_pool:
+                    mock_create_pool.return_value = mock_redis_pool
+
+                    queue = JobQueue()
+                    depth = await queue.get_queue_depth()
+
+        assert depth == 2
+        mock_redis_pool.queued_jobs.assert_awaited_once_with(queue_name=TEST_QUEUE_NAME)
+
+    @pytest.mark.asyncio
+    async def test_get_queue_depth_filters_by_operation(
+        self, mock_settings, mock_redis_pool, mock_arq_redis_settings
+    ):
+        """Queue depth should filter queued jobs by operation id."""
+        queued_job_one = Mock()
+        queued_job_one.kwargs = {"operation_id": str(TEST_OPERATION_ID)}
+        queued_job_two = Mock()
+        queued_job_two.kwargs = {"operation_id": "other-operation"}
+        queued_job_three = Mock()
+        queued_job_three.kwargs = {"operation_id": str(TEST_OPERATION_ID)}
+        mock_redis_pool.queued_jobs = AsyncMock(
+            return_value=[queued_job_one, queued_job_two, queued_job_three]
+        )
+
+        with patch(
+            "comic_identity_engine.jobs.queue.get_settings"
+        ) as mock_get_settings:
+            mock_get_settings.return_value = mock_settings
+            with patch(
+                "comic_identity_engine.jobs.queue.ArqRedisSettings.from_dsn"
+            ) as mock_from_dsn:
+                mock_from_dsn.return_value = mock_arq_redis_settings
+                with patch(
+                    "comic_identity_engine.jobs.queue.create_pool"
+                ) as mock_create_pool:
+                    mock_create_pool.return_value = mock_redis_pool
+
+                    queue = JobQueue()
+                    depth = await queue.get_queue_depth(operation_id=TEST_OPERATION_ID)
+
+        assert depth == 2
+
+
 class TestEnqueueExport:
     """Tests for enqueue_export method."""
 

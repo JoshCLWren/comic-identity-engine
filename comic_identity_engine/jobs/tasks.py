@@ -67,6 +67,7 @@ from comic_identity_engine.services import (
     parse_url,
 )
 from comic_identity_engine.services.imports import (
+    apply_clz_import_visibility,
     build_clz_row_key,
     build_clz_row_manifest,
 )
@@ -1067,7 +1068,7 @@ async def _record_clz_row_result(
             if operation.status in {"completed", "failed"}:
                 return
 
-            current_result = dict(operation.result or {})
+            current_result = apply_clz_import_visibility(dict(operation.result or {}))
             total_rows = int(current_result.get("total_rows", 0) or 0)
             if total_rows == 0:
                 total_rows = len(current_result.get("row_manifest", []) or [])
@@ -1085,20 +1086,30 @@ async def _record_clz_row_result(
                 row_results
             )
 
-            updated_result = {
-                **current_result,
-                "total_rows": total_rows,
-                "row_results": row_results,
-                "processed": processed,
-                "resolved": resolved,
-                "failed": failed,
-                "errors": errors,
-                "progress": (processed / total_rows) if total_rows else 0.0,
-            }
+            active_row_keys = set(current_result.get("active_row_keys", []) or [])
+            active_row_keys.discard(row_key)
+
+            updated_result = apply_clz_import_visibility(
+                {
+                    **current_result,
+                    "total_rows": total_rows,
+                    "row_results": row_results,
+                    "processed": processed,
+                    "resolved": resolved,
+                    "failed": failed,
+                    "errors": errors,
+                    "progress": (processed / total_rows) if total_rows else 0.0,
+                    "active_row_keys": sorted(active_row_keys),
+                }
+            )
             updated_result["summary"] = _build_clz_import_summary(updated_result)
 
             new_status = (
-                "completed" if total_rows and processed >= total_rows else "running"
+                "completed"
+                if total_rows
+                and processed >= total_rows
+                and updated_result["active_row_count"] == 0
+                else "running"
             )
 
             await repo.update_status(
@@ -1107,11 +1118,88 @@ async def _record_clz_row_result(
                 result=updated_result,
             )
             await session.commit()
+            logger.info(
+                "Recorded CLZ row result",
+                operation_id=str(operation_id),
+                row_index=row_result.get("row_index"),
+                source_issue_id=row_result.get("source_issue_id"),
+                resolved=row_result.get("resolved"),
+                active_row_count=updated_result["active_row_count"],
+                pending_row_count=updated_result["pending_row_count"],
+                failed_row_count=updated_result["failed_row_count"],
+            )
     except Exception as e:
         logger.warning(
             "Failed to record CLZ row progress",
             operation_id=str(operation_id),
             row_index=row_result.get("row_index"),
+            error=str(e),
+        )
+
+
+async def _mark_clz_row_active(
+    operation_id: uuid.UUID,
+    *,
+    row_index: int,
+    source_issue_id: str | None,
+) -> None:
+    """Track that a CLZ row has started processing."""
+    try:
+        async with AsyncSessionLocal() as session:
+            repo = OperationRepository(session)
+
+            stmt = (
+                select(Operation).where(Operation.id == operation_id).with_for_update()
+            )
+            query_result = await session.execute(stmt)
+            operation = query_result.scalar_one_or_none()
+            if inspect.isawaitable(operation):
+                operation = await operation
+
+            # Broad session mocks used in task unit tests won't yield a real
+            # Operation model here; skip the persistence path in that case.
+            if operation is None or not isinstance(operation, Operation):
+                return
+
+            if operation.status in {"completed", "failed"}:
+                return
+
+            current_result = apply_clz_import_visibility(dict(operation.result or {}))
+            row_key = build_clz_row_key(source_issue_id, row_index)
+            row_results = dict(current_result.get("row_results", {}) or {})
+            if row_key in row_results:
+                return
+
+            active_row_keys = set(current_result.get("active_row_keys", []) or [])
+            if row_key in active_row_keys:
+                return
+
+            updated_result = apply_clz_import_visibility(
+                {
+                    **current_result,
+                    "active_row_keys": sorted(active_row_keys | {row_key}),
+                }
+            )
+
+            await repo.update_status(
+                operation=operation,
+                status="running",
+                result=updated_result,
+            )
+            await session.commit()
+            logger.info(
+                "Marked CLZ row active",
+                operation_id=str(operation_id),
+                row_index=row_index,
+                source_issue_id=source_issue_id,
+                active_row_count=updated_result["active_row_count"],
+                pending_row_count=updated_result["pending_row_count"],
+            )
+    except Exception as e:
+        logger.warning(
+            "Failed to mark CLZ row active",
+            operation_id=str(operation_id),
+            row_index=row_index,
             error=str(e),
         )
 
@@ -1161,11 +1249,18 @@ async def resolve_clz_row_task(
     async with AsyncSessionLocal() as session:
         row_result: dict[str, Any]
         try:
+            source_issue_id = (row_data.get("Core ComicID") or "").strip() or None
+            row_key = build_clz_row_key(source_issue_id, row_index)
+            await _mark_clz_row_active(
+                operation_uuid,
+                row_index=row_index,
+                source_issue_id=source_issue_id,
+            )
             logger.info(
                 "Processing CLZ row",
                 operation_id=operation_id,
                 row=row_index,
-                source_issue_id=row_data.get("Core ComicID"),
+                source_issue_id=source_issue_id,
             )
 
             adapter = CLZAdapter()
@@ -1382,17 +1477,20 @@ async def import_clz_task(
             )
             total_rows = len(rows)
 
-            result_dict = {
-                **current_result,
-                "total_rows": total_rows,
-                "row_manifest": row_manifest,
-                "row_results": row_results,
-                "processed": processed,
-                "resolved": resolved,
-                "failed": failed,
-                "errors": errors,
-                "progress": (processed / total_rows) if total_rows else 0.0,
-            }
+            result_dict = apply_clz_import_visibility(
+                {
+                    **current_result,
+                    "total_rows": total_rows,
+                    "row_manifest": row_manifest,
+                    "row_results": row_results,
+                    "processed": processed,
+                    "resolved": resolved,
+                    "failed": failed,
+                    "errors": errors,
+                    "progress": (processed / total_rows) if total_rows else 0.0,
+                    "active_row_keys": [],
+                }
+            )
 
             remaining_rows: list[tuple[int, dict[str, str], str]] = []
             for row_index, row in enumerate(rows, start=1):

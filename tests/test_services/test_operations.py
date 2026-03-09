@@ -96,6 +96,10 @@ def sample_failed_import_operation():
         "progress": 0.5,
         "resume_count": 1,
         "retry_failed_count": 0,
+        "active_row_keys": [],
+        "active_row_count": 0,
+        "pending_row_count": 1,
+        "failed_row_count": 0,
         "summary": "Processed 1/2 CLZ rows: 1 resolved, 0 failed. 0 errors so far.",
     }
     operation.error_message = "worker crashed"
@@ -155,6 +159,10 @@ def sample_completed_import_with_failed_rows():
         "progress": 1.0,
         "resume_count": 0,
         "retry_failed_count": 0,
+        "active_row_keys": [],
+        "active_row_count": 0,
+        "pending_row_count": 0,
+        "failed_row_count": 1,
         "summary": "Processed 2 CLZ rows: 1 resolved, 1 failed. 1 errors.",
     }
     operation.error_message = None
@@ -299,6 +307,11 @@ class TestOperationsManager:
             "progress": 0.0,
             "resume_count": 0,
             "summary": "Prepared 1 CLZ rows for processing",
+            "retry_failed_count": 0,
+            "active_row_keys": [],
+            "active_row_count": 0,
+            "pending_row_count": 1,
+            "failed_row_count": 0,
         }
 
         mock_repo = MagicMock()
@@ -330,6 +343,10 @@ class TestOperationsManager:
         resumed_operation.result = {
             **sample_failed_import_operation.result,
             "resume_count": 2,
+            "active_row_keys": [],
+            "active_row_count": 0,
+            "pending_row_count": 1,
+            "failed_row_count": 0,
             "summary": "Resuming CLZ import with 1 rows remaining out of 2.",
         }
         resumed_operation.input_hash = sample_failed_import_operation.input_hash
@@ -386,6 +403,10 @@ class TestOperationsManager:
             "errors": [],
             "progress": 0.5,
             "retry_failed_count": 1,
+            "active_row_keys": [],
+            "active_row_count": 0,
+            "pending_row_count": 1,
+            "failed_row_count": 0,
             "summary": (
                 "Retrying 1 failed CLZ rows while preserving 1 resolved rows out of 2."
             ),

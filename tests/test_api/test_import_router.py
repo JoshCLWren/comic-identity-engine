@@ -106,8 +106,16 @@ async def test_import_clz_submits_checksum_addressed_operation(tmp_path: Path):
     data = response.json()
     assert data["metadata"]["file_checksum"] == create_call["file_checksum"]
     assert data["metadata"]["total_rows"] == 1
+    assert data["metadata"]["active_row_count"] == 0
+    assert data["metadata"]["pending_row_count"] == 0
+    assert data["metadata"]["failed_row_count"] == 0
     assert data["metadata"]["resume_count"] == 0
     assert data["metadata"]["retry_failed_count"] == 0
+    assert data["metadata"]["retry_state"] == {
+        "mode": "fresh",
+        "resume_count": 0,
+        "retry_failed_count": 0,
+    }
     assert data["metadata"]["retry_failed_only"] is False
 
 
@@ -182,3 +190,99 @@ async def test_import_clz_passes_retry_failed_only_flag(tmp_path: Path):
     data = response.json()
     assert data["metadata"]["retry_failed_only"] is True
     assert data["metadata"]["retry_failed_count"] == 1
+    assert data["metadata"]["retry_state"]["mode"] == "retry_failed_only"
+
+
+@pytest.mark.asyncio
+async def test_get_import_clz_status_exposes_operational_visibility():
+    mock_operation = create_mock_operation(
+        status="running",
+        result={
+            "file_checksum": "checksum-123",
+            "file_size": 128,
+            "total_rows": 5,
+            "processed": 2,
+            "resolved": 1,
+            "failed": 1,
+            "errors": [{"row": 2, "error": "Row 2 error"}],
+            "resume_count": 1,
+            "retry_failed_count": 0,
+            "active_row_keys": ["clz-003:3", "clz-004:4"],
+            "row_results": {
+                "clz-001:1": {"row_index": 1, "resolved": True},
+                "clz-002:2": {"row_index": 2, "resolved": False},
+            },
+            "summary": "Processed 2/5 CLZ rows",
+        },
+    )
+    mock_ops = AsyncMock()
+    mock_ops.get_operation = AsyncMock(return_value=mock_operation)
+
+    mock_queue = AsyncMock()
+    mock_queue.get_queue_depth = AsyncMock(return_value=3)
+
+    app = create_test_app(mock_ops=mock_ops, mock_queue=mock_queue)
+    transport = ASGITransport(app=app)
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get(f"/api/v1/import/clz/{FIXED_UUID}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["done"] is False
+    assert data["metadata"]["queue_depth"] == 3
+    assert data["metadata"]["active_row_count"] == 2
+    assert data["metadata"]["pending_row_count"] == 1
+    assert data["metadata"]["failed_row_count"] == 1
+    assert data["metadata"]["retry_state"] == {
+        "mode": "resume",
+        "resume_count": 1,
+        "retry_failed_count": 0,
+    }
+    assert data["response"]["active_row_count"] == 2
+    assert data["response"]["pending_row_count"] == 1
+    mock_queue.get_queue_depth.assert_awaited_once_with(operation_id=FIXED_UUID)
+
+
+@pytest.mark.asyncio
+async def test_get_import_clz_status_sets_queue_depth_to_zero_when_done():
+    mock_operation = create_mock_operation(
+        status="completed",
+        result={
+            "file_checksum": "checksum-123",
+            "file_size": 128,
+            "total_rows": 2,
+            "processed": 2,
+            "resolved": 2,
+            "failed": 0,
+            "errors": [],
+            "resume_count": 0,
+            "retry_failed_count": 1,
+            "row_results": {
+                "clz-001:1": {"row_index": 1, "resolved": True},
+                "clz-002:2": {"row_index": 2, "resolved": True},
+            },
+        },
+    )
+    mock_ops = AsyncMock()
+    mock_ops.get_operation = AsyncMock(return_value=mock_operation)
+
+    mock_queue = AsyncMock()
+    mock_queue.get_queue_depth = AsyncMock(return_value=99)
+
+    app = create_test_app(mock_ops=mock_ops, mock_queue=mock_queue)
+    transport = ASGITransport(app=app)
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get(f"/api/v1/import/clz/{FIXED_UUID}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["done"] is True
+    assert data["metadata"]["queue_depth"] == 0
+    assert data["metadata"]["retry_state"] == {
+        "mode": "retry_failed_only",
+        "resume_count": 0,
+        "retry_failed_count": 1,
+    }
+    mock_queue.get_queue_depth.assert_not_awaited()

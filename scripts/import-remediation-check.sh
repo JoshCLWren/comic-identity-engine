@@ -65,7 +65,7 @@ case "${step}" in
     ;;
   step6)
     common_checks
-    run uv run pytest tests/test_config.py tests/test_jobs/test_worker.py tests/test_api/test_import_router.py tests/test_api/test_jobs_router.py tests/test_services/test_operations.py tests/test_cli/test_import_clz.py tests/test_integration/test_clz_import.py tests/test_database_models.py tests/test_jobs/test_tasks.py -q
+    run uv run pytest tests/test_config.py tests/test_jobs/test_worker.py tests/test_jobs/test_queue.py tests/test_api/test_import_router.py tests/test_api/test_jobs_router.py tests/test_services/test_operations.py tests/test_services/test_identity_resolver.py tests/test_cli/test_import_clz.py tests/test_integration/test_clz_import.py tests/test_database_models.py tests/test_jobs/test_tasks.py -q
     ;;
   *)
     echo "Unknown remediation step: ${step}"

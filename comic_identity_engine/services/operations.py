@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from comic_identity_engine.database.models import Operation
 from comic_identity_engine.database.repositories import OperationRepository
+from comic_identity_engine.services.imports import apply_clz_import_visibility
 
 
 logger = structlog.get_logger(__name__)
@@ -200,10 +201,12 @@ class OperationsManager:
 
         if existing.status == "failed":
             resumed_result = dict(operation.result or {})
+            resumed_result["active_row_keys"] = []
             resumed_result["resume_count"] = (
                 int(resumed_result.get("resume_count", 0) or 0) + 1
             )
             resumed_result["summary"] = self._build_resume_summary(resumed_result)
+            resumed_result = apply_clz_import_visibility(resumed_result)
             operation = await self.operation_repo.update_status(
                 operation,
                 status="pending",
@@ -405,6 +408,10 @@ class OperationsManager:
             "summary",
             "resume_count",
             "retry_failed_count",
+            "active_row_keys",
+            "active_row_count",
+            "pending_row_count",
+            "failed_row_count",
         }
 
         for key, value in incoming_result.items():
@@ -415,7 +422,7 @@ class OperationsManager:
         if "resume_count" not in merged:
             merged["resume_count"] = int(incoming_result.get("resume_count", 0) or 0)
 
-        return merged
+        return apply_clz_import_visibility(merged)
 
     def _build_resume_summary(self, result: dict[str, Any]) -> str:
         """Build a summary message for a resumed import operation."""
@@ -458,6 +465,7 @@ class OperationsManager:
         retry_result["progress"] = (
             preserved_resolved_rows / total_rows if total_rows else 0.0
         )
+        retry_result["active_row_keys"] = []
         retry_result["retry_failed_count"] = (
             int(retry_result.get("retry_failed_count", 0) or 0) + 1
         )
@@ -466,7 +474,7 @@ class OperationsManager:
             preserved_resolved_rows=preserved_resolved_rows,
             retried_failed_rows=retried_failed_rows,
         )
-        return retry_result
+        return apply_clz_import_visibility(retry_result)
 
     def _build_retry_failed_summary(
         self,

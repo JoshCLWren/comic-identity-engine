@@ -11,7 +11,11 @@ from comic_identity_engine.services.identity_resolver import (
     MatchCandidate,
 )
 from comic_identity_engine.services.url_parser import ParsedUrl
-from comic_identity_engine.errors import ResolutionError, ValidationError
+from comic_identity_engine.errors import (
+    DuplicateEntityError,
+    ResolutionError,
+    ValidationError,
+)
 
 # Fixed UUIDs for deterministic tests
 FIXED_SERIES_RUN_ID = uuid.UUID("00000000-0000-4000-8000-000000000001")
@@ -325,6 +329,108 @@ class TestIdentityResolver:
         assert result.created_new is True
         assert result.issue_id == new_issue.id
         assert "created new issue" in result.explanation.lower()
+
+    @patch("comic_identity_engine.services.identity_resolver.ExternalMappingRepository")
+    @patch("comic_identity_engine.services.identity_resolver.IssueRepository")
+    @patch("comic_identity_engine.services.identity_resolver.SeriesRunRepository")
+    async def test_resolve_reuses_series_created_by_concurrent_import_worker(
+        self,
+        mock_series_repo_cls,
+        mock_issue_repo_cls,
+        mock_mapping_repo_cls,
+        mock_session,
+    ):
+        """Parallel import workers should refetch the canonical series winner."""
+        created_series = MagicMock()
+        created_series.id = FIXED_SERIES2_ID
+
+        created_issue = MagicMock()
+        created_issue.id = FIXED_ISSUE2_ID
+        created_issue.issue_number = "1"
+
+        mock_series_repo = MagicMock()
+        mock_series_repo.find_by_title = AsyncMock(side_effect=[None, created_series])
+        mock_series_repo.create = AsyncMock(
+            side_effect=DuplicateEntityError(
+                "Series run with title=X-Men and start_year=1991 already exists",
+                entity_type="SeriesRun",
+            )
+        )
+        mock_series_repo_cls.return_value = mock_series_repo
+
+        mock_issue_repo = MagicMock()
+        mock_issue_repo.find_by_upc = AsyncMock(return_value=None)
+        mock_issue_repo.find_by_number = AsyncMock(side_effect=[None, created_issue])
+        mock_issue_repo.find_with_variants = AsyncMock(return_value=created_issue)
+        mock_issue_repo.create = AsyncMock(return_value=created_issue)
+        mock_issue_repo_cls.return_value = mock_issue_repo
+
+        resolver = IdentityResolver(mock_session)
+        issue = await resolver._create_new_issue(
+            "X-Men",
+            1991,
+            "1",
+        )
+
+        assert issue.id == created_issue.id
+        mock_series_repo.create.assert_awaited_once_with("X-Men", 1991)
+        assert mock_series_repo.find_by_title.await_count == 2
+        mock_issue_repo.create.assert_awaited_once_with(
+            series_run_id=created_series.id,
+            issue_number="1",
+            cover_date=None,
+            upc=None,
+        )
+
+    @patch("comic_identity_engine.services.identity_resolver.ExternalMappingRepository")
+    @patch("comic_identity_engine.services.identity_resolver.IssueRepository")
+    @patch("comic_identity_engine.services.identity_resolver.SeriesRunRepository")
+    async def test_resolve_reuses_issue_created_by_concurrent_import_worker(
+        self,
+        mock_series_repo_cls,
+        mock_issue_repo_cls,
+        mock_mapping_repo_cls,
+        mock_session,
+    ):
+        """Parallel import workers should refetch the canonical issue winner."""
+        existing_series = MagicMock()
+        existing_series.id = FIXED_SERIES2_ID
+
+        created_issue = MagicMock()
+        created_issue.id = FIXED_ISSUE2_ID
+        created_issue.issue_number = "1"
+
+        mock_series_repo = MagicMock()
+        mock_series_repo.find_by_title = AsyncMock(return_value=existing_series)
+        mock_series_repo_cls.return_value = mock_series_repo
+
+        mock_issue_repo = MagicMock()
+        mock_issue_repo.find_by_upc = AsyncMock(return_value=None)
+        mock_issue_repo.find_by_number = AsyncMock(side_effect=[None, created_issue])
+        mock_issue_repo.find_with_variants = AsyncMock(return_value=created_issue)
+        mock_issue_repo.create = AsyncMock(
+            side_effect=DuplicateEntityError(
+                "Issue with series_run_id already exists",
+                entity_type="Issue",
+            )
+        )
+        mock_issue_repo_cls.return_value = mock_issue_repo
+
+        resolver = IdentityResolver(mock_session)
+        issue = await resolver._create_new_issue(
+            "X-Men",
+            1991,
+            "1",
+        )
+
+        assert issue.id == created_issue.id
+        mock_issue_repo.create.assert_awaited_once_with(
+            series_run_id=existing_series.id,
+            issue_number="1",
+            cover_date=None,
+            upc=None,
+        )
+        assert mock_issue_repo.find_by_number.await_count == 2
 
     @patch("comic_identity_engine.services.identity_resolver.ExternalMappingRepository")
     @patch("comic_identity_engine.services.identity_resolver.IssueRepository")

@@ -373,6 +373,25 @@ class JobQueue:
             verify_ssl=verify_ssl,
         )
 
+    async def get_queue_depth(
+        self,
+        *,
+        operation_id: uuid.UUID | None = None,
+    ) -> int:
+        """Return queued job depth, optionally scoped to a specific operation."""
+        pool = await self._get_pool()
+        queued_jobs = await pool.queued_jobs(queue_name=self._queue_name)
+
+        if operation_id is None:
+            return len(queued_jobs)
+
+        operation_id_str = str(operation_id)
+        return sum(
+            1
+            for job in queued_jobs
+            if getattr(job, "kwargs", {}).get("operation_id") == operation_id_str
+        )
+
     async def close(self) -> None:
         """Close the Redis connection pool.
 
@@ -380,11 +399,13 @@ class JobQueue:
         clean up resources.
         """
         if self._redis_pool is not None:
-            aclose = getattr(self._redis_pool, "aclose", None)
-            if callable(aclose):
-                await aclose()
-            else:
+            close = getattr(self._redis_pool, "close", None)
+            if callable(close):
                 await self._redis_pool.close()
+            else:
+                aclose = getattr(self._redis_pool, "aclose", None)
+                if callable(aclose):
+                    await aclose()
             self._redis_pool = None
             logger.debug("Closed Redis connection pool")
 
