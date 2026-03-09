@@ -1364,6 +1364,10 @@ async def resolve_clz_row_task(
                     "source_issue_id": source_issue_id,
                     "resolved": False,
                     "error": error_msg,
+                    "series": row_data.get("Series"),
+                    "issue": row_data.get("Issue"),
+                    "publisher": row_data.get("Publisher"),
+                    "year": row_data.get("Year"),
                 }
                 await _record_clz_row_result(operation_uuid, row_result)
                 return row_result
@@ -1418,6 +1422,10 @@ async def resolve_clz_row_task(
                 "source_issue_id": row_data.get("Core ComicID"),
                 "resolved": False,
                 "error": error_msg,
+                "series": row_data.get("Series"),
+                "issue": row_data.get("Issue"),
+                "publisher": row_data.get("Publisher"),
+                "year": row_data.get("Year"),
             }
             await _record_clz_row_result(operation_uuid, row_result)
             return row_result
@@ -1431,6 +1439,10 @@ async def resolve_clz_row_task(
                 "source_issue_id": row_data.get("Core ComicID"),
                 "resolved": False,
                 "error": error_msg,
+                "series": row_data.get("Series"),
+                "issue": row_data.get("Issue"),
+                "publisher": row_data.get("Publisher"),
+                "year": row_data.get("Year"),
             }
             await _record_clz_row_result(operation_uuid, row_result)
             return row_result
@@ -1448,6 +1460,10 @@ async def resolve_clz_row_task(
                 "source_issue_id": row_data.get("Core ComicID"),
                 "resolved": False,
                 "error": error_msg,
+                "series": row_data.get("Series"),
+                "issue": row_data.get("Issue"),
+                "publisher": row_data.get("Publisher"),
+                "year": row_data.get("Year"),
             }
             await _record_clz_row_result(operation_uuid, row_result)
             return row_result
@@ -1559,6 +1575,10 @@ async def import_clz_task(
                     "resolved": False,
                     "error": error_info["error"],
                     "skipped_reason": error_info["category"],
+                    "series": row.get("Series"),
+                    "issue": row.get("Issue"),
+                    "publisher": row.get("Publisher"),
+                    "year": row.get("Year"),
                 }
                 row_results[row_key] = row_result
 

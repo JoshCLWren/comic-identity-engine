@@ -502,11 +502,18 @@ def _generate_html_report(operation_id: str, result: dict) -> Path:
         }}
 
         .error-details-table td {{
-            font-size: 13px;
+            font-size: 12px;
+            padding: 10px 8px;
+        }}
+
+        .error-details-table th {{
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }}
 
         .error-message {{
-            max-width: 600px;
+            max-width: 400px;
             word-wrap: break-word;
         }}
 
@@ -595,8 +602,12 @@ def _generate_html_report(operation_id: str, result: dict) -> Path:
         <table class="error-details-table">
             <thead>
                 <tr>
-                    <th style="width: 80px;">Row</th>
-                    <th style="width: 150px;">Category</th>
+                    <th style="width: 60px;">Row</th>
+                    <th style="width: 120px;">Category</th>
+                    <th style="width: 200px;">Series</th>
+                    <th style="width: 100px;">Issue</th>
+                    <th style="width: 150px;">Publisher</th>
+                    <th style="width: 80px;">Year</th>
                     <th>Error Message</th>
                 </tr>
             </thead>
@@ -606,11 +617,19 @@ def _generate_html_report(operation_id: str, result: dict) -> Path:
             row = error.get("row", "Unknown")
             msg = error.get("error", "Unknown error")
             category = _get_error_category(msg)
+            series = error.get("series", "")
+            issue = error.get("issue", "")
+            publisher = error.get("publisher", "")
+            year = error.get("year", "")
 
             html_content += f"""
                 <tr>
                     <td><strong>{row}</strong></td>
                     <td><span class="category-badge category-{category}">{category}</span></td>
+                    <td>{series}</td>
+                    <td>{issue}</td>
+                    <td>{publisher}</td>
+                    <td>{year}</td>
                     <td class="error-message">{msg}</td>
                 </tr>
 """
