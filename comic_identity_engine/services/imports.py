@@ -35,7 +35,7 @@ def build_clz_row_manifest(rows: list[dict[str, str]]) -> list[dict[str, Any]]:
 def apply_clz_import_visibility(result: dict[str, Any]) -> dict[str, Any]:
     """Normalize derived CLZ import visibility counters.
 
-    Preserves errors array for API responses.
+    Preserves errors array for API responses and builds error categories.
     """
     normalized_result = dict(result)
     row_results = dict(normalized_result.get("row_results", {}) or {})
@@ -62,18 +62,39 @@ def apply_clz_import_visibility(result: dict[str, Any]) -> dict[str, Any]:
 
     # Build errors array from row_results for API responses
     errors = []
+    error_categories: dict[str, list[dict[str, Any]]] = {}
+
     for row_key, row_result in row_results.items():
         if "error" in row_result:
-            errors.append(
-                {
-                    "row": row_result.get("row_index"),
-                    "error": row_result.get("error"),
-                    "source_issue_id": row_result.get("source_issue_id"),
-                }
-            )
+            error_entry = {
+                "row": row_result.get("row_index"),
+                "error": row_result.get("error"),
+                "source_issue_id": row_result.get("source_issue_id"),
+            }
+            errors.append(error_entry)
+
+            # Categorize errors for analysis
+            error_msg = row_result.get("error", "")
+            category = _categorize_error(error_msg)
+            if category not in error_categories:
+                error_categories[category] = []
+            error_categories[category].append(error_entry)
 
     # Sort by row number for consistent ordering
     errors.sort(key=lambda e: e.get("row", 0))
+
+    # Build error summary
+    error_summary = [
+        {
+            "category": category,
+            "count": len(entries),
+            "sample_rows": [e["row"] for e in entries[:5]],
+            "description": _get_error_description(category),
+        }
+        for category, entries in sorted(
+            error_categories.items(), key=lambda x: -len(x[1])
+        )
+    ]
 
     normalized_result.update(
         {
@@ -83,9 +104,45 @@ def apply_clz_import_visibility(result: dict[str, Any]) -> dict[str, Any]:
             "pending_row_count": pending_row_count,
             "failed_row_count": failed,
             "errors": errors,
+            "error_summary": error_summary,
+            "error_categories": list(error_categories.keys()),
         }
     )
     return normalized_result
+
+
+def _categorize_error(error_msg: str) -> str:
+    """Categorize error message for analysis."""
+    error_lower = error_msg.lower()
+
+    if "source series start year" in error_lower or "year" in error_lower:
+        return "missing_series_year"
+    if "multiple rows were found" in error_lower:
+        return "duplicate_data"
+    if "validation error" in error_lower:
+        return "validation_error"
+    if "resolution error" in error_lower:
+        return "resolution_failed"
+    if "network" in error_lower or "connection" in error_lower:
+        return "network_error"
+    if "timeout" in error_lower:
+        return "timeout"
+
+    return "other"
+
+
+def _get_error_description(category: str) -> str:
+    """Get human-readable description for error category."""
+    descriptions = {
+        "missing_series_year": "CSV rows with empty Year field - cannot determine which series year",
+        "duplicate_data": "Database has duplicate issues/series - needs cleanup",
+        "validation_error": "Invalid data format or required fields missing",
+        "resolution_failed": "Could not match to existing canonical issue/series",
+        "network_error": "Failed to fetch data from external platform",
+        "timeout": "Request timed out",
+        "other": "Uncategorized error",
+    }
+    return descriptions.get(category, "Unknown error type")
 
 
 def build_clz_import_health(

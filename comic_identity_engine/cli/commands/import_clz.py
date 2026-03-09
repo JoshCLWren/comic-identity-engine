@@ -367,15 +367,38 @@ def _display_import_result(
 
     if errors:
         console.print()
-        error_table = Table(show_header=True, header_style="bold red")
-        error_table.add_column("Row", style="dim")
-        error_table.add_column("Error")
 
-        # Show all errors
+        # Show error summary first
+        error_summary = result.get("error_summary", [])
+        if error_summary:
+            summary_table = Table(title="Error Summary", show_header=True)
+            summary_table.add_column("Category", style="cyan")
+            summary_table.add_column("Count", style="yellow", justify="right")
+            summary_table.add_column("Sample Rows", style="dim")
+            summary_table.add_column("Description", style="dim")
+
+            for category_data in error_summary:
+                summary_table.add_row(
+                    category_data["category"],
+                    str(category_data["count"]),
+                    str(category_data["sample_rows"][:5]),
+                    category_data["description"][:80],
+                )
+
+            console.print(summary_table)
+            console.print()
+
+        # Show all errors grouped by category
+        error_table = Table(show_header=True, header_style="bold red")
+        error_table.add_column("Row", style="cyan", no_wrap=True, width=6)
+        error_table.add_column("Category", style="yellow", width=20)
+        error_table.add_column("Error", style="red")
+
         for error in errors:
-            row_num = error.get("row", "N/A")
-            error_msg = error.get("error", "")
-            error_table.add_row(str(row_num), error_msg[:200])
+            row = str(error.get("row", "Unknown"))
+            msg = error.get("error", "Unknown error")
+            category = _get_error_category(msg)
+            error_table.add_row(row, category, msg[:150])
 
         console.print(error_table)
 
@@ -383,6 +406,26 @@ def _display_import_result(
         console.print()
         console.print("[dim]Raw response data:[/dim]")
         console.print(result)
+
+
+def _get_error_category(error_msg: str) -> str:
+    """Categorize error message for display."""
+    error_lower = error_msg.lower()
+
+    if "source series start year" in error_lower or "year" in error_lower:
+        return "missing_year"
+    if "multiple rows were found" in error_lower:
+        return "duplicate"
+    if "validation error" in error_lower:
+        return "validation"
+    if "resolution error" in error_lower:
+        return "resolution"
+    if "network" in error_lower or "connection" in error_lower:
+        return "network"
+    if "timeout" in error_lower:
+        return "timeout"
+
+    return "other"
 
 
 if __name__ == "__main__":
