@@ -288,7 +288,6 @@ def _poll_import_operation(
             response = client.get(f"{api_url}/api/v1/import/clz/{operation_id}")
             response.raise_for_status()
             data = response.json()
-            elapsed = time.time() - start_time
 
             last_metadata = data.get("metadata", {}) or {}
 

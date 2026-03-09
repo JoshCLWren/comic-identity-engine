@@ -390,7 +390,9 @@ class TestOperationsManager:
                 "Retrying 1 failed CLZ rows while preserving 1 resolved rows out of 2."
             ),
         }
-        retried_operation.input_hash = sample_completed_import_with_failed_rows.input_hash
+        retried_operation.input_hash = (
+            sample_completed_import_with_failed_rows.input_hash
+        )
         retried_operation.error_message = None
 
         mock_repo = MagicMock()

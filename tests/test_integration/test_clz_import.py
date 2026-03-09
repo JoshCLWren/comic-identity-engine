@@ -5,7 +5,6 @@ using the new task-based parallel processing architecture.
 """
 
 import uuid
-from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
