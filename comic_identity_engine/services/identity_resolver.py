@@ -22,7 +22,7 @@ import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import date
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 import jellyfish
 import structlog

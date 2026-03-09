@@ -268,7 +268,9 @@ class TestCanonicalCreationRaceSafety:
     """Tests for race-safe canonical creation."""
 
     @pytest.mark.asyncio
-    async def test_create_new_issue_refetches_series_winner_after_duplicate(self) -> None:
+    async def test_create_new_issue_refetches_series_winner_after_duplicate(
+        self,
+    ) -> None:
         """The resolver should refetch a duplicate-winning series and continue."""
         resolver = IdentityResolver(AsyncMock())
         winning_series = SeriesRun(
@@ -303,7 +305,9 @@ class TestCanonicalCreationRaceSafety:
         resolver.issue_repo.create.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_create_new_issue_refetches_issue_winner_after_duplicate(self) -> None:
+    async def test_create_new_issue_refetches_issue_winner_after_duplicate(
+        self,
+    ) -> None:
         """The resolver should refetch the canonical issue after a duplicate insert race."""
         resolver = IdentityResolver(AsyncMock())
         series = SeriesRun(
@@ -1033,7 +1037,9 @@ class TestIssueRepositoryErrorPaths:
         mock_session.rollback.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_create_non_canonical_integrity_error(self, mock_session: AsyncMock) -> None:
+    async def test_create_non_canonical_integrity_error(
+        self, mock_session: AsyncMock
+    ) -> None:
         """Non-canonical integrity failures should still raise RepositoryError."""
         repo = IssueRepository(mock_session)
         series_run_id = uuid.uuid4()
@@ -1043,7 +1049,7 @@ class TestIssueRepositoryErrorPaths:
         mock_session.execute.return_value = mock_result
         mock_session.flush = AsyncMock(
             side_effect=_integrity_error(
-                "duplicate key value violates unique constraint \"ix_issues_upc\"",
+                'duplicate key value violates unique constraint "ix_issues_upc"',
                 constraint_name="ix_issues_upc",
             )
         )
