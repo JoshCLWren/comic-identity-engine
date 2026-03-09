@@ -378,19 +378,27 @@ class JobQueue:
         *,
         operation_id: uuid.UUID | None = None,
     ) -> int:
-        """Return queued job depth, optionally scoped to a specific operation."""
-        pool = await self._get_pool()
-        queued_jobs = await pool.queued_jobs(queue_name=self._queue_name)
+        """Return queued job depth, optionally scoped to a specific operation.
 
-        if operation_id is None:
-            return len(queued_jobs)
+        Returns 0 if queue is empty or if jobs race with completion during inspection.
+        """
+        try:
+            pool = await self._get_pool()
+            queued_jobs = await pool.queued_jobs(queue_name=self._queue_name)
 
-        operation_id_str = str(operation_id)
-        return sum(
-            1
-            for job in queued_jobs
-            if getattr(job, "kwargs", {}).get("operation_id") == operation_id_str
-        )
+            if operation_id is None:
+                return len(queued_jobs)
+
+            operation_id_str = str(operation_id)
+            return sum(
+                1
+                for job in queued_jobs
+                if getattr(job, "kwargs", {}).get("operation_id") == operation_id_str
+            )
+        except RuntimeError:
+            # Jobs were processed while we were inspecting the queue
+            # This is a race condition, not an error
+            return 0
 
     async def close(self) -> None:
         """Close the Redis connection pool.

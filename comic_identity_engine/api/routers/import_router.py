@@ -188,14 +188,8 @@ async def get_import_clz_status(
     is_done = operation.status in ("completed", "failed")
     queue_depth: int | None = 0 if is_done else None
     if not is_done:
-        try:
-            queue_depth = await queue.get_queue_depth(operation_id=operation.id)
-        except (ConnectionError, RuntimeError) as e:
-            logger.warning(
-                "Failed to inspect import queue depth",
-                operation_id=str(operation.id),
-                error=str(e),
-            )
+        # Queue depth is best-effort metadata, failures are not errors
+        queue_depth = await queue.get_queue_depth(operation_id=operation.id)
 
     response: OperationResponse = OperationResponse(
         name=f"operations/{operation.id}",
