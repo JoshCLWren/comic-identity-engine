@@ -12,8 +12,8 @@ BRANCH="import-remediation/complete-import-hardening"
 STEP_CHECK_SCRIPT="scripts/import-remediation-check.sh"
 FINAL_VERIFY_SCRIPT="scripts/import-remediation-verify.sh"
 BASE_HEAD_FILE=".git/import-remediation-base-head"
-LOG_DIR="${CIE_IMPORT_REMEDIATION_LOG_DIR:-/tmp}"
-MAX_REPAIR_ATTEMPTS="${CIE_IMPORT_REMEDIATION_MAX_REPAIR_ATTEMPTS:-3}"
+LOG_DIR="/tmp"
+MAX_REPAIR_ATTEMPTS=3
 
 if git checkout -b "${BRANCH}" 2>/dev/null; then
   git rev-parse HEAD > "${BASE_HEAD_FILE}"

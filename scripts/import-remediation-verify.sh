@@ -3,9 +3,9 @@ set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
-CACHE_ROOT="${CIE_IMPORT_REMEDIATION_CACHE_DIR:-$PWD/.cache/import-remediation}"
-export UV_CACHE_DIR="${CIE_IMPORT_REMEDIATION_UV_CACHE_DIR:-${CACHE_ROOT}/uv}"
-export RUFF_CACHE_DIR="${CIE_IMPORT_REMEDIATION_RUFF_CACHE_DIR:-${CACHE_ROOT}/ruff}"
+CACHE_ROOT="$PWD/.cache/import-remediation"
+export UV_CACHE_DIR="${CACHE_ROOT}/uv"
+export RUFF_CACHE_DIR="${CACHE_ROOT}/ruff"
 mkdir -p "${UV_CACHE_DIR}" "${RUFF_CACHE_DIR}"
 
 BASE_HEAD_FILE=".git/import-remediation-base-head"
@@ -53,12 +53,7 @@ if rg -n '^- \[\s\]|^- \[-\]|^- \[!\]' IMPORT_REMEDIATION_TODO.md; then
   exit 1
 fi
 
-if [ "${IMPORT_REMEDIATION_RUN_FULL_CI:-0}" = "1" ]; then
-  echo "Running full repository CI checks"
-  bash scripts/ci.sh
-else
-  echo "Skipping full repository CI checks"
-  echo "Set IMPORT_REMEDIATION_RUN_FULL_CI=1 to include scripts/ci.sh"
-fi
+echo "Running full repository CI checks"
+bash scripts/ci.sh
 
 echo "Import remediation verification completed successfully"

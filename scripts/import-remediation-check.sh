@@ -3,9 +3,9 @@ set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
-CACHE_ROOT="${CIE_IMPORT_REMEDIATION_CACHE_DIR:-$PWD/.cache/import-remediation}"
-export UV_CACHE_DIR="${CIE_IMPORT_REMEDIATION_UV_CACHE_DIR:-${CACHE_ROOT}/uv}"
-export RUFF_CACHE_DIR="${CIE_IMPORT_REMEDIATION_RUFF_CACHE_DIR:-${CACHE_ROOT}/ruff}"
+CACHE_ROOT="$PWD/.cache/import-remediation"
+export UV_CACHE_DIR="${CACHE_ROOT}/uv"
+export RUFF_CACHE_DIR="${CACHE_ROOT}/ruff"
 mkdir -p "${UV_CACHE_DIR}" "${RUFF_CACHE_DIR}"
 
 if [ $# -lt 1 ] || [ $# -gt 2 ]; then
