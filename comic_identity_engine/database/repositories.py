@@ -104,7 +104,10 @@ class SeriesRunRepository:
         stmt: Select[SeriesRun] = select(SeriesRun).where(SeriesRun.title == title)
         if start_year is not None:
             stmt = stmt.where(SeriesRun.start_year == start_year)
+            result = await self.session.execute(stmt)
+            return result.scalar_one_or_none()
 
+        stmt = stmt.order_by(SeriesRun.start_year).limit(1)
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
