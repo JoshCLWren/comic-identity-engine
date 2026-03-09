@@ -683,11 +683,6 @@ def _display_import_result(
         "[dim]Open the report in your browser to view full details and error breakdowns.[/dim]"
     )
 
-    if verbose:
-        console.print()
-        console.print("[dim]Raw response data:[/dim]")
-        console.print(result)
-
 
 def _get_error_category(error_msg: str) -> str:
     """Categorize error message for display."""
