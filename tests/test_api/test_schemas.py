@@ -140,6 +140,7 @@ class TestImportClzRequest:
             file_path="/uploads/collections/clz_collection_2024.csv"
         )
         assert request.file_path == "/uploads/collections/clz_collection_2024.csv"
+        assert request.retry_failed_only is False
 
     def test_relative_path_passes(self):
         """Relative path should be accepted."""
@@ -161,6 +162,14 @@ class TestImportClzRequest:
         with pytest.raises(ValidationError) as exc_info:
             ImportClzRequest()
         assert "file_path" in str(exc_info.value)
+
+    def test_retry_failed_only_flag_passes(self):
+        """Explicit retry-failed-only flag should be accepted."""
+        request = ImportClzRequest(
+            file_path="/uploads/collections/clz_collection_2024.csv",
+            retry_failed_only=True,
+        )
+        assert request.retry_failed_only is True
 
 
 class TestHealthResponse:
@@ -673,6 +682,7 @@ class TestSchemaExamples:
         for example in examples:
             request = ImportClzRequest(**example)
             assert request.file_path == example["file_path"]
+            assert request.retry_failed_only == example["retry_failed_only"]
 
     def test_health_response_examples(self):
         """HealthResponse examples should be valid."""

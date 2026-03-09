@@ -95,9 +95,69 @@ def sample_failed_import_operation():
         "errors": [],
         "progress": 0.5,
         "resume_count": 1,
+        "retry_failed_count": 0,
         "summary": "Processed 1/2 CLZ rows: 1 resolved, 0 failed. 0 errors so far.",
     }
     operation.error_message = "worker crashed"
+    return operation
+
+
+@pytest.fixture
+def sample_completed_import_with_failed_rows():
+    """Create a completed import with one failed row to retry."""
+    operation = MagicMock()
+    operation.id = uuid.uuid4()
+    operation.operation_type = "import_clz"
+    operation.status = "completed"
+    operation.input_hash = "checksum-hash"
+    operation.result = {
+        "file_checksum": "checksum-123",
+        "file_size": 128,
+        "total_rows": 2,
+        "row_manifest": [
+            {
+                "row_index": 1,
+                "source_issue_id": "clz-001",
+                "row_key": "clz-001:1",
+            },
+            {
+                "row_index": 2,
+                "source_issue_id": "clz-002",
+                "row_key": "clz-002:2",
+            },
+        ],
+        "row_results": {
+            "clz-001:1": {
+                "row_index": 1,
+                "row_key": "clz-001:1",
+                "source_issue_id": "clz-001",
+                "resolved": True,
+            },
+            "clz-002:2": {
+                "row_index": 2,
+                "row_key": "clz-002:2",
+                "source_issue_id": "clz-002",
+                "resolved": False,
+                "error": "Row 2 error: Series not found",
+            },
+        },
+        "processed": 2,
+        "resolved": 1,
+        "failed": 1,
+        "errors": [
+            {
+                "row": 2,
+                "row_key": "clz-002:2",
+                "source_issue_id": "clz-002",
+                "error": "Row 2 error: Series not found",
+            }
+        ],
+        "progress": 1.0,
+        "resume_count": 0,
+        "retry_failed_count": 0,
+        "summary": "Processed 2 CLZ rows: 1 resolved, 1 failed. 1 errors.",
+    }
+    operation.error_message = None
     return operation
 
 
@@ -197,6 +257,7 @@ class TestOperationsManager:
             "errors": [],
             "progress": 0.0,
             "resume_count": 0,
+            "retry_failed_count": 0,
             "summary": "Prepared 1 CLZ rows for processing",
         }
 
@@ -294,6 +355,65 @@ class TestOperationsManager:
             sample_failed_import_operation,
             status="pending",
             result=resumed_operation.result,
+            clear_error_message=True,
+        )
+
+    @patch("comic_identity_engine.services.operations.OperationRepository")
+    async def test_create_or_resume_import_operation_retries_only_failed_rows(
+        self,
+        mock_repo_cls,
+        mock_session,
+        sample_completed_import_with_failed_rows,
+    ):
+        """Test same-file retry-failed-only preserves resolved rows and requeues failures."""
+        retried_operation = MagicMock()
+        retried_operation.id = sample_completed_import_with_failed_rows.id
+        retried_operation.operation_type = "import_clz"
+        retried_operation.status = "pending"
+        retried_operation.result = {
+            **sample_completed_import_with_failed_rows.result,
+            "row_results": {
+                "clz-001:1": {
+                    "row_index": 1,
+                    "row_key": "clz-001:1",
+                    "source_issue_id": "clz-001",
+                    "resolved": True,
+                }
+            },
+            "processed": 1,
+            "resolved": 1,
+            "failed": 0,
+            "errors": [],
+            "progress": 0.5,
+            "retry_failed_count": 1,
+            "summary": (
+                "Retrying 1 failed CLZ rows while preserving 1 resolved rows out of 2."
+            ),
+        }
+        retried_operation.input_hash = sample_completed_import_with_failed_rows.input_hash
+        retried_operation.error_message = None
+
+        mock_repo = MagicMock()
+        mock_repo.find_by_input_hash = AsyncMock(
+            return_value=sample_completed_import_with_failed_rows
+        )
+        mock_repo.update_status = AsyncMock(return_value=retried_operation)
+        mock_repo_cls.return_value = mock_repo
+
+        manager = OperationsManager(mock_session)
+        operation, should_enqueue = await manager.create_or_resume_import_operation(
+            operation_type="import_clz",
+            file_checksum="checksum-123",
+            initial_result=dict(sample_completed_import_with_failed_rows.result),
+            retry_failed_only=True,
+        )
+
+        assert operation is retried_operation
+        assert should_enqueue is True
+        mock_repo.update_status.assert_awaited_once_with(
+            sample_completed_import_with_failed_rows,
+            status="pending",
+            result=retried_operation.result,
             clear_error_message=True,
         )
 

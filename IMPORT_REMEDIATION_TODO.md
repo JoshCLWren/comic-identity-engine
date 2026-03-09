@@ -31,10 +31,10 @@ Status markers:
 - [x] Add explicit resume semantics for incomplete imports.
   Success criteria:
   A stuck or interrupted same-file import can be resumed without creating a fresh operation id.
-- [ ] Add retry-failed-only semantics.
+- [x] Add retry-failed-only semantics.
   Success criteria:
   Same-file retry can requeue failed rows without resubmitting already-resolved work.
-- [ ] Add CLI attach/resume support.
+- [x] Add CLI attach/resume support.
   Success criteria:
   CLI can monitor an existing operation id without re-posting the file.
 

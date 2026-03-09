@@ -64,7 +64,7 @@ async def test_import_clz_submits_checksum_addressed_operation(tmp_path: Path):
 
     mock_operation = create_mock_operation(
         status="pending",
-        result={"resume_count": 0},
+        result={"resume_count": 0, "retry_failed_count": 0},
     )
     mock_ops = AsyncMock()
     mock_ops.create_or_resume_import_operation = AsyncMock(
@@ -107,6 +107,8 @@ async def test_import_clz_submits_checksum_addressed_operation(tmp_path: Path):
     assert data["metadata"]["file_checksum"] == create_call["file_checksum"]
     assert data["metadata"]["total_rows"] == 1
     assert data["metadata"]["resume_count"] == 0
+    assert data["metadata"]["retry_failed_count"] == 0
+    assert data["metadata"]["retry_failed_only"] is False
 
 
 @pytest.mark.asyncio
@@ -121,7 +123,7 @@ async def test_import_clz_returns_existing_running_operation_without_requeue(
 
     mock_operation = create_mock_operation(
         status="running",
-        result={"resume_count": 2},
+        result={"resume_count": 2, "retry_failed_count": 0},
     )
     mock_ops = AsyncMock()
     mock_ops.create_or_resume_import_operation = AsyncMock(
@@ -143,3 +145,40 @@ async def test_import_clz_returns_existing_running_operation_without_requeue(
     assert response.status_code == 202
     mock_queue.enqueue_import_clz.assert_not_awaited()
     assert response.json()["metadata"]["resume_count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_import_clz_passes_retry_failed_only_flag(tmp_path: Path):
+    csv_file = tmp_path / "collection.csv"
+    csv_file.write_text(
+        "Series,Issue,Publisher,Year,Core ComicID\nX-Men,1,Marvel,1991,clz-001\n",
+        encoding="utf-8",
+    )
+
+    mock_operation = create_mock_operation(
+        status="pending",
+        result={"resume_count": 0, "retry_failed_count": 1},
+    )
+    mock_ops = AsyncMock()
+    mock_ops.create_or_resume_import_operation = AsyncMock(
+        return_value=(mock_operation, True)
+    )
+
+    mock_queue = AsyncMock()
+    mock_queue.enqueue_import_clz = AsyncMock()
+
+    app = create_test_app(mock_ops=mock_ops, mock_queue=mock_queue)
+    transport = ASGITransport(app=app)
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/import/clz",
+            json={"file_path": str(csv_file), "retry_failed_only": True},
+        )
+
+    assert response.status_code == 202
+    create_call = mock_ops.create_or_resume_import_operation.await_args.kwargs
+    assert create_call["retry_failed_only"] is True
+    data = response.json()
+    assert data["metadata"]["retry_failed_only"] is True
+    assert data["metadata"]["retry_failed_count"] == 1

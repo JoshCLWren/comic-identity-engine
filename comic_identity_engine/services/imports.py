@@ -64,6 +64,7 @@ class ClzImportFingerprint:
             "errors": [],
             "progress": 0.0,
             "resume_count": 0,
+            "retry_failed_count": 0,
             "summary": summary,
         }
 

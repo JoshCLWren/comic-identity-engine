@@ -5,6 +5,7 @@ CLZ CSV collections into the Comic Identity Engine.
 
 USAGE:
     cie-import-clz <csv_path> [options]
+    cie-import-clz --operation-id <operation_id> [options]
     cie-import-clz collection.csv
     cie-import-clz collection.csv --limit 100
     cie-import-clz collection.csv --api-url http://localhost:8000
@@ -27,7 +28,7 @@ from rich.table import Table
 
 
 @click.command(name="cie-import-clz")
-@click.argument("csv_path", type=click.Path(exists=True), required=True)
+@click.argument("csv_path", type=click.Path(exists=True), required=False)
 @click.option(
     "--api-url",
     default="http://localhost:8000",
@@ -58,75 +59,126 @@ from rich.table import Table
     is_flag=True,
     help="Enable DEBUG level logging with full stack traces",
 )
+@click.option(
+    "--operation-id",
+    "--attach",
+    "operation_id",
+    help="Attach to an existing CLZ import operation without submitting a file",
+)
+@click.option(
+    "--retry-failed-only",
+    is_flag=True,
+    help="Requeue failed rows for a same-file import without reposting resolved rows",
+)
 def cli_import_clz(
-    csv_path: str,
+    csv_path: str | None,
     api_url: str,
     wait: bool,
     timeout: int,
     verbose: bool,
     debug: bool,
+    operation_id: str | None,
+    retry_failed_only: bool,
 ) -> None:
     """Import comic data from a CLZ CSV export file.
 
     This command submits a CLZ CSV file to the Comic Identity Engine API
-    for batch import and displays the results. The CSV file will be processed
-    in the background by the worker.
+    for batch import and displays the results, or attaches to an existing
+    import operation without creating a new one.
 
     \b
     Examples:
         cie-import-clz clz_export.csv
+        cie-import-clz --operation-id 550e8400-e29b-41d4-a716-446655440000
         cie-import-clz clz_export.csv --no-wait
         cie-import-clz clz_export.csv --verbose
     """
     console = Console(stderr=True)
 
-    csv_file = Path(csv_path)
-    if not csv_file.exists():
-        console.print(f"[red]CSV file not found: {csv_path}[/red]")
-        sys.exit(1)
-
-    if not csv_file.suffix.lower() == ".csv":
-        console.print(
-            f"[yellow]Warning: File does not have .csv extension: {csv_path}[/yellow]"
+    if csv_path and operation_id:
+        raise click.UsageError(
+            "Provide either a CSV path or --operation-id/--attach, not both."
         )
+    if not csv_path and not operation_id:
+        raise click.UsageError(
+            "Provide a CSV path to submit or --operation-id/--attach to monitor."
+        )
+    if retry_failed_only and not csv_path:
+        raise click.UsageError("--retry-failed-only requires a CSV path submission.")
+
+    csv_file: Path | None = None
+    if csv_path:
+        csv_file = Path(csv_path)
+        if not csv_file.exists():
+            console.print(f"[red]CSV file not found: {csv_path}[/red]")
+            sys.exit(1)
+
+        if not csv_file.suffix.lower() == ".csv":
+            console.print(
+                f"[yellow]Warning: File does not have .csv extension: {csv_path}[/yellow]"
+            )
+
+    normalized_operation_id = (
+        _normalize_operation_id(operation_id) if operation_id else None
+    )
 
     if verbose or debug:
-        console.print(f"[dim]Importing CLZ CSV: {csv_path}[/dim]")
+        if csv_file is not None:
+            console.print(f"[dim]Importing CLZ CSV: {csv_file}[/dim]")
+            if retry_failed_only:
+                console.print("[dim]Retry mode: failed rows only[/dim]")
+        else:
+            console.print(
+                f"[dim]Attaching to CLZ import operation: {normalized_operation_id}[/dim]"
+            )
         console.print(f"[dim]API endpoint: {api_url}[/dim]")
 
     try:
         with httpx.Client(timeout=30.0) as client:
-            if verbose or debug:
-                console.print("[dim]Submitting CSV to API...[/dim]")
+            if normalized_operation_id is None:
+                if verbose or debug:
+                    console.print("[dim]Submitting CSV to API...[/dim]")
 
-            response = client.post(
-                f"{api_url}/api/v1/import/clz",
-                json={"file_path": str(csv_file.absolute())},
-            )
-            response.raise_for_status()
-            data = response.json()
+                response = client.post(
+                    f"{api_url}/api/v1/import/clz",
+                    json={
+                        "file_path": str(csv_file.absolute()),
+                        "retry_failed_only": retry_failed_only,
+                    },
+                )
+                response.raise_for_status()
+                data = response.json()
 
-            operation_name = data.get("name")
-            if not operation_name:
-                raise RuntimeError("API response missing operation name")
+                operation_name = data.get("name")
+                if not operation_name:
+                    raise RuntimeError("API response missing operation name")
 
-            operation_id = operation_name.split("/", 1)[1]
+                normalized_operation_id = _normalize_operation_id(operation_name)
 
-            if verbose or debug:
-                console.print(f"[dim]Operation ID: {operation_id}[/dim]")
+                if verbose or debug:
+                    console.print(f"[dim]Operation ID: {normalized_operation_id}[/dim]")
+            elif verbose or debug:
+                console.print(
+                    "[dim]Skipping submission and polling existing operation[/dim]"
+                )
 
             if not wait:
-                click.echo(f"Import operation submitted: {operation_id}")
+                action = "attached" if operation_id else "submitted"
+                click.echo(f"Import operation {action}: {normalized_operation_id}")
                 return
 
             final_data = _poll_import_operation(
                 client=client,
                 api_url=api_url,
-                operation_id=operation_id,
+                operation_id=normalized_operation_id,
                 timeout=timeout,
                 verbose=verbose,
                 console=console,
-                csv_path=csv_file,
+                display_name=(
+                    csv_file.name
+                    if csv_file is not None
+                    else f"operation {normalized_operation_id}"
+                ),
             )
 
             _display_import_result(final_data, console, verbose=verbose)
@@ -179,6 +231,13 @@ def cli_import_clz(
         sys.exit(1)
 
 
+def _normalize_operation_id(operation_ref: str) -> str:
+    """Accept either a raw UUID or an AIP-151 operation resource name."""
+    if operation_ref.startswith("operations/"):
+        return operation_ref.split("/", 1)[1]
+    return operation_ref
+
+
 def _poll_import_operation(
     client: httpx.Client,
     api_url: str,
@@ -186,7 +245,7 @@ def _poll_import_operation(
     timeout: int,
     verbose: bool,
     console: Console,
-    csv_path: Path,
+    display_name: str,
 ) -> dict:
     """Poll for import operation completion with progress display.
 
@@ -197,7 +256,7 @@ def _poll_import_operation(
         timeout: Maximum time to wait in seconds
         verbose: Whether to show verbose output
         console: Rich console for output
-        csv_path: Path to CSV file (for display)
+        display_name: Human-readable label for the operation
 
     Returns:
         The completed operation response data
@@ -219,7 +278,7 @@ def _poll_import_operation(
         console=console,
     ) as progress:
         task = progress.add_task(
-            f"[cyan]Importing {csv_path.name}[/cyan]",
+            f"[cyan]Importing {display_name}[/cyan]",
             total=100,
         )
 
@@ -244,7 +303,7 @@ def _poll_import_operation(
                         task,
                         completed=processed,
                         total=total_rows,
-                        description=f"[cyan]Importing {csv_path.name}[/cyan] ({processed}/{total_rows} rows processed)",
+                        description=f"[cyan]Importing {display_name}[/cyan] ({processed}/{total_rows} rows processed)",
                     )
                 else:
                     progress.update(

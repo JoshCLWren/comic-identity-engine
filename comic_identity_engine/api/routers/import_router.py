@@ -72,6 +72,7 @@ async def import_clz(
             operation_type="import_clz",
             file_checksum=prepared_import.file_checksum,
             initial_result=prepared_import.to_operation_result(),
+            retry_failed_only=request.retry_failed_only,
         )
 
         if should_enqueue:
@@ -96,6 +97,12 @@ async def import_clz(
                     if isinstance(operation.result, dict)
                     else 0
                 ),
+                "retry_failed_count": (
+                    operation.result.get("retry_failed_count", 0)
+                    if isinstance(operation.result, dict)
+                    else 0
+                ),
+                "retry_failed_only": request.retry_failed_only,
                 "status": operation.status,
             },
         )
@@ -166,7 +173,13 @@ async def get_import_clz_status(
     )
 
     if isinstance(operation.result, dict):
-        for key in ("file_checksum", "file_size", "total_rows", "resume_count"):
+        for key in (
+            "file_checksum",
+            "file_size",
+            "total_rows",
+            "resume_count",
+            "retry_failed_count",
+        ):
             if key in operation.result:
                 response.metadata[key] = operation.result[key]
 

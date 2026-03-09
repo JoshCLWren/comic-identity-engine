@@ -1,12 +1,10 @@
-"""Test CLI import_clz command with new response format.
+"""Test CLI import_clz command with new response format."""
 
-This test verifies that the CLI correctly handles the new response format
-from the import_clz_task: {total_rows, processed, resolved, failed, errors, summary}
-"""
-
-import json
+from pathlib import Path
 from unittest.mock import MagicMock, patch
+
 from click.testing import CliRunner
+
 from comic_identity_engine.cli.commands.import_clz import cli_import_clz
 
 
@@ -243,6 +241,101 @@ def test_import_clz_calculates_success_rate():
         output = result.output
         # Should show 95% success rate (95/100)
         assert "95.0%" in output or "95%" in output
+
+
+def test_import_clz_attach_polls_existing_operation_without_posting():
+    """Attach mode should poll an existing operation instead of submitting a file."""
+
+    runner = CliRunner()
+
+    with patch(
+        "comic_identity_engine.cli.commands.import_clz.httpx.Client"
+    ) as mock_client_class:
+        mock_client = MagicMock()
+        mock_client_class.return_value.__enter__.return_value = mock_client
+
+        poll_response = MagicMock()
+        poll_response.status_code = 200
+        poll_response.json.return_value = {
+            "name": "operations/test-operation-id",
+            "done": True,
+            "response": {
+                "total_rows": 10,
+                "processed": 10,
+                "resolved": 9,
+                "failed": 1,
+                "errors": [],
+                "summary": "Processed 10 CLZ rows: 9 resolved, 1 failed. 0 errors.",
+            },
+            "metadata": {"status": "completed"},
+        }
+        mock_client.get.return_value = poll_response
+
+        result = runner.invoke(
+            cli_import_clz, ["--operation-id", "operations/test-operation-id"]
+        )
+
+        assert result.exit_code == 0
+        mock_client.post.assert_not_called()
+        mock_client.get.assert_called_once_with(
+            "http://localhost:8000/api/v1/import/clz/test-operation-id"
+        )
+        assert "Resolved" in result.output
+        assert "9" in result.output
+
+
+def test_import_clz_retry_failed_only_posts_flag():
+    """Retry-failed-only mode should submit the explicit retry flag."""
+
+    runner = CliRunner()
+
+    with patch(
+        "comic_identity_engine.cli.commands.import_clz.httpx.Client"
+    ) as mock_client_class:
+        mock_client = MagicMock()
+        mock_client_class.return_value.__enter__.return_value = mock_client
+
+        submit_response = MagicMock()
+        submit_response.status_code = 202
+        submit_response.json.return_value = {
+            "name": "operations/test-operation-id",
+            "done": False,
+            "metadata": {"status": "pending"},
+        }
+        mock_client.post.return_value = submit_response
+
+        poll_response = MagicMock()
+        poll_response.status_code = 200
+        poll_response.json.return_value = {
+            "name": "operations/test-operation-id",
+            "done": True,
+            "response": {
+                "total_rows": 10,
+                "processed": 10,
+                "resolved": 10,
+                "failed": 0,
+                "errors": [],
+                "summary": "Processed 10 CLZ rows: 10 resolved, 0 failed. 0 errors.",
+            },
+            "metadata": {"status": "completed"},
+        }
+        mock_client.get.return_value = poll_response
+
+        result = runner.invoke(
+            cli_import_clz,
+            ["tests/fixtures/clz/sample_clz_export.csv", "--retry-failed-only"],
+        )
+
+        assert result.exit_code == 0
+        mock_client.post.assert_called_once_with(
+            "http://localhost:8000/api/v1/import/clz",
+            json={
+                "file_path": str(
+                    Path("tests/fixtures/clz/sample_clz_export.csv").absolute()
+                ),
+                "retry_failed_only": True,
+            },
+        )
 
 
 if __name__ == "__main__":

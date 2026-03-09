@@ -52,6 +52,7 @@ X-Men,10,Marvel,1992,clz-010,April 1992,012345678901"""
             "comic_identity_engine.jobs.tasks.OperationsManager"
         ) as mock_ops_manager_class:
             mock_ops_manager = Mock()
+            mock_ops_manager.get_operation = AsyncMock(return_value=None)
             mock_ops_manager.mark_running = AsyncMock()
             mock_ops_manager.update_operation = AsyncMock()
             mock_ops_manager_class.return_value = mock_ops_manager
@@ -94,7 +95,7 @@ X-Men,10,Marvel,1992,clz-010,April 1992,012345678901"""
         assert result["total_rows"] == 10
         assert result["processed"] == 0
         assert "summary" in result
-        assert "Enqueued 10 CLZ row tasks" in result["summary"]
+        assert "Enqueued 10 pending CLZ row tasks" in result["summary"]
         assert mock_queue.enqueue_resolve_clz_row.call_count == 10
         mock_ops_manager.update_operation.assert_called_once()
 
@@ -119,6 +120,7 @@ class TestResolveClzRow:
             "comic_identity_engine.jobs.tasks.OperationsManager"
         ) as mock_ops_manager_class:
             mock_ops_manager = Mock()
+            mock_ops_manager.get_operation = AsyncMock(return_value=None)
             mock_ops_manager.mark_running = AsyncMock()
             mock_ops_manager.update_operation = AsyncMock()
             mock_ops_manager_class.return_value = mock_ops_manager
@@ -248,6 +250,7 @@ class TestClzImportMedium:
             "comic_identity_engine.jobs.tasks.OperationsManager"
         ) as mock_ops_manager_class:
             mock_ops_manager = Mock()
+            mock_ops_manager.get_operation = AsyncMock(return_value=None)
             mock_ops_manager.mark_running = AsyncMock()
             mock_ops_manager.update_operation = AsyncMock()
             mock_ops_manager_class.return_value = mock_ops_manager
@@ -287,6 +290,117 @@ class TestClzImportMedium:
 
         assert result["total_rows"] == 100
         assert result["processed"] == 0
-        assert "Enqueued 100 CLZ row tasks" in result["summary"]
+        assert "Enqueued 100 pending CLZ row tasks" in result["summary"]
         assert mock_queue.enqueue_resolve_clz_row.call_count == 100
         mock_ops_manager.update_operation.assert_called_once()
+
+    async def test_import_retry_failed_only_enqueues_only_missing_rows(
+        self, mock_async_session_local, tmp_path
+    ):
+        """Retry-failed-only state should preserve resolved rows and requeue only missing work."""
+        csv_file = tmp_path / "test_retry.csv"
+        csv_content = """Series,Issue,Publisher,Year,Core ComicID
+X-Men,1,Marvel,1991,clz-001
+X-Men,2,Marvel,1991,clz-002
+X-Men,3,Marvel,1991,clz-003"""
+        csv_file.write_text(csv_content)
+
+        existing_operation = Mock()
+        existing_operation.result = {
+            "total_rows": 3,
+            "row_manifest": [
+                {
+                    "row_index": 1,
+                    "source_issue_id": "clz-001",
+                    "row_key": "clz-001:1",
+                },
+                {
+                    "row_index": 2,
+                    "source_issue_id": "clz-002",
+                    "row_key": "clz-002:2",
+                },
+                {
+                    "row_index": 3,
+                    "source_issue_id": "clz-003",
+                    "row_key": "clz-003:3",
+                },
+            ],
+            "row_results": {
+                "clz-001:1": {
+                    "row_index": 1,
+                    "row_key": "clz-001:1",
+                    "source_issue_id": "clz-001",
+                    "resolved": True,
+                }
+            },
+            "processed": 1,
+            "resolved": 1,
+            "failed": 0,
+            "errors": [],
+            "progress": 1 / 3,
+        }
+
+        with patch(
+            "comic_identity_engine.jobs.tasks.OperationsManager"
+        ) as mock_ops_manager_class:
+            mock_ops_manager = Mock()
+            mock_ops_manager.get_operation = AsyncMock(return_value=existing_operation)
+            mock_ops_manager.mark_running = AsyncMock()
+            mock_ops_manager.update_operation = AsyncMock()
+            mock_ops_manager_class.return_value = mock_ops_manager
+
+            with patch(
+                "comic_identity_engine.jobs.tasks.CLZAdapter"
+            ) as mock_adapter_class:
+                mock_adapter = Mock()
+                mock_adapter.load_csv_from_file.return_value = [
+                    {
+                        "Series": "X-Men",
+                        "Issue": "1",
+                        "Publisher": "Marvel",
+                        "Year": "1991",
+                        "Core ComicID": "clz-001",
+                    },
+                    {
+                        "Series": "X-Men",
+                        "Issue": "2",
+                        "Publisher": "Marvel",
+                        "Year": "1991",
+                        "Core ComicID": "clz-002",
+                    },
+                    {
+                        "Series": "X-Men",
+                        "Issue": "3",
+                        "Publisher": "Marvel",
+                        "Year": "1991",
+                        "Core ComicID": "clz-003",
+                    },
+                ]
+                mock_adapter_class.return_value = mock_adapter
+
+                with patch(
+                    "comic_identity_engine.jobs.queue.JobQueue"
+                ) as mock_queue_class:
+                    mock_queue = Mock()
+                    mock_job = Mock()
+                    mock_job.job_id = "test-job"
+                    mock_queue.enqueue_resolve_clz_row = AsyncMock(
+                        return_value=mock_job
+                    )
+                    mock_queue_class.return_value = mock_queue
+
+                    result = await import_clz_task(
+                        {},
+                        str(csv_file),
+                        str(TEST_OPERATION_ID),
+                    )
+
+        assert result["processed"] == 1
+        assert result["resolved"] == 1
+        assert "Enqueued 2 pending CLZ row tasks" in result["summary"]
+        assert mock_queue.enqueue_resolve_clz_row.await_count == 2
+        enqueued_rows = [
+            call.kwargs["row_index"]
+            for call in mock_queue.enqueue_resolve_clz_row.await_args_list
+        ]
+        assert enqueued_rows == [2, 3]

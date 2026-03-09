@@ -137,6 +137,7 @@ class OperationsManager:
         operation_type: str,
         file_checksum: str,
         initial_result: dict[str, Any],
+        retry_failed_only: bool = False,
     ) -> tuple[Operation, bool]:
         """Create or resume a checksum-addressed import operation.
 
@@ -171,6 +172,24 @@ class OperationsManager:
         merged_result = self._merge_import_result(existing.result, initial_result)
         operation = existing
         should_enqueue = False
+
+        if retry_failed_only and existing.status in {"completed", "failed"}:
+            retried_result = self._build_retry_failed_result(merged_result)
+            if retried_result is not None:
+                operation = await self.operation_repo.update_status(
+                    existing,
+                    status="pending",
+                    result=retried_result,
+                    clear_error_message=True,
+                )
+                logger.info(
+                    "Requeued failed CLZ rows on checksum-addressed import",
+                    operation_id=str(operation.id),
+                    operation_type=operation.operation_type,
+                    status=operation.status,
+                    file_checksum=file_checksum,
+                )
+                return operation, True
 
         if merged_result != (existing.result or {}):
             operation = await self.operation_repo.update_status(
@@ -385,6 +404,7 @@ class OperationsManager:
             "progress",
             "summary",
             "resume_count",
+            "retry_failed_count",
         }
 
         for key, value in incoming_result.items():
@@ -408,6 +428,58 @@ class OperationsManager:
                 f"out of {total_rows}."
             )
         return f"Resuming CLZ import for {total_rows} rows."
+
+    def _build_retry_failed_result(
+        self,
+        result: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        """Clear failed row results so the import task can enqueue them again."""
+        row_results = dict(result.get("row_results", {}) or {})
+        if not row_results:
+            return None
+
+        preserved_row_results = {
+            row_key: row_result
+            for row_key, row_result in row_results.items()
+            if row_result.get("resolved")
+        }
+        retried_failed_rows = len(row_results) - len(preserved_row_results)
+        if retried_failed_rows <= 0:
+            return None
+
+        total_rows = int(result.get("total_rows", 0) or 0)
+        preserved_resolved_rows = len(preserved_row_results)
+        retry_result = dict(result)
+        retry_result["row_results"] = preserved_row_results
+        retry_result["processed"] = preserved_resolved_rows
+        retry_result["resolved"] = preserved_resolved_rows
+        retry_result["failed"] = 0
+        retry_result["errors"] = []
+        retry_result["progress"] = (
+            preserved_resolved_rows / total_rows if total_rows else 0.0
+        )
+        retry_result["retry_failed_count"] = (
+            int(retry_result.get("retry_failed_count", 0) or 0) + 1
+        )
+        retry_result["summary"] = self._build_retry_failed_summary(
+            total_rows=total_rows,
+            preserved_resolved_rows=preserved_resolved_rows,
+            retried_failed_rows=retried_failed_rows,
+        )
+        return retry_result
+
+    def _build_retry_failed_summary(
+        self,
+        *,
+        total_rows: int,
+        preserved_resolved_rows: int,
+        retried_failed_rows: int,
+    ) -> str:
+        """Build a summary message for a failed-row-only retry."""
+        return (
+            f"Retrying {retried_failed_rows} failed CLZ rows while preserving "
+            f"{preserved_resolved_rows} resolved rows out of {total_rows}."
+        )
 
     def _compute_idempotency_key(
         self, operation_type: str, input_data: dict[str, Any]
