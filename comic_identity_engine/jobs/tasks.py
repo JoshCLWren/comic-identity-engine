@@ -1573,7 +1573,7 @@ async def import_clz_task(
 
                 # Build set of existing (series, issue) pairs for fast lookup
                 existing_pairs = {
-                    (issue.series_run.series_title, issue.issue_number)
+                    (issue.series_run.title, issue.issue_number)
                     for issue in existing_issues
                 }
 

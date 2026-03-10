@@ -313,13 +313,19 @@ class IssueRepository:
         for series_title, issue_number in series_issue_pairs:
             conditions.append(
                 and_(
-                    SeriesRun.series_title == series_title,
+                    SeriesRun.title == series_title,
                     Issue.issue_number == issue_number,
                 )
             )
 
         # Join with SeriesRun to filter by series_title
-        stmt = select(Issue).join(SeriesRun).where(or_(*conditions))
+        # Use selectinload to eagerly load series_run relationship
+        stmt = (
+            select(Issue)
+            .join(SeriesRun)
+            .options(selectinload(Issue.series_run))
+            .where(or_(*conditions))
+        )
 
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
