@@ -1554,6 +1554,74 @@ async def import_clz_task(
                 else:
                     validated_rows.append((row_index, row, row_key))
 
+            # Bulk lookup: Check which issues already exist in database
+            if validated_rows:
+                from comic_identity_engine.database.repositories import IssueRepository
+
+                issue_repo = IssueRepository(session)
+
+                # Extract (series_title, issue_number) pairs for bulk lookup
+                series_issue_pairs = [
+                    (row.get("Series", "").strip(), row.get("Issue", "").strip())
+                    for _, row, _ in validated_rows
+                ]
+
+                # Bulk query: Find which issues already exist
+                existing_issues = await issue_repo.bulk_find_by_series_issue(
+                    [(series, issue) for series, issue in series_issue_pairs]
+                )
+
+                # Build set of existing (series, issue) pairs for fast lookup
+                existing_pairs = {
+                    (issue.series_run.series_title, issue.issue_number)
+                    for issue in existing_issues
+                }
+
+                # Filter out rows that already exist
+                pre_filtered_rows: list[tuple[int, dict[str, str], str]] = []
+                pre_skipped_count = 0
+
+                for row_index, row, row_key in validated_rows:
+                    series_title = row.get("Series", "").strip()
+                    issue_number = row.get("Issue", "").strip()
+
+                    if (series_title, issue_number) in existing_pairs:
+                        # Issue already exists, mark as resolved without queueing
+                        source_issue_id = row.get("Core ComicID", "").strip()
+
+                        # Find the actual issue to get its ID
+                        for issue in existing_issues:
+                            if (
+                                issue.series_run.series_title == series_title
+                                and issue.issue_number == issue_number
+                            ):
+                                row_result = {
+                                    "row_index": row_index,
+                                    "row_key": row_key,
+                                    "source_issue_id": source_issue_id,
+                                    "resolved": True,
+                                    "issue_id": str(issue.id),
+                                    "existing_mapping": True,
+                                    "cross_platform_found": 0,
+                                    "skipped_reason": "already_exists",
+                                }
+                                row_results[row_key] = row_result
+                                pre_skipped_count += 1
+                                break
+                    else:
+                        # Issue doesn't exist, needs processing
+                        pre_filtered_rows.append((row_index, row, row_key))
+
+                validated_rows = pre_filtered_rows
+
+                if pre_skipped_count > 0:
+                    logger.info(
+                        "Bulk database lookup skipped already-existing issues",
+                        operation_id=operation_id,
+                        skipped_count=pre_skipped_count,
+                        will_enqueue=len(validated_rows),
+                    )
+
             # Record skipped rows as failures
             for row_index, row, row_key, error_info in skipped_rows:
                 row_result = {

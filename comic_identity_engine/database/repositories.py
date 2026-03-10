@@ -18,7 +18,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Delete, Select, delete, exc as sqlalchemy_exc, select
+from sqlalchemy import Delete, Select, and_, delete, exc as sqlalchemy_exc, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -287,6 +287,42 @@ class IssueRepository:
         stmt: Select[Issue] = select(Issue).where(Issue.upc == upc)
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def bulk_find_by_series_issue(
+        self,
+        series_issue_pairs: list[tuple[str, str]],
+    ) -> list[Issue]:
+        """Bulk find issues by (series_title, issue_number) pairs.
+
+        This is much more efficient than individual lookups when checking
+        if multiple issues already exist in the database.
+
+        Args:
+            series_issue_pairs: List of (series_title, issue_number) tuples
+
+        Returns:
+            List of matching Issue entities
+        """
+        from sqlalchemy import or_
+
+        if not series_issue_pairs:
+            return []
+
+        # Build OR conditions for all (series_title, issue_number) pairs
+        conditions = []
+        for series_title, issue_number in series_issue_pairs:
+            conditions.append(
+                and_(
+                    SeriesRun.series_title == series_title,
+                    Issue.issue_number == issue_number,
+                )
+            )
+
+        # Join with SeriesRun to filter by series_title
+        stmt = select(Issue).join(SeriesRun).where(or_(*conditions))
+
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
 
     async def create(
         self,
