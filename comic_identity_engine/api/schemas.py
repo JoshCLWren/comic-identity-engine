@@ -111,7 +111,7 @@ class ImportClzRequest(BaseModel):
             "examples": [
                 {
                     "file_path": "/uploads/collections/clz_collection_2024.csv",
-                    "retry_failed_only": False,
+                    "retry_failed_only": True,
                 }
             ]
         }
@@ -123,9 +123,9 @@ class ImportClzRequest(BaseModel):
         examples=["/uploads/collections/clz_collection_2024.csv"],
     )
     retry_failed_only: bool = Field(
-        default=False,
+        default=True,
         description="Requeue failed rows from an existing same-file import without reposting resolved work",
-        examples=[False],
+        examples=[True],
     )
 
 

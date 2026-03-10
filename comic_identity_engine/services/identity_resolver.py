@@ -306,6 +306,7 @@ class IdentityResolver:
                         incoming_upc=upc,
                         variant_suffix=normalized_variant_suffix,
                         variant_name=normalized_variant_name,
+                        cover_date=cover_date,
                     )
                     logger.info(
                         "Found valid issue match",
@@ -677,6 +678,7 @@ class IdentityResolver:
         incoming_upc: Optional[str],
         variant_suffix: Optional[str],
         variant_name: Optional[str],
+        cover_date: Optional[date] = None,
     ) -> str:
         """Reject ambiguous duplicate issues or capture them as variants."""
         if issue_id is None or not incoming_upc:
@@ -691,11 +693,17 @@ class IdentityResolver:
             return ""
 
         if not variant_suffix:
-            raise ValidationError(
-                "Matched canonical issue has a different UPC and no variant suffix "
-                "was provided; reject this row for review instead of merging it "
-                "into the base issue"
-            )
+            # If we have a cover date, derive a printing suffix from it
+            # (e.g., "2006-10" for an Oct 2006 printing) so the row is
+            # accepted as a variant instead of rejected outright.
+            if cover_date:
+                variant_suffix = cover_date.strftime("%Y-%m")
+            else:
+                raise ValidationError(
+                    "Matched canonical issue has a different UPC and no variant suffix "
+                    "was provided; reject this row for review instead of merging it "
+                    "into the base issue"
+                )
 
         return await self._ensure_variant(
             issue_id=matched_issue.id,

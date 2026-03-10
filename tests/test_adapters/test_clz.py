@@ -456,8 +456,8 @@ class TestCLZAdapterEdgeCases:
         ):
             adapter.fetch_series_from_csv_row("test", row)
 
-    def test_issue_with_whitespace_only_number(self):
-        """Issue number with only whitespace raises ValidationError."""
+    def test_issue_with_whitespace_only_number_no_format(self):
+        """Issue number with only whitespace and no Format raises ValidationError."""
         row = {
             "Core ComicID": "12345",
             "Series": "Test Series",
@@ -466,8 +466,21 @@ class TestCLZAdapterEdgeCases:
 
         adapter = CLZAdapter()
 
-        with pytest.raises(ValidationError, match="Invalid issue number"):
+        with pytest.raises(ValidationError, match="missing required field: Issue"):
             adapter.fetch_issue_from_csv_row(row)
+
+    def test_issue_with_whitespace_only_number_with_format(self):
+        """Issue number with only whitespace but Format present defaults to 1."""
+        row = {
+            "Core ComicID": "12345",
+            "Series": "Test Series",
+            "Issue": "   ",
+            "Format": "Trade Paperback",
+        }
+
+        adapter = CLZAdapter()
+        result = adapter.fetch_issue_from_csv_row(row)
+        assert result.issue_number == "1"
 
     def test_parse_year_out_of_range_low(self):
         """Year below valid range returns None."""
@@ -722,4 +735,117 @@ class TestCLZAdapterRealData:
 
         result = adapter.fetch_issue_from_csv_row(rows[2])
         assert result.issue_number == "100.5"
+        assert result.variant_suffix is None
+
+
+class TestCLZAdapterFormatCodes:
+    """Tests for CLZ format-code-as-issue-number handling (TP, HC, GN, etc.)."""
+
+    def _make_row(self, issue: str, **overrides: str) -> dict[str, str]:
+        base = {
+            "Core ComicID": "999",
+            "Series": "Hellboy and The B.P.R.D. 1952",
+            "Issue": issue,
+            "Publisher": "Dark Horse Comics",
+            "Cover Year": "2015",
+        }
+        base.update(overrides)
+        return base
+
+    def test_tp_defaults_to_issue_1(self):
+        """Trade Paperback 'TP' should map to issue 1 with variant TP."""
+        adapter = CLZAdapter()
+        result = adapter.fetch_issue_from_csv_row(self._make_row("TP"))
+        assert result.issue_number == "1"
+        assert result.variant_suffix == "TP"
+
+    def test_hc_defaults_to_issue_1(self):
+        """Hardcover 'HC' should map to issue 1 with variant HC."""
+        adapter = CLZAdapter()
+        result = adapter.fetch_issue_from_csv_row(self._make_row("HC"))
+        assert result.issue_number == "1"
+        assert result.variant_suffix == "HC"
+
+    def test_gn_defaults_to_issue_1(self):
+        """Graphic Novel 'GN' should map to issue 1 with variant GN."""
+        adapter = CLZAdapter()
+        result = adapter.fetch_issue_from_csv_row(self._make_row("GN"))
+        assert result.issue_number == "1"
+        assert result.variant_suffix == "GN"
+
+    def test_tp_case_insensitive(self):
+        """Format codes should be case-insensitive."""
+        adapter = CLZAdapter()
+        result = adapter.fetch_issue_from_csv_row(self._make_row("tp"))
+        assert result.issue_number == "1"
+        assert result.variant_suffix == "TP"
+
+    def test_tp_with_volume_number(self):
+        """'TP-1' should map to issue 1 with variant TP."""
+        adapter = CLZAdapter()
+        result = adapter.fetch_issue_from_csv_row(self._make_row("TP-1"))
+        assert result.issue_number == "1"
+        assert result.variant_suffix == "TP"
+
+    def test_hc_with_volume_2(self):
+        """'HC-2' should map to issue 2 with variant HC."""
+        adapter = CLZAdapter()
+        result = adapter.fetch_issue_from_csv_row(self._make_row("HC-2"))
+        assert result.issue_number == "2"
+        assert result.variant_suffix == "HC"
+
+    def test_number_format_variant(self):
+        """'1HC-E' should map to issue 1 with variant HC-E."""
+        adapter = CLZAdapter()
+        result = adapter.fetch_issue_from_csv_row(self._make_row("1HC-E"))
+        assert result.issue_number == "1"
+        assert result.variant_suffix == "HC-E"
+
+    def test_number_format_no_variant(self):
+        """'2TP' should map to issue 2 with variant TP."""
+        adapter = CLZAdapter()
+        result = adapter.fetch_issue_from_csv_row(self._make_row("2TP"))
+        assert result.issue_number == "2"
+        assert result.variant_suffix == "TP"
+
+    def test_normal_issue_not_affected(self):
+        """Normal issue numbers should still work."""
+        adapter = CLZAdapter()
+        result = adapter.fetch_issue_from_csv_row(self._make_row("#5"))
+        assert result.issue_number == "5"
+        assert result.variant_suffix is None
+
+    def test_normal_issue_with_variant_not_affected(self):
+        """Normal issues with letter variants should still work."""
+        adapter = CLZAdapter()
+        result = adapter.fetch_issue_from_csv_row(self._make_row("#1A"))
+        assert result.issue_number == "1"
+        assert result.variant_suffix == "A"
+
+    def test_tp_with_letter_variant(self):
+        """'TP-D' should map to issue 1 with variant TP-D."""
+        adapter = CLZAdapter()
+        result = adapter.fetch_issue_from_csv_row(self._make_row("TP-D"))
+        assert result.issue_number == "1"
+        assert result.variant_suffix == "TP-D"
+
+    def test_tp_with_letter_variant_b(self):
+        """'TP-B' should map to issue 1 with variant TP-B."""
+        adapter = CLZAdapter()
+        result = adapter.fetch_issue_from_csv_row(self._make_row("TP-B"))
+        assert result.issue_number == "1"
+        assert result.variant_suffix == "TP-B"
+
+    def test_unicode_half_with_variant(self):
+        """'½-A' (unicode fraction) should map to issue 1/2 with variant A."""
+        adapter = CLZAdapter()
+        result = adapter.fetch_issue_from_csv_row(self._make_row("½-A"))
+        assert result.issue_number == "1/2"
+        assert result.variant_suffix == "A"
+
+    def test_unicode_half_bare(self):
+        """'½' should map to issue 1/2."""
+        adapter = CLZAdapter()
+        result = adapter.fetch_issue_from_csv_row(self._make_row("½"))
+        assert result.issue_number == "1/2"
         assert result.variant_suffix is None

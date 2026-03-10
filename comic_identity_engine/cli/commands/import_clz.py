@@ -69,9 +69,10 @@ from rich.table import Table
     help="Attach to an existing CLZ import operation without submitting a file",
 )
 @click.option(
-    "--retry-failed-only",
-    is_flag=True,
+    "--retry-failed-only/--no-retry-failed-only",
+    default=True,
     help="Requeue failed rows for a same-file import without reposting resolved rows",
+    show_default=True,
 )
 def cli_import_clz(
     csv_path: str | None,
@@ -881,12 +882,10 @@ def _display_import_result(
     operation_id = data.get("name", "unknown")
     report_path = _generate_html_report(operation_id, result)
 
+    report_url = f"file://{report_path.resolve()}"
     console.print()
     console.print(
-        f"[green]✓[/green] Detailed HTML report generated: [cyan]{report_path}[/cyan]"
-    )
-    console.print(
-        "[dim]Open the report in your browser to view full details and error breakdowns.[/dim]"
+        f"[green]✓[/green] Detailed HTML report generated: [link={report_url}][cyan]{report_path}[/cyan][/link]"
     )
 
 

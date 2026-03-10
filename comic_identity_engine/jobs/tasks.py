@@ -875,13 +875,15 @@ def _validate_clz_row_for_import(
             "category": "missing_series",
         }
 
-    # Check for Issue field
+    # Check for Issue field — allow missing if Format indicates a collected edition
     issue_number = (row.get("Issue") or "").strip()
     if not issue_number:
-        return {
-            "error": f"Row {row_index} validation error: Missing required field 'Issue'",
-            "category": "missing_issue",
-        }
+        fmt = (row.get("Format") or "").strip().lower()
+        if not fmt:
+            return {
+                "error": f"Row {row_index} validation error: Missing required field 'Issue'",
+                "category": "missing_issue",
+            }
 
     # Don't pre-filter rows with empty Year - let identity resolver try
     # It might succeed by finding the series by title or existing mapping

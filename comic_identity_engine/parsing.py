@@ -117,28 +117,34 @@ def parse_issue_candidate(raw: str) -> ParseResult:
             error_message="Issue number must contain digits",
         )
 
-    # Canonical pattern: optional leading -, digits, optional decimal, optional slash
-    # Valid: -1, 0, 0.5, 1/2, 0001
-    # Invalid: ABC, 1..2, 1//2, 1-2-3, X-Men -1
-    # Note: We match from start, but allow non-greedy matching to handle variants
-    canonical_pattern = r"^(-?\d+(\.\d+)?(/\d+)?)"
-    match = re.match(canonical_pattern, working)
+    # Special non-numeric issue tokens (e.g., INF for ∞ infinity issues)
+    special_token_match = re.match(r"^(INF)(?=[A-Za-z.]|$)", working, re.IGNORECASE)
+    if special_token_match:
+        canonical_issue_number = special_token_match.group(1).upper()
+        working_after = working[len(canonical_issue_number):]
+    else:
+        # Canonical pattern: optional leading -, digits, optional decimal, optional slash
+        # Valid: -1, 0, 0.5, 1/2, 0001
+        # Invalid: ABC, 1..2, 1//2, 1-2-3, X-Men -1
+        canonical_pattern = r"^(-?\d+(\.\d+)?(/\d+)?)"
+        match = re.match(canonical_pattern, working)
 
-    if not match:
-        return ParseResult(
-            success=False,
-            raw=preserved_raw,
-            error_code="INVALID_FORMAT",
-            error_message="Invalid issue number format",
-        )
+        if not match:
+            return ParseResult(
+                success=False,
+                raw=preserved_raw,
+                error_code="INVALID_FORMAT",
+                error_message="Invalid issue number format",
+            )
 
-    canonical_issue_number = match.group(0)
+        canonical_issue_number = match.group(0)
+        working_after = working[len(canonical_issue_number):]
 
     # Phase 3: Variant Extraction
     # Check if there's a variant suffix after the canonical number
     variant_suffix = None
-    if len(working) > len(canonical_issue_number):
-        remaining = working[len(canonical_issue_number) :]
+    remaining = working_after
+    if remaining:
         # Variant must contain only letters and dots, and must start with letter or dot+letter
         # Allow patterns like: A, .DE, WIZ.SIGNED
         if remaining and re.match(r"^(\.?)[A-Za-z]", remaining):
