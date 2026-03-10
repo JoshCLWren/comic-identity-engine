@@ -471,6 +471,59 @@ class TestIdentityResolver:
                 issue_number="1",
             )
 
+    def test_validate_creation_inputs_falls_back_to_cover_date_year(self, mock_session):
+        """Test cover_date year fallback when series_start_year is None."""
+        from datetime import date
+
+        resolver = IdentityResolver(mock_session)
+
+        # When series_start_year is None but cover_date is provided,
+        # should use cover_date.year as fallback
+        title, year, issue = resolver._validate_creation_inputs(
+            series_title="Majestic, Vol. 2",
+            series_start_year=None,
+            issue_number="2",
+            cover_date=date(2004, 11, 1),
+        )
+
+        assert title == "Majestic, Vol. 2"
+        assert year == 2004
+        assert issue == "2"
+
+    def test_validate_creation_inputs_prefers_explicit_series_start_year(
+        self, mock_session
+    ):
+        """Test explicit series_start_year takes precedence over cover_date."""
+        from datetime import date
+
+        resolver = IdentityResolver(mock_session)
+
+        # When both are provided, series_start_year should be used
+        title, year, issue = resolver._validate_creation_inputs(
+            series_title="Majestic, Vol. 2",
+            series_start_year=1999,
+            issue_number="2",
+            cover_date=date(2004, 11, 1),
+        )
+
+        assert year == 1999, "Should prefer explicit series_start_year over cover_date"
+
+    def test_validate_creation_inputs_raises_when_no_year_available(self, mock_session):
+        """Test ValidationError when neither series_start_year nor cover_date available."""
+        import pytest
+
+        resolver = IdentityResolver(mock_session)
+
+        with pytest.raises(ValidationError) as exc_info:
+            resolver._validate_creation_inputs(
+                series_title="Majestic, Vol. 2",
+                series_start_year=None,
+                issue_number="2",
+                cover_date=None,
+            )
+
+        assert "source series start year" in str(exc_info.value).lower()
+
 
 @pytest.mark.asyncio
 class TestMatchCandidate:

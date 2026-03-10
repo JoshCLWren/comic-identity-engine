@@ -15,6 +15,7 @@ import csv
 from datetime import date
 from io import StringIO
 from pathlib import Path
+from typing import Any
 
 from comic_identity_engine.adapters import (
     SourceAdapter,
@@ -161,7 +162,9 @@ class CLZAdapter(SourceAdapter):
             )
 
         publisher = row.get("Publisher")
-        year_began = self._parse_year(row.get("Year") or row.get("Release Year"))
+        year_began = self._parse_year(
+            row.get("Year") or row.get("Cover Year") or row.get("Release Year")
+        )
 
         return SeriesCandidate(
             source=self.SOURCE,
@@ -214,7 +217,9 @@ class CLZAdapter(SourceAdapter):
             )
 
         publisher = row.get("Publisher")
-        year_began = self._parse_year(row.get("Year") or row.get("Release Year"))
+        year_began = self._parse_year(
+            row.get("Year") or row.get("Cover Year") or row.get("Release Year")
+        )
 
         cover_date = self._parse_date(row.get("Cover Date"))
         publication_date = self._parse_date(row.get("Release Date"))
@@ -350,7 +355,7 @@ class CLZAdapter(SourceAdapter):
 
         return None
 
-    def _parse_page_count(self, page_str: str | None) -> int | None:
+    def _parse_page_count(self, page_str: Any) -> int | None:
         """Parse page count from CLZ page count string.
 
         Args:

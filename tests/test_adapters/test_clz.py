@@ -142,6 +142,7 @@ class TestCLZAdapterIssueMapping:
     def test_successful_issue_mapping_xmen_negative1(self):
         """CLZ issue row for X-Men #-1A maps correctly."""
         row = {
+            "Core ComicID": "75960601772099911",
             "Series": "X-Men, Vol. 1",
             "Issue": "#-1A",
             "Publisher": "Marvel Comics",
@@ -155,10 +156,10 @@ class TestCLZAdapterIssueMapping:
         }
 
         adapter = CLZAdapter()
-        result = adapter.fetch_issue_from_csv_row("row-0", row)
+        result = adapter.fetch_issue_from_csv_row(row)
 
         assert result.source == "clz"
-        assert result.source_issue_id == "row-0"
+        assert result.source_issue_id == "75960601772099911"
         assert result.series_title == "X-Men, Vol. 1"
         assert result.issue_number == "-1"
         assert result.variant_suffix == "A"
@@ -173,6 +174,7 @@ class TestCLZAdapterIssueMapping:
     def test_issue_mapping_without_variant(self):
         """Issue row without variant suffix."""
         row = {
+            "Core ComicID": "12345",
             "Series": "X-Men, Vol. 1",
             "Issue": "#1",
             "Publisher": "Marvel Comics",
@@ -183,7 +185,7 @@ class TestCLZAdapterIssueMapping:
         }
 
         adapter = CLZAdapter()
-        result = adapter.fetch_issue_from_csv_row("row-1", row)
+        result = adapter.fetch_issue_from_csv_row(row)
 
         assert result.issue_number == "1"
         assert result.variant_suffix is None
@@ -192,6 +194,7 @@ class TestCLZAdapterIssueMapping:
     def test_issue_mapping_issue_zero(self):
         """Issue #0 maps correctly."""
         row = {
+            "Core ComicID": "12346",
             "Series": "Amazing Spider-Man, Vol. 1",
             "Issue": "#0",
             "Publisher": "Marvel Comics",
@@ -202,7 +205,7 @@ class TestCLZAdapterIssueMapping:
         }
 
         adapter = CLZAdapter()
-        result = adapter.fetch_issue_from_csv_row("row-0", row)
+        result = adapter.fetch_issue_from_csv_row(row)
 
         assert result.issue_number == "0"
         assert result.variant_suffix is None
@@ -210,6 +213,7 @@ class TestCLZAdapterIssueMapping:
     def test_issue_mapping_issue_half(self):
         """Issue #1/2 maps correctly."""
         row = {
+            "Core ComicID": "12347",
             "Series": "Amazing Spider-Man, Vol. 1",
             "Issue": "#1/2",
             "Publisher": "Marvel Comics",
@@ -218,7 +222,7 @@ class TestCLZAdapterIssueMapping:
         }
 
         adapter = CLZAdapter()
-        result = adapter.fetch_issue_from_csv_row("row-half", row)
+        result = adapter.fetch_issue_from_csv_row(row)
 
         assert result.issue_number == "1/2"
         assert result.variant_suffix is None
@@ -228,11 +232,12 @@ class TestCLZAdapterIssueMapping:
         adapter = CLZAdapter()
 
         with pytest.raises(ValidationError, match="CSV row is empty"):
-            adapter.fetch_issue_from_csv_row("test", {})
+            adapter.fetch_issue_from_csv_row({})
 
     def test_issue_missing_series_title(self):
         """Row without Series field raises ValidationError."""
         row = {
+            "Core ComicID": "12345",
             "Issue": "#1",
         }
 
@@ -241,22 +246,24 @@ class TestCLZAdapterIssueMapping:
         with pytest.raises(
             ValidationError, match="missing required field: series title"
         ):
-            adapter.fetch_issue_from_csv_row("test", row)
+            adapter.fetch_issue_from_csv_row(row)
 
     def test_issue_missing_issue_number(self):
         """Row without Issue field raises ValidationError."""
         row = {
+            "Core ComicID": "12345",
             "Series": "Test Series",
         }
 
         adapter = CLZAdapter()
 
         with pytest.raises(ValidationError, match="missing required field: Issue"):
-            adapter.fetch_issue_from_csv_row("test", row)
+            adapter.fetch_issue_from_csv_row(row)
 
     def test_issue_empty_issue_number(self):
         """Empty Issue field raises ValidationError."""
         row = {
+            "Core ComicID": "12345",
             "Series": "Test Series",
             "Issue": "",
         }
@@ -264,11 +271,12 @@ class TestCLZAdapterIssueMapping:
         adapter = CLZAdapter()
 
         with pytest.raises(ValidationError, match="missing required field: Issue"):
-            adapter.fetch_issue_from_csv_row("test", row)
+            adapter.fetch_issue_from_csv_row(row)
 
     def test_issue_invalid_issue_number_multi_issue(self):
         """Multi-issue range raises ValidationError."""
         row = {
+            "Core ComicID": "12345",
             "Series": "Test Series",
             "Issue": "1-3",
         }
@@ -276,7 +284,7 @@ class TestCLZAdapterIssueMapping:
         adapter = CLZAdapter()
 
         with pytest.raises(ValidationError, match="Invalid issue number"):
-            adapter.fetch_issue_from_csv_row("test", row)
+            adapter.fetch_issue_from_csv_row(row)
 
 
 class TestCLZAdapterHelpers:
@@ -315,7 +323,7 @@ class TestCLZAdapterHelpers:
 
         assert adapter._parse_year("1997") == 1997
         assert adapter._parse_year("2000") == 2000
-        assert adapter._parse_year(2000) == 2000
+        assert adapter._parse_year("2000") == 2000
 
     def test_parse_year_invalid(self):
         """Invalid year string returns None."""
@@ -451,6 +459,7 @@ class TestCLZAdapterEdgeCases:
     def test_issue_with_whitespace_only_number(self):
         """Issue number with only whitespace raises ValidationError."""
         row = {
+            "Core ComicID": "12345",
             "Series": "Test Series",
             "Issue": "   ",
         }
@@ -458,7 +467,7 @@ class TestCLZAdapterEdgeCases:
         adapter = CLZAdapter()
 
         with pytest.raises(ValidationError, match="Invalid issue number"):
-            adapter.fetch_issue_from_csv_row("test", row)
+            adapter.fetch_issue_from_csv_row(row)
 
     def test_parse_year_out_of_range_low(self):
         """Year below valid range returns None."""
@@ -611,6 +620,7 @@ class TestCLZAdapterEdgeCases:
         adapter = CLZAdapter()
 
         row = {
+            "Core ComicID": "12345",
             "Series": "Test Series",
             "Issue": "#1",
         }
@@ -629,7 +639,7 @@ class TestCLZAdapterEdgeCases:
                 ValidationError,
                 match="parsed successfully but produced no canonical form",
             ):
-                adapter.fetch_issue_from_csv_row("test", row)
+                adapter.fetch_issue_from_csv_row(row)
 
     def test_parse_date_exception_during_parsing(self):
         """Date parsing raises unexpected exception."""
@@ -653,7 +663,7 @@ class TestCLZAdapterRealData:
         csv_path = FIXTURE_DIR / "sample_clz_export.csv"
 
         rows = adapter.load_csv_from_file(csv_path)
-        result = adapter.fetch_issue_from_csv_row("row-0", rows[0])
+        result = adapter.fetch_issue_from_csv_row(rows[0])
 
         assert result.series_title == "X-Men, Vol. 1"
         assert result.issue_number == "-1"
@@ -672,7 +682,7 @@ class TestCLZAdapterRealData:
         csv_path = FIXTURE_DIR / "sample_clz_export.csv"
 
         rows = adapter.load_csv_from_file(csv_path)
-        result = adapter.fetch_issue_from_csv_row("row-1", rows[1])
+        result = adapter.fetch_issue_from_csv_row(rows[1])
 
         assert result.series_title == "Amazing Spider-Man, Vol. 1"
         assert result.issue_number == "1"
@@ -689,10 +699,10 @@ class TestCLZAdapterRealData:
 
         rows = adapter.load_csv_from_file(csv_path)
 
-        result = adapter.fetch_issue_from_csv_row("row-0", rows[0])
+        result = adapter.fetch_issue_from_csv_row(rows[0])
         assert result.issue_number == "0"
 
-        result = adapter.fetch_issue_from_csv_row("row-1", rows[1])
+        result = adapter.fetch_issue_from_csv_row(rows[1])
         assert result.issue_number == "1/2"
 
     def test_xmen_issues_from_fixture(self):
@@ -702,14 +712,14 @@ class TestCLZAdapterRealData:
 
         rows = adapter.load_csv_from_file(csv_path)
 
-        result = adapter.fetch_issue_from_csv_row("row-0", rows[0])
+        result = adapter.fetch_issue_from_csv_row(rows[0])
         assert result.issue_number == "-1"
         assert result.variant_suffix == "A"
 
-        result = adapter.fetch_issue_from_csv_row("row-1", rows[1])
+        result = adapter.fetch_issue_from_csv_row(rows[1])
         assert result.issue_number == "100"
         assert result.variant_suffix is None
 
-        result = adapter.fetch_issue_from_csv_row("row-2", rows[2])
+        result = adapter.fetch_issue_from_csv_row(rows[2])
         assert result.issue_number == "100.5"
         assert result.variant_suffix is None

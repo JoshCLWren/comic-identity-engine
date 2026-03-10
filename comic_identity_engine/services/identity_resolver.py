@@ -340,6 +340,7 @@ class IdentityResolver:
                 series_title=series_title,
                 series_start_year=series_start_year,
                 issue_number=issue_number,
+                cover_date=cover_date,
             )
             created = await self._create_new_issue(
                 creation_series_title,
@@ -628,6 +629,7 @@ class IdentityResolver:
         series_title: Optional[str],
         series_start_year: Optional[int],
         issue_number: Optional[str],
+        cover_date: Optional[date] = None,
     ) -> tuple[str, int, str]:
         """Reject placeholder metadata before creating a canonical issue."""
         normalized_title = re.sub(r"\s+", " ", (series_title or "")).strip()
@@ -642,10 +644,17 @@ class IdentityResolver:
                 "manual review is required"
             )
         if series_start_year is None:
-            raise ValidationError(
-                "Cannot create a canonical issue without a source series start year; "
-                "manual review is required"
-            )
+            if cover_date:
+                series_start_year = cover_date.year
+                logger.info(
+                    "Using cover date year as series start year fallback",
+                    fallback_year=series_start_year,
+                )
+            else:
+                raise ValidationError(
+                    "Cannot create a canonical issue without a source series start year; "
+                    "manual review is required"
+                )
         if not normalized_issue_number:
             raise ValidationError(
                 "Cannot create a canonical issue without an issue number; "
