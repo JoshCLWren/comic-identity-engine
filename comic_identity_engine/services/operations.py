@@ -15,6 +15,7 @@ USAGE:
 
 import hashlib
 import json
+import subprocess
 import uuid
 from typing import Any, Optional
 
@@ -64,6 +65,26 @@ class OperationsManager:
         """
         self.session = session
         self.operation_repo = OperationRepository(session)
+
+    @staticmethod
+    def _get_code_version() -> str:
+        """Get the current git commit hash for code version tracking.
+
+        Returns:
+            Git commit SHA hash, or 'unknown' if not in a git repo
+        """
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                timeout=1,
+            )
+            if result.returncode == 0:
+                return result.stdout.strip()
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass
+        return "unknown"
 
     async def create_operation(
         self,
@@ -156,17 +177,47 @@ class OperationsManager:
             {"file_checksum": file_checksum},
         )
         existing = await self.operation_repo.find_by_input_hash(idempotency_key)
+
+        # Get current code version for cache invalidation
+        current_code_version = self._get_code_version()
+
         if existing is None:
+            # Store code version in initial result
+            initial_result_with_version = dict(initial_result or {})
+            initial_result_with_version["_code_version"] = current_code_version
+
             operation = await self.operation_repo.create_operation(
                 operation_type=operation_type,
                 input_hash=idempotency_key,
-                result=initial_result,
+                result=initial_result_with_version,
             )
             logger.info(
                 "Created checksum-addressed import operation",
                 operation_id=str(operation.id),
                 operation_type=operation.operation_type,
                 file_checksum=file_checksum,
+                code_version=current_code_version,
+            )
+            return operation, True
+
+        # Check if code has changed since the operation was created
+        existing_code_version = (existing.result or {}).get("_code_version", "unknown")
+        if existing_code_version != current_code_version:
+            logger.info(
+                "Code version changed, creating new import operation",
+                operation_id=str(existing.id),
+                old_code_version=existing_code_version,
+                new_code_version=current_code_version,
+                file_checksum=file_checksum,
+            )
+            # Store new code version in result
+            initial_result_with_version = dict(initial_result or {})
+            initial_result_with_version["_code_version"] = current_code_version
+
+            operation = await self.operation_repo.create_operation(
+                operation_type=operation_type,
+                input_hash=idempotency_key,
+                result=initial_result_with_version,
             )
             return operation, True
 
