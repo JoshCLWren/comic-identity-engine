@@ -61,6 +61,7 @@ from comic_identity_engine.errors import (
     ResolutionError,
     ValidationError,
 )
+from comic_identity_engine.jobs.error_handling import handle_task_error
 from comic_identity_engine.services import (
     IdentityResolver,
     OperationsManager,
@@ -73,6 +74,209 @@ from comic_identity_engine.services.imports import (
 )
 
 logger = structlog.get_logger(__name__)
+
+
+async def _handle_existing_mapping(
+    existing: Any,
+    parsed_url: Any,
+    url: str,
+    operation_uuid: uuid.UUID,
+    operations_manager: Any,
+    session: Any,
+    operation_id: str,
+) -> dict[str, Any]:
+    """Handle case where an external mapping already exists.
+
+    Performs cross-platform search for the existing issue and returns
+    a result dictionary with platform URLs and status.
+    """
+    issue_repo = IssueRepository(session)
+    series_repo = SeriesRunRepository(session)
+
+    issue = await issue_repo.find_by_id(existing.issue_id)
+    series = await series_repo.find_by_id(issue.series_run_id) if issue else None
+
+    cross_platform_urls = {}
+    platform_status = {parsed_url.platform: "found"}
+    cross_platform_result = {"urls": {}, "status": {}, "events": []}
+
+    if issue and series:
+        try:
+            from comic_identity_engine.services.platform_searcher import (
+                PlatformSearcher,
+            )
+
+            searcher = PlatformSearcher(session)
+            cross_platform_result = await searcher.search_all_platforms(
+                issue_id=existing.issue_id,
+                series_title=series.title,
+                issue_number=issue.issue_number,
+                year=series.start_year,
+                publisher=series.publisher,
+                operation_id=operation_uuid,
+                source_platform=parsed_url.platform,
+                operations_manager=operations_manager,
+            )
+            cross_platform_urls = cross_platform_result.get("urls", {})
+
+            for platform, status in cross_platform_result.get("status", {}).items():
+                if platform not in platform_status:
+                    platform_status[platform] = status
+
+            logger.info(
+                "Cross-platform search completed",
+                operation_id=operation_id,
+                issue_id=str(existing.issue_id),
+                found_platforms=list(cross_platform_urls.keys()),
+            )
+        except Exception as e:
+            logger.warning(
+                "Cross-platform search failed, continuing without it",
+                operation_id=operation_id,
+                issue_id=str(existing.issue_id),
+                error=str(e),
+            )
+
+    urls = {parsed_url.platform: url}
+    for platform, found_url in cross_platform_urls.items():
+        if not urls.get(platform):
+            urls[platform] = found_url
+
+    result_dict = {
+        "canonical_uuid": str(existing.issue_id),
+        "confidence": 1.0,
+        "platform_urls": urls,
+        "platform_status": platform_status,
+        "platform_events": cross_platform_result.get("events", []),
+        "created_new": False,
+        "explanation": f"Found existing external mapping for {parsed_url.platform}:{parsed_url.source_issue_id}",
+    }
+    await operations_manager.mark_completed(operation_uuid, result_dict)
+    return result_dict
+
+
+async def _fetch_and_resolve_issue(
+    parsed_url: Any,
+    url: str,
+    operation_uuid: uuid.UUID,
+    operations_manager: Any,
+    session: Any,
+    operation_id: str,
+) -> dict[str, Any]:
+    """Fetch issue from platform and resolve it.
+
+    Returns a result dictionary with resolution results and cross-platform URLs.
+    """
+    mapping_repo = ExternalMappingRepository(session)
+
+    adapter = get_adapter(parsed_url.platform)
+
+    if parsed_url.platform in {"aa", "hip"} and parsed_url.full_url:
+        candidate = await adapter.fetch_issue(
+            parsed_url.source_issue_id, full_url=parsed_url.full_url
+        )
+    else:
+        candidate = await adapter.fetch_issue(parsed_url.source_issue_id)
+
+    resolver = IdentityResolver(session)
+    result = await resolver.resolve_issue(
+        parsed_url,
+        upc=candidate.upc,
+        series_title=candidate.series_title,
+        series_start_year=candidate.series_start_year,
+        issue_number=candidate.issue_number,
+        cover_date=candidate.cover_date,
+        variant_suffix=(
+            getattr(candidate, "variant_suffix", None)
+            or getattr(parsed_url, "variant_suffix", None)
+        ),
+        variant_name=getattr(candidate, "variant_name", None),
+    )
+
+    cross_platform_urls = {}
+    cross_platform_result = {"urls": {}, "status": {}, "events": []}
+    platform_status = {}
+    source_mapping_action = None
+
+    if result.issue_id:
+        source_mapping_action = await _ensure_source_mapping(
+            mapping_repo=mapping_repo,
+            issue_id=result.issue_id,
+            source=parsed_url.platform,
+            source_issue_id=parsed_url.source_issue_id,
+            source_series_id=candidate.source_series_id,
+        )
+
+        logger.info(
+            "External mapping action",
+            operation_id=operation_id,
+            issue_id=str(result.issue_id),
+            action=source_mapping_action,
+        )
+
+        platform_status[parsed_url.platform] = "found"
+
+        try:
+            from comic_identity_engine.services.platform_searcher import (
+                PlatformSearcher,
+            )
+
+            searcher = PlatformSearcher(session)
+            cross_platform_result = await searcher.search_all_platforms(
+                issue_id=result.issue_id,
+                series_title=candidate.series_title,
+                issue_number=candidate.issue_number,
+                year=candidate.series_start_year,
+                publisher=None,
+                operation_id=operation_uuid,
+                source_platform=parsed_url.platform,
+                operations_manager=operations_manager,
+            )
+            cross_platform_urls = cross_platform_result.get("urls", {})
+
+            for platform, status in cross_platform_result.get("status", {}).items():
+                if platform not in platform_status:
+                    platform_status[platform] = status
+
+            logger.info(
+                "Cross-platform search completed",
+                operation_id=operation_id,
+                issue_id=str(result.issue_id),
+                found_platforms=list(cross_platform_urls.keys()),
+            )
+        except Exception as e:
+            logger.warning(
+                "Cross-platform search failed, continuing without it",
+                operation_id=operation_id,
+                issue_id=str(result.issue_id),
+                error=str(e),
+            )
+            cross_platform_result = {"urls": {}, "status": {}, "events": []}
+
+    urls = {}
+    if result.issue_id:
+        urls = {parsed_url.platform: url}
+        for platform, found_url in cross_platform_urls.items():
+            if not urls.get(platform):
+                urls[platform] = found_url
+
+    result_dict = {
+        "canonical_uuid": str(result.issue_id) if result.issue_id else None,
+        "confidence": (
+            result.best_match.overall_confidence if result.best_match else 1.0
+        ),
+        "platform_urls": urls,
+        "platform_status": platform_status if result.issue_id else {},
+        "platform_events": (
+            cross_platform_result.get("events", []) if result.issue_id else []
+        ),
+        "created_new": result.created_new,
+        "explanation": result.explanation,
+        "source_mapping_action": source_mapping_action,
+    }
+
+    await operations_manager.mark_completed(operation_uuid, result_dict)
+    return result_dict
 
 
 def _mapping_conflict_message(source: str, source_issue_id: str) -> str:
@@ -359,7 +563,6 @@ async def resolve_identity_task(
     """
     async with AsyncSessionLocal() as session:
         operation_uuid = None
-        parsed_url = None
         try:
             operation_uuid = uuid.UUID(operation_id)
             operations_manager = OperationsManager(session)
@@ -378,9 +581,7 @@ async def resolve_identity_task(
 
             parsed_url = parse_url(url)
             mapping_repo = ExternalMappingRepository(session)
-            series_repo = SeriesRunRepository(session)
 
-            # Handle clear_mappings: delete all external mappings for this source_issue_id
             if clear_mappings:
                 logger.info(
                     "Clearing external mappings",
@@ -397,7 +598,6 @@ async def resolve_identity_task(
                     deleted_count=deleted_count,
                 )
 
-            # Handle dry_run: return what would happen without executing
             if dry_run:
                 logger.info(
                     "Dry run mode - returning without executing search",
@@ -417,7 +617,6 @@ async def resolve_identity_task(
                 await session.commit()
                 return result_dict
 
-            # Check for existing mapping first (unless force is True)
             existing = None
             if not force:
                 existing = await mapping_repo.find_by_source(
@@ -431,6 +630,7 @@ async def resolve_identity_task(
                     platform=parsed_url.platform,
                     source_issue_id=parsed_url.source_issue_id,
                 )
+
             if existing and not force:
                 logger.info(
                     "Found existing mapping",
@@ -439,393 +639,51 @@ async def resolve_identity_task(
                     platform=parsed_url.platform,
                     source_issue_id=parsed_url.source_issue_id,
                 )
-
-                # Cross-platform search: find this issue on other platforms
-                resolver = IdentityResolver(session)
-                issue_repo = IssueRepository(session)
-                issue = await issue_repo.find_by_id(existing.issue_id)
-                series = (
-                    await series_repo.find_by_id(issue.series_run_id) if issue else None
+                result_dict = await _handle_existing_mapping(
+                    existing,
+                    parsed_url,
+                    url,
+                    operation_uuid,
+                    operations_manager,
+                    session,
+                    operation_id,
                 )
-
-                cross_platform_urls = {}
-                platform_status = {}
-
-                # Mark source platform as found since we have a mapping for it
-                platform_status[parsed_url.platform] = "found"
-
-                if issue and series:
-                    try:
-                        from comic_identity_engine.services.platform_searcher import (
-                            PlatformSearcher,
-                        )
-
-                        searcher = PlatformSearcher(session)
-                        cross_platform_result = await searcher.search_all_platforms(
-                            issue_id=existing.issue_id,
-                            series_title=series.title,
-                            issue_number=issue.issue_number,
-                            year=series.start_year,
-                            publisher=series.publisher,
-                            operation_id=operation_uuid,
-                            source_platform=parsed_url.platform,
-                            operations_manager=operations_manager,
-                        )
-                        cross_platform_urls = cross_platform_result.get("urls", {})
-
-                        # Merge platform_status - source platform stays "found"
-                        for platform, status in cross_platform_result.get(
-                            "status", {}
-                        ).items():
-                            if platform not in platform_status:
-                                platform_status[platform] = status
-
-                        logger.info(
-                            "Cross-platform search completed",
-                            operation_id=operation_id,
-                            issue_id=str(existing.issue_id),
-                            found_platforms=list(cross_platform_urls.keys()),
-                            platform_status=cross_platform_result.get("status", {}),
-                        )
-                    except Exception as e:
-                        logger.warning(
-                            "Cross-platform search failed, continuing without it",
-                            operation_id=operation_id,
-                            issue_id=str(existing.issue_id),
-                            error=str(e),
-                        )
-                        cross_platform_urls = {}
-
-                urls = {parsed_url.platform: url}
-                # TODO: once external mappings persist authoritative source URLs,
-                # merge the stored per-platform URLs here. Until then, only return
-                # exact URLs from this request or from the live cross-platform run.
-                for platform, found_url in cross_platform_urls.items():
-                    if not urls.get(platform):
-                        urls[platform] = found_url
-
-                result_dict = {
-                    "canonical_uuid": str(existing.issue_id),
-                    "confidence": 1.0,
-                    "platform_urls": urls,
-                    "platform_status": platform_status,
-                    "platform_events": cross_platform_result.get("events", []),
-                    "created_new": False,
-                    "explanation": f"Found existing external mapping for {parsed_url.platform}:{parsed_url.source_issue_id}",
-                }
-                await operations_manager.mark_completed(operation_uuid, result_dict)
                 await session.commit()
                 return result_dict
 
-            # Fetch from platform
             logger.info(
                 "Fetching issue from platform",
                 operation_id=operation_id,
                 platform=parsed_url.platform,
                 source_issue_id=parsed_url.source_issue_id,
             )
-            adapter = get_adapter(parsed_url.platform)
 
-            # Some platforms need the original source URL to fetch the issue page.
-            if parsed_url.platform in {"aa", "hip"} and parsed_url.full_url:
-                candidate = await adapter.fetch_issue(
-                    parsed_url.source_issue_id, full_url=parsed_url.full_url
-                )
-            else:
-                candidate = await adapter.fetch_issue(parsed_url.source_issue_id)
-
-            # Resolve with fetched data
-            resolver = IdentityResolver(session)
-            result = await resolver.resolve_issue(
+            result_dict = await _fetch_and_resolve_issue(
                 parsed_url,
-                upc=candidate.upc,
-                series_title=candidate.series_title,
-                series_start_year=candidate.series_start_year,
-                issue_number=candidate.issue_number,
-                cover_date=candidate.cover_date,
-                variant_suffix=(
-                    getattr(candidate, "variant_suffix", None)
-                    or getattr(parsed_url, "variant_suffix", None)
-                ),
-                variant_name=getattr(candidate, "variant_name", None),
+                url,
+                operation_uuid,
+                operations_manager,
+                session,
+                operation_id,
             )
 
-            # Create external mapping if successful
-            cross_platform_urls = {}
-            cross_platform_result = {"urls": {}, "status": {}, "events": []}
-            platform_status = {}
-            source_mapping_action = None
-
-            if result.issue_id:
-                source_mapping_action = await _ensure_source_mapping(
-                    mapping_repo=mapping_repo,
-                    issue_id=result.issue_id,
-                    source=parsed_url.platform,
-                    source_issue_id=parsed_url.source_issue_id,
-                    source_series_id=candidate.source_series_id,
-                )
-                if source_mapping_action == "created":
-                    logger.info(
-                        "Created external mapping",
-                        operation_id=operation_id,
-                        issue_id=str(result.issue_id),
-                        platform=parsed_url.platform,
-                        source_issue_id=parsed_url.source_issue_id,
-                    )
-                else:
-                    logger.info(
-                        "Reused existing external mapping",
-                        operation_id=operation_id,
-                        issue_id=str(result.issue_id),
-                        platform=parsed_url.platform,
-                        source_issue_id=parsed_url.source_issue_id,
-                    )
-
-                # Mark source platform as found since we just created a mapping for it
-                platform_status[parsed_url.platform] = "found"
-
-                # Cross-platform search: find this issue on other platforms
-                try:
-                    from comic_identity_engine.services.platform_searcher import (
-                        PlatformSearcher,
-                    )
-
-                    searcher = PlatformSearcher(session)
-                    cross_platform_result = await searcher.search_all_platforms(
-                        issue_id=result.issue_id,
-                        series_title=candidate.series_title,
-                        issue_number=candidate.issue_number,
-                        year=candidate.series_start_year,
-                        publisher=None,
-                        operation_id=operation_uuid,
-                        source_platform=parsed_url.platform,
-                        operations_manager=operations_manager,
-                    )
-                    cross_platform_urls = cross_platform_result.get("urls", {})
-
-                    # Merge platform_status - source platform stays "found"
-                    for platform, status in cross_platform_result.get(
-                        "status", {}
-                    ).items():
-                        if platform not in platform_status:
-                            platform_status[platform] = status
-
-                    logger.info(
-                        "Cross-platform search completed",
-                        operation_id=operation_id,
-                        issue_id=str(result.issue_id),
-                        found_platforms=list(cross_platform_urls.keys()),
-                        platform_status=cross_platform_result.get("status", {}),
-                    )
-                except Exception as e:
-                    logger.warning(
-                        "Cross-platform search failed, continuing without it",
-                        operation_id=operation_id,
-                        issue_id=str(result.issue_id),
-                        error=str(e),
-                    )
-                    cross_platform_urls = {}
-                    cross_platform_result = {"urls": {}, "status": {}, "events": []}
-
-            urls = {}
-            if result.issue_id:
-                urls = {parsed_url.platform: url}
-                # TODO: once external mappings persist authoritative source URLs,
-                # merge the stored per-platform URLs here. Until then, only return
-                # exact URLs from this request or from the live cross-platform run.
-                for platform, found_url in cross_platform_urls.items():
-                    if not urls.get(platform):
-                        urls[platform] = found_url
-
-            result_dict = {
-                "canonical_uuid": str(result.issue_id) if result.issue_id else None,
-                "confidence": (
-                    result.best_match.overall_confidence if result.best_match else 1.0
-                ),
-                "platform_urls": urls,
-                "platform_status": platform_status if result.issue_id else {},
-                "platform_events": (
-                    cross_platform_result.get("events", []) if result.issue_id else []
-                ),
-                "created_new": result.created_new,
-                "explanation": result.explanation,
-                "source_mapping_action": source_mapping_action,
-            }
-
-            await operations_manager.mark_completed(operation_uuid, result_dict)
             await session.commit()
 
             logger.info(
                 "Identity resolution task completed",
                 operation_id=operation_id,
-                issue_id=str(result.issue_id) if result.issue_id else None,
-                confidence=result_dict["confidence"],
+                issue_id=result_dict.get("canonical_uuid"),
+                confidence=result_dict.get("confidence"),
             )
 
             return result_dict
 
-        except ParseError as e:
-            error_msg = f"URL parsing failed: {e}"
-            logger.error(
-                "Identity resolution task failed - parse error",
-                operation_id=operation_id,
-                error=error_msg,
-            )
-            await _mark_failed_safe(
-                session,
-                operation_uuid,
-                error_msg,
-                result={"error_type": "parse_error", "input_url": url},
-            )
-            await session.commit()
-            return {"error": error_msg, "error_type": "parse_error"}
-
-        except NotFoundError as e:
-            error_msg = f"Issue not found on platform: {e}"
-            logger.error(
-                "Identity resolution task failed - issue not found",
-                operation_id=operation_id,
-                error=error_msg,
-            )
-            await _mark_failed_safe(
-                session,
-                operation_uuid,
-                error_msg,
-                result={"error_type": "not_found", "input_url": url},
-            )
-            await session.commit()
-            return {"error": error_msg, "error_type": "not_found"}
-
-        except NetworkError as e:
-            error_msg = f"Network error communicating with platform: {e}"
-            logger.error(
-                "Identity resolution task failed - network error",
-                operation_id=operation_id,
-                error=error_msg,
-            )
-            await _mark_failed_safe(
-                session,
-                operation_uuid,
-                error_msg,
-                result={"error_type": "network_error", "input_url": url},
-            )
-            await session.commit()
-            return {"error": error_msg, "error_type": "network_error"}
-
-        except SourceError as e:
-            error_msg = f"Platform communication error: {e}"
-            logger.error(
-                "Identity resolution task failed - platform error",
-                operation_id=operation_id,
-                error=error_msg,
-            )
-            await _mark_failed_safe(
-                session,
-                operation_uuid,
-                error_msg,
-                result={"error_type": "platform_error", "input_url": url},
-            )
-            await session.commit()
-            return {"error": error_msg, "error_type": "platform_error"}
-
-        except AdapterValidationError as e:
-            error_msg = f"Invalid data from platform: {e}"
-            logger.error(
-                "Identity resolution task failed - validation error",
-                operation_id=operation_id,
-                error=error_msg,
-            )
-            await _mark_failed_safe(
-                session,
-                operation_uuid,
-                error_msg,
-                result={"error_type": "platform_validation_error", "input_url": url},
-            )
-            await session.commit()
-            return {"error": error_msg, "error_type": "platform_validation_error"}
-
-        except ValidationError as e:
-            error_msg = f"Validation error during resolution: {e}"
-            failure_result: dict[str, Any] = {
-                "error_type": "validation_error",
-                "input_url": url,
-            }
-            if parsed_url is not None:
-                failure_result["source"] = parsed_url.platform
-                failure_result["source_issue_id"] = parsed_url.source_issue_id
-            if "use --clear-mappings" in str(e):
-                failure_result["hint"] = (
-                    "Retry with --clear-mappings to replace the existing mapping"
-                )
-            logger.error(
-                "Identity resolution task failed - validation error",
-                operation_id=operation_id,
-                error=error_msg,
-                source=getattr(parsed_url, "platform", None),
-                source_issue_id=getattr(parsed_url, "source_issue_id", None),
-            )
-            await _mark_failed_safe(
-                session,
-                operation_uuid,
-                error_msg,
-                result=failure_result,
-            )
-            await session.commit()
-            return {"error": error_msg, **failure_result}
-
-        except ResolutionError as e:
-            error_msg = f"Identity resolution failed: {e}"
-            logger.error(
-                "Identity resolution task failed - resolution error",
-                operation_id=operation_id,
-                error=error_msg,
-            )
-            await _mark_failed_safe(
-                session,
-                operation_uuid,
-                error_msg,
-                result={"error_type": "resolution_error", "input_url": url},
-            )
-            await session.commit()
-            return {"error": error_msg, "error_type": "resolution_error"}
-
-        except SQLAlchemyError as e:
-            error_msg = f"Database error during resolution: {e}"
-            logger.error(
-                "Identity resolution task failed - database error",
-                operation_id=operation_id,
-                error=error_msg,
-            )
-            await _mark_failed_safe(
-                session,
-                operation_uuid,
-                error_msg,
-                result={"error_type": "database_error", "input_url": url},
-            )
-            await session.commit()
-            return {"error": error_msg, "error_type": "database_error"}
-
         except Exception as e:
-            error_msg = f"Unexpected error during resolution: {e}"
-            logger.error(
-                "Identity resolution task failed - unexpected error",
-                operation_id=operation_id,
-                error=error_msg,
-                error_type=type(e).__name__,
+            error_result = await handle_task_error(
+                session, operation_uuid, operation_id, e, context={"input_url": url}
             )
-            if operation_uuid:
-                await _mark_failed_safe(
-                    session,
-                    operation_uuid,
-                    error_msg,
-                    result={
-                        "error_type": "unexpected_error",
-                        "exception_type": type(e).__name__,
-                        "input_url": url,
-                    },
-                )
-                await session.commit()
-            return {"error": error_msg, "error_type": "unexpected_error"}
+            await session.commit()
+            return error_result
 
 
 async def bulk_resolve_task(
@@ -867,6 +725,7 @@ async def bulk_resolve_task(
         2
     """
     async with AsyncSessionLocal() as session:
+        operation_uuid = None
         try:
             operation_uuid = uuid.UUID(operation_id)
             operations_manager = OperationsManager(session)
@@ -976,7 +835,8 @@ async def bulk_resolve_task(
                 operation_id=operation_id,
                 error=error_msg,
             )
-            await _mark_failed_safe(session, operation_uuid, error_msg)
+            if operation_uuid:
+                await _mark_failed_safe(session, operation_uuid, error_msg)
             return {"error": error_msg, "error_type": "database_error"}
 
         except Exception as e:
@@ -987,7 +847,8 @@ async def bulk_resolve_task(
                 error=error_msg,
                 error_type=type(e).__name__,
             )
-            await _mark_failed_safe(session, operation_uuid, error_msg)
+            if operation_uuid:
+                await _mark_failed_safe(session, operation_uuid, error_msg)
             return {"error": error_msg, "error_type": "unexpected_error"}
 
 
@@ -1592,7 +1453,7 @@ async def import_clz_task(
                         # Find the actual issue to get its ID
                         for issue in existing_issues:
                             if (
-                                issue.series_run.series_title == series_title
+                                issue.series_run.title == series_title
                                 and issue.issue_number == issue_number
                             ):
                                 row_result = {
@@ -1807,6 +1668,7 @@ async def export_task(
         '/tmp/export_550e8400.json'
     """
     async with AsyncSessionLocal() as session:
+        operation_uuid = None
         try:
             operation_uuid = uuid.UUID(operation_id)
             operations_manager = OperationsManager(session)
@@ -1888,7 +1750,8 @@ async def export_task(
                 operation_id=operation_id,
                 error=error_msg,
             )
-            await _mark_failed_safe(session, operation_uuid, error_msg)
+            if operation_uuid:
+                await _mark_failed_safe(session, operation_uuid, error_msg)
             return {"error": error_msg, "error_type": "invalid_format"}
 
         except SQLAlchemyError as e:
@@ -1898,7 +1761,8 @@ async def export_task(
                 operation_id=operation_id,
                 error=error_msg,
             )
-            await _mark_failed_safe(session, operation_uuid, error_msg)
+            if operation_uuid:
+                await _mark_failed_safe(session, operation_uuid, error_msg)
             return {"error": error_msg, "error_type": "database_error"}
 
         except Exception as e:
@@ -1909,7 +1773,8 @@ async def export_task(
                 error=error_msg,
                 error_type=type(e).__name__,
             )
-            await _mark_failed_safe(session, operation_uuid, error_msg)
+            if operation_uuid:
+                await _mark_failed_safe(session, operation_uuid, error_msg)
             return {"error": error_msg, "error_type": "unexpected_error"}
 
 
@@ -1951,6 +1816,7 @@ async def reconcile_task(
         2
     """
     async with AsyncSessionLocal() as session:
+        operation_uuid = None
         try:
             operation_uuid = uuid.UUID(operation_id)
             issue_uuid = uuid.UUID(issue_id)
@@ -2033,7 +1899,8 @@ async def reconcile_task(
                 operation_id=operation_id,
                 error=error_msg,
             )
-            await _mark_failed_safe(session, operation_uuid, error_msg)
+            if operation_uuid:
+                await _mark_failed_safe(session, operation_uuid, error_msg)
             return {"error": error_msg, "error_type": "validation_error"}
 
         except SQLAlchemyError as e:
@@ -2043,7 +1910,8 @@ async def reconcile_task(
                 operation_id=operation_id,
                 error=error_msg,
             )
-            await _mark_failed_safe(session, operation_uuid, error_msg)
+            if operation_uuid:
+                await _mark_failed_safe(session, operation_uuid, error_msg)
             return {"error": error_msg, "error_type": "database_error"}
 
         except Exception as e:
@@ -2054,7 +1922,8 @@ async def reconcile_task(
                 error=error_msg,
                 error_type=type(e).__name__,
             )
-            await _mark_failed_safe(session, operation_uuid, error_msg)
+            if operation_uuid:
+                await _mark_failed_safe(session, operation_uuid, error_msg)
             return {"error": error_msg, "error_type": "unexpected_error"}
 
 
