@@ -1,3 +1,24 @@
+## ⚠️ MANDATORY: Fix Broken Code
+
+**ALL AI AGENTS MUST READ THIS:**
+
+When you encounter broken code, tests, or functionality in this codebase, **you are REQUIRED to fix it**. Do NOT ignore broken code. Do NOT work around it. Do NOT leave it for "later".
+
+**If you find it, you fix it.**
+
+This includes but is not limited to:
+- Failing tests
+- Syntax errors
+- Import errors
+- Type errors
+- Logic bugs
+- LSP warnings that indicate real problems
+- Inconsistent behavior
+
+**No exceptions. No excuses.**
+
+---
+
 - generic [active] [ref=e1]:
   - banner [ref=e2]:
     - navigation [ref=e3]:
