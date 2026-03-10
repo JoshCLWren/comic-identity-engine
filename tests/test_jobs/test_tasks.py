@@ -98,7 +98,7 @@ class TestResolveIdentityTask:
                 )
 
                 with patch(
-                    "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
+                    "comic_identity_engine.database.repositories.ExternalMappingRepository"
                 ) as mock_mapping_repo_class:
                     mock_mapping_repo = Mock()
                     mock_mapping_repo.find_by_source = AsyncMock(return_value=None)
@@ -196,10 +196,13 @@ class TestResolveIdentityTask:
                 )
 
                 with patch(
-                    "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
+                    "comic_identity_engine.database.repositories.ExternalMappingRepository"
                 ) as mock_mapping_repo_class:
                     mock_mapping_repo = Mock()
                     mock_mapping_repo.find_by_source = AsyncMock(return_value=None)
+                    mock_mapping_repo.bulk_find_by_source_issue_ids = AsyncMock(
+                        return_value=[]
+                    )
                     mock_mapping_repo_class.return_value = mock_mapping_repo
 
                     with patch(
@@ -314,7 +317,7 @@ class TestResolveIdentityTask:
                 )
 
                 with patch(
-                    "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
+                    "comic_identity_engine.database.repositories.ExternalMappingRepository"
                 ) as mock_mapping_repo_class:
                     mock_mapping_repo = Mock()
                     mock_mapping_repo.find_by_source = AsyncMock(return_value=None)
@@ -378,7 +381,7 @@ class TestResolveIdentityTask:
                 )
 
                 with patch(
-                    "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
+                    "comic_identity_engine.database.repositories.ExternalMappingRepository"
                 ) as mock_mapping_repo_class:
                     mock_mapping_repo = Mock()
                     mock_mapping_repo.create_mapping = AsyncMock()
@@ -460,7 +463,7 @@ class TestResolveIdentityTask:
                 )
 
                 with patch(
-                    "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
+                    "comic_identity_engine.database.repositories.ExternalMappingRepository"
                 ) as mock_mapping_repo_class:
                     mock_mapping_repo = Mock()
                     mock_mapping_repo_class.return_value = mock_mapping_repo
@@ -547,7 +550,7 @@ class TestResolveIdentityTask:
                 )
 
                 with patch(
-                    "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
+                    "comic_identity_engine.database.repositories.ExternalMappingRepository"
                 ) as mock_mapping_repo_class:
                     mock_mapping_repo = Mock()
                     mock_mapping_repo.find_by_source = AsyncMock(
@@ -823,11 +826,20 @@ X-Men,2,Marvel,1991,clz-002"""
                     mock_queue.enqueue_resolve_clz_row.return_value = mock_job
                     mock_queue_class.return_value = mock_queue
 
-                    result = await import_clz_task(
-                        {},
-                        str(csv_file),
-                        str(TEST_OPERATION_ID),
-                    )
+                    with patch(
+                        "comic_identity_engine.database.repositories.ExternalMappingRepository"
+                    ) as mock_mapping_repo_class:
+                        mock_mapping_repo = Mock()
+                        mock_mapping_repo.bulk_find_by_source_issue_ids = AsyncMock(
+                            return_value=[]
+                        )
+                        mock_mapping_repo_class.return_value = mock_mapping_repo
+
+                        result = await import_clz_task(
+                            {},
+                            str(csv_file),
+                            str(TEST_OPERATION_ID),
+                        )
 
         # Orchestrator returns immediately with enqueue confirmation
         assert result["total_rows"] == 2
@@ -1181,7 +1193,7 @@ class TestReconcileTask:
                 mock_issue_repo_class.return_value = mock_issue_repo
 
                 with patch(
-                    "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
+                    "comic_identity_engine.database.repositories.ExternalMappingRepository"
                 ) as mock_mapping_repo_class:
                     mock_mapping_repo = Mock()
                     mock_mapping_repo.find_by_issue = AsyncMock(return_value=[])
@@ -1344,7 +1356,7 @@ class TestOperationStatusTransitions:
                 )
 
                 with patch(
-                    "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
+                    "comic_identity_engine.database.repositories.ExternalMappingRepository"
                 ) as mock_mapping_repo_class:
                     mock_mapping_repo = Mock()
                     mock_mapping_repo.find_by_source = AsyncMock(return_value=None)
@@ -1686,7 +1698,7 @@ X-Men,1,Marvel,1991,clz-001"""
                 mock_adapter_class.return_value = mock_adapter
 
                 with patch(
-                    "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
+                    "comic_identity_engine.database.repositories.ExternalMappingRepository"
                 ) as mock_mapping_repo_class:
                     mock_mapping_repo = Mock()
 
@@ -1695,6 +1707,9 @@ X-Men,1,Marvel,1991,clz-001"""
 
                     mock_mapping_repo.find_by_source = AsyncMock(
                         return_value=mock_existing_mapping
+                    )
+                    mock_mapping_repo.bulk_find_by_source_issue_ids = AsyncMock(
+                        return_value=[]
                     )
                     mock_mapping_repo_class.return_value = mock_mapping_repo
 
@@ -1770,10 +1785,13 @@ X-Men,1,Marvel,1991,clz-001"""
                 mock_adapter_class.return_value = mock_adapter
 
                 with patch(
-                    "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
+                    "comic_identity_engine.database.repositories.ExternalMappingRepository"
                 ) as mock_mapping_repo_class:
                     mock_mapping_repo = Mock()
                     mock_mapping_repo.find_by_source = AsyncMock(return_value=None)
+                    mock_mapping_repo.bulk_find_by_source_issue_ids = AsyncMock(
+                        return_value=[]
+                    )
                     mock_mapping_repo_class.return_value = mock_mapping_repo
 
                     with patch(
@@ -1865,10 +1883,13 @@ X-Men,1,Marvel,1991,clz-001"""
                 mock_adapter_class.return_value = mock_adapter
 
                 with patch(
-                    "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
+                    "comic_identity_engine.database.repositories.ExternalMappingRepository"
                 ) as mock_mapping_repo_class:
                     mock_mapping_repo = Mock()
                     mock_mapping_repo.find_by_source = AsyncMock(return_value=None)
+                    mock_mapping_repo.bulk_find_by_source_issue_ids = AsyncMock(
+                        return_value=[]
+                    )
                     mock_mapping_repo_class.return_value = mock_mapping_repo
 
                     with patch(
@@ -1991,10 +2012,13 @@ X-Men,2,Marvel,1991,clz-002"""
                 mock_adapter_class.return_value = mock_adapter
 
                 with patch(
-                    "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
+                    "comic_identity_engine.database.repositories.ExternalMappingRepository"
                 ) as mock_mapping_repo_class:
                     mock_mapping_repo = Mock()
                     mock_mapping_repo.find_by_source = AsyncMock(return_value=None)
+                    mock_mapping_repo.bulk_find_by_source_issue_ids = AsyncMock(
+                        return_value=[]
+                    )
                     mock_mapping_repo_class.return_value = mock_mapping_repo
 
                     with patch(
@@ -2082,7 +2106,7 @@ class TestReconcileTaskEdgeCases:
                 mock_issue_repo_class.return_value = mock_issue_repo
 
                 with patch(
-                    "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
+                    "comic_identity_engine.database.repositories.ExternalMappingRepository"
                 ) as mock_mapping_repo_class:
                     mock_mapping_repo = Mock()
                     # Create existing mappings for some platforms
@@ -2127,7 +2151,7 @@ class TestReconcileTaskEdgeCases:
                 mock_issue_repo_class.return_value = mock_issue_repo
 
                 with patch(
-                    "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
+                    "comic_identity_engine.database.repositories.ExternalMappingRepository"
                 ) as mock_mapping_repo_class:
                     mock_mapping_repo = Mock()
                     # Simulate error during find_by_issue
