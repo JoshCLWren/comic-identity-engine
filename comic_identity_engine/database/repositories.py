@@ -621,6 +621,36 @@ class ExternalMappingRepository:
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
+    async def bulk_find_by_source_issue_ids(
+        self,
+        source: str,
+        source_issue_ids: list[str],
+    ) -> list[ExternalMapping]:
+        """Bulk find external mappings by source and source issue IDs.
+
+        This is much more efficient than individual lookups when checking
+        if multiple mappings already exist (e.g., during CLZ import).
+
+        Args:
+            source: Source platform code (e.g., "clz")
+            source_issue_ids: List of source issue IDs to lookup
+
+        Returns:
+            List of ExternalMapping entities that match the provided IDs
+        """
+        from sqlalchemy import or_
+
+        if not source_issue_ids:
+            return []
+
+        stmt: Select[ExternalMapping] = select(ExternalMapping).where(
+            ExternalMapping.source == source,
+            or_(*(ExternalMapping.source_issue_id == sid for sid in source_issue_ids)),
+        )
+
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
     async def create_mapping(
         self,
         issue_id: uuid.UUID,

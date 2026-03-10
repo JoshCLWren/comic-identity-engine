@@ -1415,26 +1415,78 @@ async def import_clz_task(
                 else:
                     validated_rows.append((row_index, row, row_key))
 
-            # Bulk lookup: Check which issues already exist in database
+            # Bulk lookup: Check which CLZ issues already have external mappings
             if validated_rows:
-                from comic_identity_engine.database.repositories import IssueRepository
-
-                issue_repo = IssueRepository(session)
-
-                # Extract (series_title, issue_number) pairs for bulk lookup
-                series_issue_pairs = [
-                    (row.get("Series", "").strip(), row.get("Issue", "").strip())
-                    for _, row, _ in validated_rows
-                ]
-
-                # Bulk query: Find which issues already exist
-                existing_issues = await issue_repo.bulk_find_by_series_issue(
-                    [(series, issue) for series, issue in series_issue_pairs]
+                from comic_identity_engine.database.repositories import (
+                    ExternalMappingRepository,
                 )
 
-                # Build set of existing (series, issue) pairs for fast lookup
-                existing_pairs = {
-                    (issue.series_run.title, issue.issue_number)
+                mapping_repo = ExternalMappingRepository(session)
+
+                # Extract all Core ComicID values (CLZ source issue IDs)
+                source_issue_ids = [
+                    row.get("Core ComicID", "").strip() for _, row, _ in validated_rows
+                ]
+
+                # Bulk query: Find which CLZ IDs already have mappings
+                existing_mappings = await mapping_repo.bulk_find_by_source_issue_ids(
+                    source="clz",
+                    source_issue_ids=source_issue_ids,
+                )
+
+                # Build set of existing CLZ IDs for fast lookup
+                existing_clz_ids = {
+                    mapping.source_issue_id for mapping in existing_mappings
+                }
+
+                # Create mapping dict for quick lookup
+                mapping_by_clz_id = {
+                    mapping.source_issue_id: mapping for mapping in existing_mappings
+                }
+
+                # Filter out rows that already have mappings
+                pre_filtered_rows: list[tuple[int, dict[str, str], str]] = []
+                pre_skipped_count = 0
+
+                for row_index, row, row_key in validated_rows:
+                    source_issue_id = row.get("Core ComicID", "").strip()
+
+                    if source_issue_id in existing_clz_ids:
+                        # CLZ ID already mapped, mark as resolved without queueing
+                        existing_mapping = mapping_by_clz_id[source_issue_id]
+                        row_result = {
+                            "row_index": row_index,
+                            "row_key": row_key,
+                            "source_issue_id": source_issue_id,
+                            "resolved": True,
+                            "issue_id": str(existing_mapping.issue_id),
+                            "existing_mapping": True,
+                            "cross_platform_found": 0,
+                            "skipped_reason": "already_exists",
+                        }
+                        row_results[row_key] = row_result
+                        pre_skipped_count += 1
+                    else:
+                        # No mapping exists, needs processing
+                        pre_filtered_rows.append((row_index, row, row_key))
+
+                validated_rows = pre_filtered_rows
+
+                if pre_skipped_count > 0:
+                    logger.info(
+                        "Bulk external mapping lookup skipped already-imported CLZ issues",
+                        operation_id=operation_id,
+                        skipped_count=pre_skipped_count,
+                        will_enqueue=len(validated_rows),
+                    )
+
+                # Build set of existing (series, issue, year) triples for fast lookup
+                existing_triples = {
+                    (
+                        issue.series_run.title,
+                        issue.issue_number,
+                        issue.series_run.start_year,
+                    )
                     for issue in existing_issues
                 }
 
@@ -1445,8 +1497,14 @@ async def import_clz_task(
                 for row_index, row, row_key in validated_rows:
                     series_title = row.get("Series", "").strip()
                     issue_number = row.get("Issue", "").strip()
+                    release_year = row.get("Release Year", "").strip()
 
-                    if (series_title, issue_number) in existing_pairs:
+                    # Parse year for comparison
+                    year = None
+                    if release_year and release_year.isdigit():
+                        year = int(release_year)
+
+                    if (series_title, issue_number, year) in existing_triples:
                         # Issue already exists, mark as resolved without queueing
                         source_issue_id = row.get("Core ComicID", "").strip()
 
@@ -1455,6 +1513,7 @@ async def import_clz_task(
                             if (
                                 issue.series_run.title == series_title
                                 and issue.issue_number == issue_number
+                                and issue.series_run.start_year == year
                             ):
                                 row_result = {
                                     "row_index": row_index,
