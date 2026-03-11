@@ -85,11 +85,20 @@ X-Men,10,Marvel,1992,clz-010,April 1992,012345678901"""
                     )
                     mock_queue_class.return_value = mock_queue
 
-                    result = await import_clz_task(
-                        {},
-                        str(csv_file),
-                        str(TEST_OPERATION_ID),
-                    )
+                    with patch(
+                        "comic_identity_engine.database.repositories.ExternalMappingRepository"
+                    ) as mock_mapping_repo_class:
+                        mock_mapping_repo = Mock()
+                        mock_mapping_repo.bulk_find_by_source_issue_ids = AsyncMock(
+                            return_value=[]
+                        )
+                        mock_mapping_repo_class.return_value = mock_mapping_repo
+
+                        result = await import_clz_task(
+                            {},
+                            str(csv_file),
+                            str(TEST_OPERATION_ID),
+                        )
 
         assert result["total_rows"] == 10
         assert result["processed"] == 0
@@ -453,11 +462,20 @@ class TestClzImportMedium:
                     )
                     mock_queue_class.return_value = mock_queue
 
-                    result = await import_clz_task(
-                        {},
-                        str(csv_file),
-                        str(TEST_OPERATION_ID),
-                    )
+                    with patch(
+                        "comic_identity_engine.database.repositories.ExternalMappingRepository"
+                    ) as mock_mapping_repo_class:
+                        mock_mapping_repo = Mock()
+                        mock_mapping_repo.bulk_find_by_source_issue_ids = AsyncMock(
+                            return_value=[]
+                        )
+                        mock_mapping_repo_class.return_value = mock_mapping_repo
+
+                        result = await import_clz_task(
+                            {},
+                            str(csv_file),
+                            str(TEST_OPERATION_ID),
+                        )
 
         assert result["total_rows"] == 100
         assert result["processed"] == 0
@@ -560,11 +578,20 @@ X-Men,3,Marvel,1991,clz-003"""
                     )
                     mock_queue_class.return_value = mock_queue
 
-                    result = await import_clz_task(
-                        {},
-                        str(csv_file),
-                        str(TEST_OPERATION_ID),
-                    )
+                    with patch(
+                        "comic_identity_engine.database.repositories.ExternalMappingRepository"
+                    ) as mock_mapping_repo_class:
+                        mock_mapping_repo = Mock()
+                        mock_mapping_repo.bulk_find_by_source_issue_ids = AsyncMock(
+                            return_value=[]
+                        )
+                        mock_mapping_repo_class.return_value = mock_mapping_repo
+
+                        result = await import_clz_task(
+                            {},
+                            str(csv_file),
+                            str(TEST_OPERATION_ID),
+                        )
 
         assert result["processed"] == 1
         assert result["resolved"] == 1
@@ -678,11 +705,20 @@ X-Men,3,Marvel,1991,clz-003"""
                     )
                     mock_queue_class.return_value = mock_queue
 
-                    result = await import_clz_task(
-                        {},
-                        str(csv_file),
-                        str(TEST_OPERATION_ID),
-                    )
+                    with patch(
+                        "comic_identity_engine.database.repositories.ExternalMappingRepository"
+                    ) as mock_mapping_repo_class:
+                        mock_mapping_repo = Mock()
+                        mock_mapping_repo.bulk_find_by_source_issue_ids = AsyncMock(
+                            return_value=[]
+                        )
+                        mock_mapping_repo_class.return_value = mock_mapping_repo
+
+                        result = await import_clz_task(
+                            {},
+                            str(csv_file),
+                            str(TEST_OPERATION_ID),
+                        )
 
         assert result["processed"] == 1
         assert result["resolved"] == 1
