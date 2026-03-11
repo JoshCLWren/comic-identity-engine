@@ -36,6 +36,7 @@ VALID_OPERATION_TYPES = [
     "import_csv",
     "export",
     "reconcile",
+    "refresh_clz_mappings",
 ]
 
 VALID_STATUSES = [

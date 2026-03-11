@@ -146,6 +146,7 @@ class TestResolveClzRow:
                 ) as mock_mapping_repo_class:
                     mock_mapping_repo = Mock()
                     mock_mapping_repo.find_by_source = AsyncMock(return_value=None)
+                    mock_mapping_repo.find_by_issue = AsyncMock(return_value=[])
                     mock_mapping_repo.create_mapping = AsyncMock()
                     mock_mapping_repo_class.return_value = mock_mapping_repo
 
@@ -213,6 +214,7 @@ class TestResolveClzRow:
             mock_mapping_repo.find_by_source = AsyncMock(
                 return_value=mock_existing_mapping
             )
+            mock_mapping_repo.find_by_issue = AsyncMock(return_value=[])
             mock_mapping_repo_class.return_value = mock_mapping_repo
 
             result = await resolve_clz_row_task(

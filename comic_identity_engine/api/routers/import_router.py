@@ -11,10 +11,13 @@ USAGE:
     app.include_router(import_router)
 """
 
-from typing import Annotated
+import csv
+import uuid
+from pathlib import Path
+from typing import Annotated, Optional
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from comic_identity_engine.api.dependencies import (
     get_job_queue,
@@ -24,6 +27,8 @@ from comic_identity_engine.api.schemas import (
     ImportClzRequest,
     OperationResponse,
 )
+from comic_identity_engine.database.connection import AsyncSessionLocal
+from comic_identity_engine.database.repositories import ExternalMappingRepository
 from comic_identity_engine.errors import ValidationError
 from comic_identity_engine.jobs.queue import JobQueue
 from comic_identity_engine.services.imports import (
@@ -226,3 +231,209 @@ async def get_import_clz_status(
         }
 
     return response
+
+
+@router.post(
+    "/clz/{operation_id}/refresh-mappings",
+    response_model=OperationResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Refresh missing platform mappings",
+    description="Re-run cross-platform search for issues that are missing mappings.",
+    responses={
+        404: {"description": "Operation not found"},
+        400: {"description": "Operation is not a CLZ import or is still running"},
+    },
+)
+async def refresh_clz_mappings(
+    operation_id: uuid.UUID,
+    queue: Annotated[JobQueue, Depends(get_job_queue)],
+    operations_manager: Annotated[OperationsManager, Depends(get_operations_manager)],
+    platforms: Annotated[
+        Optional[list[str]],
+        Query(
+            description="Specific platforms to refresh (default: all missing platforms)"
+        ),
+    ] = None,
+) -> OperationResponse:
+    """Re-run cross-platform search for issues from this import that are missing mappings.
+
+    This endpoint finds all issues from the specified import operation,
+    checks which platforms are missing mappings, and enqueues platform-only
+    search tasks to find the missing mappings.
+
+    Args:
+        operation_id: UUID of the original CLZ import operation
+        platforms: Optional list of specific platforms to refresh
+            (default: refresh all missing platforms)
+        queue: Job queue dependency for enqueueing jobs
+        operations_manager: Operations manager for tracking operation
+
+    Returns:
+        OperationResponse with operation name for polling
+
+    Raises:
+        HTTPException: 404 if operation not found, 400 if not a CLZ import
+    """
+    original_operation = await operations_manager.get_operation(operation_id)
+
+    if original_operation is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "code": "OPERATION_NOT_FOUND",
+                "message": f"Operation not found: {operation_id}",
+            },
+        )
+
+    if original_operation.operation_type != "import_clz":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "INVALID_OPERATION_TYPE",
+                "message": "This operation is not a CLZ import",
+            },
+        )
+
+    if original_operation.status not in ("completed", "failed"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "OPERATION_STILL_RUNNING",
+                "message": "Cannot refresh mappings while import is still running",
+            },
+        )
+
+    original_result = original_operation.result or {}
+    row_results = original_result.get("row_results", {})
+    csv_path = original_result.get("csv_path") or original_result.get("file_path")
+
+    if not csv_path:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "CSV_PATH_NOT_FOUND",
+                "message": "Original CSV path not found in operation result",
+            },
+        )
+
+    csv_file = Path(csv_path)
+    if not csv_file.exists():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "CSV_FILE_NOT_FOUND",
+                "message": f"Original CSV file not found: {csv_path}",
+            },
+        )
+
+    async with AsyncSessionLocal() as session:
+        mapping_repo = ExternalMappingRepository(session)
+
+        issues_to_refresh = []
+        all_platforms = {"gcd", "locg", "ccl", "aa", "cpg", "hip"}
+
+        for row_key, row_result in row_results.items():
+            if not row_result.get("resolved"):
+                continue
+
+            issue_id_str = row_result.get("issue_id")
+            if not issue_id_str:
+                continue
+
+            issue_id = uuid.UUID(issue_id_str)
+            external_mappings = await mapping_repo.find_by_issue(issue_id)
+            mapped_platforms = {m.source for m in external_mappings}
+
+            if platforms:
+                target_platforms = set(platforms)
+                missing = target_platforms - mapped_platforms
+            else:
+                missing = all_platforms - mapped_platforms
+
+            if missing:
+                issues_to_refresh.append(
+                    {
+                        "row_key": row_key,
+                        "row_index": row_result.get("row_index"),
+                        "issue_id": issue_id_str,
+                        "source_issue_id": row_result.get("source_issue_id"),
+                        "missing_platforms": sorted(missing),
+                    }
+                )
+
+    if not issues_to_refresh:
+        return OperationResponse(
+            name=f"operations/{operation_id}",
+            done=True,
+            metadata={
+                "operation_type": "refresh_clz_mappings",
+                "original_operation_id": str(operation_id),
+                "issues_checked": len(row_results),
+                "issues_refreshed": 0,
+                "message": "All issues already have all platform mappings",
+            },
+            response={
+                "issues_checked": len(row_results),
+                "issues_refreshed": 0,
+                "message": "No missing platform mappings found",
+            },
+        )
+
+    refresh_operation = await operations_manager.create_operation(
+        operation_type="refresh_clz_mappings",
+        initial_result={
+            "original_operation_id": str(operation_id),
+            "csv_path": csv_path,
+            "total_rows": len(issues_to_refresh),
+            "processed": 0,
+            "resolved": 0,
+            "failed": 0,
+            "errors": [],
+            "progress": 0.0,
+            "issues_to_refresh": issues_to_refresh,
+        },
+    )
+
+    rows = []
+    with open(csv_file, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        rows = list(reader)
+
+    row_by_index = {idx: row for idx, row in enumerate(rows, start=1)}
+    row_by_clz_id = {}
+    for row in rows:
+        clz_id = (row.get("Core ComicID") or "").strip()
+        if clz_id:
+            row_by_clz_id[clz_id] = row
+
+    enqueued_count = 0
+    for issue_info in issues_to_refresh:
+        row_index = issue_info.get("row_index")
+        source_issue_id = issue_info.get("source_issue_id")
+
+        row_data = None
+        if row_index and row_index in row_by_index:
+            row_data = row_by_index[row_index]
+        elif source_issue_id and source_issue_id in row_by_clz_id:
+            row_data = row_by_clz_id[source_issue_id]
+
+        if row_data:
+            await queue.enqueue_resolve_clz_row_platforms_only(
+                row_data=row_data,
+                row_index=row_index or 0,
+                operation_id=refresh_operation.id,
+            )
+            enqueued_count += 1
+
+    return OperationResponse(
+        name=f"operations/{refresh_operation.id}",
+        done=False,
+        metadata={
+            "operation_type": "refresh_clz_mappings",
+            "original_operation_id": str(operation_id),
+            "issues_checked": len(row_results),
+            "issues_to_refresh": len(issues_to_refresh),
+            "enqueued": enqueued_count,
+            "target_platforms": platforms,
+        },
+    )

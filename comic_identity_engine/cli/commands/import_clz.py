@@ -74,6 +74,11 @@ from rich.table import Table
     help="Requeue failed rows for a same-file import without reposting resolved rows",
     show_default=True,
 )
+@click.option(
+    "--refresh-mappings",
+    is_flag=True,
+    help="Only search for missing platform mappings (skip CLZ resolution)",
+)
 def cli_import_clz(
     csv_path: str | None,
     api_url: str,
@@ -83,6 +88,7 @@ def cli_import_clz(
     debug: bool,
     operation_id: str | None,
     retry_failed_only: bool,
+    refresh_mappings: bool,
 ) -> None:
     """Import comic data from a CLZ CSV export file.
 
@@ -96,6 +102,7 @@ def cli_import_clz(
         cie-import-clz --operation-id 550e8400-e29b-41d4-a716-446655440000
         cie-import-clz clz_export.csv --no-wait
         cie-import-clz clz_export.csv --verbose
+        cie-import-clz clz_export.csv --refresh-mappings
     """
     if csv_path and operation_id:
         raise click.UsageError(
@@ -107,6 +114,8 @@ def cli_import_clz(
         )
     if retry_failed_only and not csv_path:
         raise click.UsageError("--retry-failed-only requires a CSV path submission.")
+    if refresh_mappings and not csv_path:
+        raise click.UsageError("--refresh-mappings requires a CSV path.")
 
     console = Console(stderr=True)
 
@@ -131,6 +140,10 @@ def cli_import_clz(
             console.print(f"[dim]Importing CLZ CSV: {csv_file}[/dim]")
             if retry_failed_only:
                 console.print("[dim]Retry mode: failed rows only[/dim]")
+            if refresh_mappings:
+                console.print(
+                    "[dim]Refresh mode: search for missing platform mappings[/dim]"
+                )
         else:
             console.print(
                 f"[dim]Attaching to CLZ import operation: {normalized_operation_id}[/dim]"
@@ -140,7 +153,6 @@ def cli_import_clz(
     try:
         with httpx.Client(timeout=30.0) as client:
             if normalized_operation_id is None:
-                # csv_file is guaranteed to be set here since operation_id is None
                 assert csv_file is not None, (
                     "csv_file must be set when operation_id is None"
                 )
@@ -166,6 +178,27 @@ def cli_import_clz(
 
                 if verbose or debug:
                     console.print(f"[dim]Operation ID: {normalized_operation_id}[/dim]")
+
+                if refresh_mappings:
+                    if verbose or debug:
+                        console.print("[dim]Calling refresh-mappings endpoint...[/dim]")
+
+                    refresh_response = client.post(
+                        f"{api_url}/api/v1/import/clz/{normalized_operation_id}/refresh-mappings",
+                    )
+                    refresh_response.raise_for_status()
+                    refresh_data = refresh_response.json()
+
+                    refresh_operation_name = refresh_data.get("name")
+                    if refresh_operation_name:
+                        normalized_operation_id = _normalize_operation_id(
+                            refresh_operation_name
+                        )
+                        if verbose or debug:
+                            console.print(
+                                f"[dim]Refresh operation ID: {normalized_operation_id}[/dim]"
+                            )
+
             elif verbose or debug:
                 console.print(
                     "[dim]Skipping submission and polling existing operation[/dim]"
@@ -603,6 +636,264 @@ def _generate_html_report(operation_id: str, result: dict) -> Path:
                 <div class="metric-value">{success_rate:.1f}%</div>
             </div>
         </div>
+"""
+
+    # Get row_results for successful entries with platform mappings
+    row_results = result.get("row_results", {})
+    successful_results = []
+    for row_key, row_result in row_results.items():
+        if row_result.get("resolved") and not row_result.get("error"):
+            platform_mappings = row_result.get("platform_mappings", [])
+            if platform_mappings and len(platform_mappings) > 0:
+                successful_results.append(row_result)
+
+    # Sort by row_index
+    successful_results.sort(key=lambda x: x.get("row_index", 0))
+
+    # Add successful results section with navigation
+    if successful_results:
+        html_content += (
+            """
+        <style>
+            .success-nav {{
+                background: #f0f9f0;
+                border: 1px solid #27ae60;
+                border-radius: 8px;
+                padding: 15px 20px;
+                margin-bottom: 20px;
+            }}
+            .success-nav-title {{
+                font-size: 18px;
+                font-weight: bold;
+                color: #27ae60;
+                margin-bottom: 10px;
+            }}
+            .success-nav-controls {{
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }}
+            .success-nav button {{
+                background: #27ae60;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 14px;
+            }}
+            .success-nav button:hover {{
+                background: #219a52;
+            }}
+            .success-nav button:disabled {{
+                background: #95a5a6;
+                cursor: not-allowed;
+            }}
+            .success-nav-info {{
+                color: #555;
+                font-size: 14px;
+            }}
+            .success-card {{
+                display: none;
+                border: 1px solid #27ae60: 8px;
+                border-radius;
+                margin-bottom: 20px;
+                background: white;
+                overflow: hidden;
+            }}
+            .success-card.active {{
+                display: block;
+            }}
+            .success-header {{
+                background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+                color: white;
+                padding: 15px 20px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }}
+            .success-title {{
+                font-size: 18px;
+                font-weight: bold;
+            }}
+            .success-subtitle {{
+                font-size: 14px;
+                opacity: 0.9;
+            }}
+            .success-body {{
+                padding: 20px;
+            }}
+            .data-section {{
+                margin-bottom: 20px;
+            }}
+            .data-section h3 {{
+                color: #2c3e50;
+                font-size: 16px;
+                margin-bottom: 10px;
+                padding-bottom: 5px;
+                border-bottom: 2px solid #3498db;
+            }}
+            .platform-grid {{
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+                gap: 15px;
+                margin-top: 10px;
+            }}
+            .platform-card {{
+                background: #f8f9fa;
+                border: 1px solid #ddd;
+                border-radius: 6px;
+                padding: 12px;
+            }}
+            .platform-card-header {{
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 8px;
+            }}
+            .platform-name {{
+                font-weight: bold;
+                color: #2c3e50;
+                text-transform: uppercase;
+                font-size: 12px;
+            }}
+            .platform-id {{
+                font-family: 'Courier New', monospace;
+                font-size: 13px;
+                color: #555;
+            }}
+            .match-explanation {{
+                background: #e8f5e9;
+                border-left: 4px solid #27ae60;
+                padding: 12px 15px;
+                margin: 15px 0;
+                border-radius: 4px;
+            }}
+            .match-explanation strong {{
+                color: #1e7e34;
+                display: block;
+                margin-bottom: 5px;
+            }}
+        </style>
+
+        <h2>✅ Successful Imports (with platform mappings)</h2>
+        <div class="success-nav">
+            <div class="success-nav-title">Navigate Results</div>
+            <div class="success-nav-controls">
+                <button id="prev-btn" onclick="navigateResult(-1)" disabled>← Previous</button>
+                <span class="success-nav-info">Result <span id="current-index">1</span> of """
+            + str(len(successful_results))
+            + """</span>
+                <button id="next-btn" onclick="navigateResult(1)">Next →</button>
+            </div>
+        </div>
+"""
+        )
+        # Add each success card
+        for idx, sr in enumerate(successful_results):
+            row_index = sr.get("row_index", "?")
+            source_issue_id = sr.get("source_issue_id", "")
+            issue_id = sr.get("issue_id", "")
+            row_data = sr.get("row_data", {})
+            platform_mappings = sr.get("platform_mappings", [])
+            explanation = sr.get("match_explanation", "")
+            existing = sr.get("existing_mapping", False)
+
+            # Build CLZ row data HTML
+            clz_data_html = ""
+            for key, value in sorted(row_data.items()):
+                if value:
+                    clz_data_html += f"""
+                        <tr>
+                            <td class="key-column">{key}</td>
+                            <td>{value}</td>
+                        </tr>"""
+
+            # Build platform mappings HTML
+            platform_html = ""
+            all_platforms = ["gcd", "locg", "ccl", "aa", "cpg", "hip"]
+            platforms_found = {pm["platform"] for pm in platform_mappings}
+
+            for plat in all_platforms:
+                plat_data = next(
+                    (pm for pm in platform_mappings if pm["platform"] == plat), None
+                )
+                if plat_data:
+                    platform_html += f"""
+                    <div class="platform-card">
+                        <div class="platform-card-header">
+                            <span class="platform-name">{plat}</span>
+                        </div>
+                        <div class="platform-id">{plat_data.get("external_id", "N/A")}</div>
+                    </div>"""
+                else:
+                    platform_html += f"""
+                    <div class="platform-card" style="opacity: 0.5;">
+                        <div class="platform-card-header">
+                            <span class="platform-name">{plat}</span>
+                        </div>
+                        <div class="platform-id">Not found</div>
+                    </div>"""
+
+            html_content += f"""
+        <div class="success-card" data-index="{idx}">
+            <div class="success-header">
+                <div>
+                    <div class="success-title">Row {row_index}</div>
+                    <div class="success-subtitle">CLZ ID: {source_issue_id} | Issue UUID: {issue_id[:8]}...</div>
+                </div>
+                <span class="category-badge" style="background: #27ae60; color: white;">{"Reused" if existing else "Resolved"}</span>
+            </div>
+            <div class="success-body">
+                <div class="data-section">
+                    <h3>📄 CLZ Row Data</h3>
+                    <table class="row-data-table">
+                        <tbody>
+                            {clz_data_html}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="match-explanation">
+                    <strong>Match Explanation</strong>
+                    {explanation}
+                </div>
+                
+                <div class="data-section">
+                    <h3>🔗 Platform Mappings ({len(platform_mappings)}/6 found)</h3>
+                    <div class="platform-grid">
+                        {platform_html}
+                    </div>
+                </div>
+            </div>
+        </div>
+"""
+
+        html_content += """
+        <script>
+            let currentIndex = 0;
+            const cards = document.querySelectorAll('.success-card');
+            const totalCards = cards.length;
+            
+            function showCard(index) {
+                cards.forEach((card, i) => {
+                    card.classList.toggle('active', i === index);
+                });
+                document.getElementById('current-index').textContent = index + 1;
+                document.getElementById('prev-btn').disabled = index === 0;
+                document.getElementById('next-btn').disabled = index === totalCards - 1;
+            }
+            
+            function navigateResult(direction) {
+                currentIndex = Math.max(0, Math.min(totalCards - 1, currentIndex + direction));
+                showCard(currentIndex);
+            }
+            
+            // Show first card initially
+            if (totalCards > 0) {
+                showCard(0);
+            }
+        </script>
 """
 
     # Add error summary section if there are errors

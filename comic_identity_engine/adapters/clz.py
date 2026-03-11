@@ -28,15 +28,17 @@ from comic_identity_engine.parsing import parse_issue_candidate
 
 # Format codes used by CLZ as "issue numbers" for collected editions.
 # These are not real issue numbers — default to "1" and treat the code as a variant.
-FORMAT_ISSUE_CODES = frozenset({
-    "TP",   # Trade Paperback
-    "HC",   # Hardcover
-    "GN",   # Graphic Novel
-    "SC",   # Softcover
-    "TPB",  # Trade Paperback (alternate)
-    "OGN",  # Original Graphic Novel
-    "OM",   # Omnibus
-})
+FORMAT_ISSUE_CODES = frozenset(
+    {
+        "TP",  # Trade Paperback
+        "HC",  # Hardcover
+        "GN",  # Graphic Novel
+        "SC",  # Softcover
+        "TPB",  # Trade Paperback (alternate)
+        "OGN",  # Original Graphic Novel
+        "OM",  # Omnibus
+    }
+)
 
 
 class CLZAdapter(SourceAdapter):
@@ -216,6 +218,21 @@ class CLZAdapter(SourceAdapter):
             )
 
         issue_number_raw = (row.get("Issue") or "").strip()
+
+        # Handle CLZ "NN" (No Number) placeholders
+        # These appear when CLZ can't determine the actual issue number
+        # Patterns: NN, NN-NN, 1998NN-NN (number + NN + optional suffix)
+        if re.match(
+            r"^(NN|NN-NN|\d+NN(-[A-Za-z0-9]+)*)$", issue_number_raw, re.IGNORECASE
+        ):
+            # Check if there's a numeric issue number in "Issue Nr" column
+            issue_nr = (row.get("Issue Nr") or "").strip()
+            if issue_nr and issue_nr.isdigit():
+                issue_number_raw = issue_nr
+            else:
+                # Default to issue 1 if no Issue Nr available
+                issue_number_raw = "1"
+
         if not issue_number_raw:
             # Missing issue number — default to "1" if Format is present
             # (e.g., Trade Paperback with no issue number)
@@ -309,8 +326,11 @@ class CLZAdapter(SourceAdapter):
                 raw = raw.replace(char, replacement)
                 # Remove hyphen separator before variant letter after fractions
                 # e.g. "½-A" → "1/2-A" → "1/2A"
+                # Also for INF issues: "INF-A" → "INFA"
                 if "/" in replacement:
                     raw = re.sub(r"(\d/\d+)-([A-Za-z])", r"\1\2", raw)
+                if replacement == "INF":
+                    raw = re.sub(r"^INF-([A-Za-z])", r"INF\1", raw)
         return raw
 
     @staticmethod

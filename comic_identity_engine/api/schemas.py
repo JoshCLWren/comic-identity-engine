@@ -374,3 +374,182 @@ class JobStatusResponse(BaseModel):
         description="When the operation was last updated (ISO 8601 format)",
         examples=["2024-01-15T10:35:00Z"],
     )
+
+
+class MarkIncorrectRequest(BaseModel):
+    """Request to mark a mapping as incorrect.
+
+    Attributes:
+        issue_id: UUID of the canonical issue
+        source: Platform source (gcd, locg, ccl, aa, cpg, hip, clz)
+        source_issue_id: The incorrect source issue ID
+        correction_type: Type of correction (wrong_issue, wrong_series, wrong_variant, should_not_match)
+        notes: Optional user notes explaining the correction
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "issue_id": "550e8400-e29b-41d4-a716-446655440000",
+                    "source": "gcd",
+                    "source_issue_id": "12345",
+                    "correction_type": "wrong_issue",
+                    "notes": "This is actually issue #2, not #1",
+                }
+            ]
+        }
+    )
+
+    issue_id: UUID = Field(
+        ...,
+        description="UUID of the canonical issue",
+        examples=["550e8400-e29b-41d4-a716-446655440000"],
+    )
+    source: str = Field(
+        ...,
+        description="Platform source (gcd, locg, ccl, aa, cpg, hip, clz)",
+        examples=["gcd"],
+        pattern=r"^(gcd|locg|ccl|aa|cpg|hip|clz)$",
+    )
+    source_issue_id: str = Field(
+        ...,
+        description="The incorrect source issue ID",
+        examples=["12345"],
+    )
+    correction_type: str = Field(
+        ...,
+        description="Type of correction",
+        examples=["wrong_issue"],
+        pattern=r"^(wrong_issue|wrong_series|wrong_variant|should_not_match)$",
+    )
+    notes: Optional[str] = Field(
+        default=None,
+        description="Optional user notes explaining the correction",
+        examples=["This is actually issue #2, not #1"],
+    )
+
+
+class ProvideCorrectRequest(BaseModel):
+    """Request to provide the correct mapping ID.
+
+    Attributes:
+        issue_id: UUID of the canonical issue
+        source: Platform source (gcd, locg, ccl, aa, cpg, hip, clz)
+        incorrect_source_issue_id: The incorrect source issue ID
+        correct_source_issue_id: The correct source issue ID
+        notes: Optional user notes
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "issue_id": "550e8400-e29b-41d4-a716-446655440000",
+                    "source": "gcd",
+                    "incorrect_source_issue_id": "12345",
+                    "correct_source_issue_id": "12346",
+                    "notes": "Corrected to issue #2",
+                }
+            ]
+        }
+    )
+
+    issue_id: UUID = Field(
+        ...,
+        description="UUID of the canonical issue",
+        examples=["550e8400-e29b-41d4-a716-446655440000"],
+    )
+    source: str = Field(
+        ...,
+        description="Platform source (gcd, locg, ccl, aa, cpg, hip, clz)",
+        examples=["gcd"],
+        pattern=r"^(gcd|locg|ccl|aa|cpg|hip|clz)$",
+    )
+    incorrect_source_issue_id: str = Field(
+        ...,
+        description="The incorrect source issue ID",
+        examples=["12345"],
+    )
+    correct_source_issue_id: str = Field(
+        ...,
+        description="The correct source issue ID",
+        examples=["12346"],
+    )
+    notes: Optional[str] = Field(
+        default=None,
+        description="Optional user notes",
+        examples=["Corrected to issue #2"],
+    )
+
+
+class CorrectionResponse(BaseModel):
+    """Response for correction operations.
+
+    Attributes:
+        id: UUID of the correction record
+        issue_id: UUID of the canonical issue
+        source: Platform source
+        correction_type: Type of correction
+        created_at: When the correction was created
+    """
+
+    id: UUID = Field(
+        ...,
+        description="UUID of the correction record",
+        examples=["550e8400-e29b-41d4-a716-446655440001"],
+    )
+    issue_id: UUID = Field(
+        ...,
+        description="UUID of the canonical issue",
+        examples=["550e8400-e29b-41d4-a716-446655440000"],
+    )
+    source: str = Field(
+        ...,
+        description="Platform source",
+        examples=["gcd"],
+    )
+    correction_type: str = Field(
+        ...,
+        description="Type of correction",
+        examples=["wrong_issue"],
+    )
+    created_at: datetime = Field(
+        ...,
+        description="When the correction was created",
+        examples=["2024-01-15T10:30:00Z"],
+    )
+
+
+class CorrectionHistoryItem(BaseModel):
+    """Single item in correction history.
+
+    Attributes:
+        id: UUID of the correction record
+        source: Platform source
+        original_source_issue_id: The original (incorrect) ID
+        correct_source_issue_id: The correct ID (if provided)
+        correction_type: Type of correction
+        user_notes: User-provided notes
+        created_at: When the correction was created
+    """
+
+    id: UUID
+    source: str
+    original_source_issue_id: str
+    correct_source_issue_id: Optional[str]
+    correction_type: str
+    user_notes: Optional[str]
+    created_at: datetime
+
+
+class CorrectionHistoryResponse(BaseModel):
+    """Correction history for an issue.
+
+    Attributes:
+        issue_id: UUID of the canonical issue
+        corrections: List of corrections
+    """
+
+    issue_id: UUID
+    corrections: list[CorrectionHistoryItem]

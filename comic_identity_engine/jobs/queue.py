@@ -310,6 +310,52 @@ class JobQueue:
             operation_id=str(operation_id),
         )
 
+    async def enqueue_resolve_clz_row_platforms_only(
+        self,
+        row_data: dict[str, str],
+        row_index: int,
+        operation_id: uuid.UUID,
+    ) -> Job:
+        """Enqueue a CLZ row task that only searches for missing platforms.
+
+        This is used for refresh operations where CLZ mapping already exists
+        but we want to search for missing cross-platform mappings.
+
+        Args:
+            row_data: Single CSV row as dictionary
+            row_index: Row index (1-based) for error reporting
+            operation_id: UUID of the parent import operation
+
+        Returns:
+            arq Job instance.
+
+        Raises:
+            ConnectionError: If unable to connect to Redis.
+
+        Examples:
+            >>> job = await queue.enqueue_resolve_clz_row_platforms_only(
+            ...     {"Core ComicID": "123", "Series": "X-Men"},
+            ...     1,
+            ...     operation_id
+            ... )
+        """
+        pool = await self._get_pool()
+
+        logger.info(
+            "Enqueueing CLZ row platforms-only refresh job",
+            row_index=row_index,
+            source_issue_id=row_data.get("Core ComicID"),
+            operation_id=str(operation_id),
+        )
+
+        return await pool.enqueue_job(
+            "resolve_clz_row_task",
+            row_data=row_data,
+            row_index=row_index,
+            operation_id=str(operation_id),
+            phase="platforms_only",
+        )
+
     async def enqueue_http_request(
         self,
         url: str,

@@ -278,6 +278,15 @@ class ExternalMapping(Base):
         String(500),
         nullable=False,
     )
+    is_accurate: Mapped[bool] = mapped_column(
+        default=True,
+        nullable=False,
+        index=True,
+    )
+    source_url: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -304,6 +313,66 @@ class ExternalMapping(Base):
         return (
             f"<ExternalMapping(id={self.id}, source='{self.source}', "
             f"source_issue_id='{self.source_issue_id}', issue_id={self.issue_id})>"
+        )
+
+
+class MappingCorrection(Base):
+    """User-initiated correction for an external mapping.
+
+    Tracks when a user marks a mapping as incorrect and optionally
+    provides the correct mapping. Used for algorithm improvement.
+    """
+
+    __tablename__ = "mapping_corrections"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    issue_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("issues.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    source: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        index=True,
+    )
+    original_source_issue_id: Mapped[str] = mapped_column(
+        String(500),
+        nullable=False,
+    )
+    correct_source_issue_id: Mapped[Optional[str]] = mapped_column(
+        String(500),
+        nullable=True,
+    )
+    correction_type: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        index=True,
+    )
+    user_notes: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+    )
+    corrected_by: Mapped[Optional[str]] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<MappingCorrection(id={self.id}, issue_id={self.issue_id}, "
+            f"source='{self.source}', correction_type='{self.correction_type}')>"
         )
 
 

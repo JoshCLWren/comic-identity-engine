@@ -12,13 +12,16 @@ The API follows AIP-151 and AIP-236 for long-running operations and custom metho
 """
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import AsyncGenerator
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 from comic_identity_engine.api.routers import all_routers
+from comic_identity_engine.api.routers.ui import router as ui_router
 from comic_identity_engine.config import get_settings
 from comic_identity_engine.core.cache import redis_cache
 from comic_identity_engine.database.connection import test_database_connection
@@ -33,6 +36,8 @@ from comic_identity_engine.errors import (
     ResolutionError,
     ValidationError,
 )
+
+STATIC_DIR = Path(__file__).parent.parent / "static"
 
 
 def _setup_exception_handlers(app: FastAPI) -> None:
@@ -243,8 +248,17 @@ def create_app() -> FastAPI:
         """
         return {"status": "ok"}
 
-    # Include all routers with /api/v1 prefix
+    @app.get("/", response_class=HTMLResponse)
+    async def root():
+        return RedirectResponse(url="/ui/inventory")
+
+    if STATIC_DIR.exists():
+        app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
     for router in all_routers:
-        app.include_router(router, prefix="/api/v1")
+        if router != ui_router:
+            app.include_router(router, prefix="/api/v1")
+
+    app.include_router(ui_router)
 
     return app
