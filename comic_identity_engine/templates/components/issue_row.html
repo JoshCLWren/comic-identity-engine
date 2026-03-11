@@ -1,0 +1,27 @@
+<tr class="issue-row" data-issue-id="{{ issue.id }}">
+    <td class="col-series">{{ issue.series_title }}</td>
+    <td class="col-issue_number">{{ issue.issue_number }}</td>
+    <td class="col-year">{{ issue.start_year }}</td>
+    <td class="col-publisher {% if not show_publisher %}col-hidden{% endif %}">
+        {{ issue.publisher or '-' }}
+    </td>
+    <td class="col-cover_date {% if not show_cover_date %}col-hidden{% endif %}">
+        {{ issue.cover_date or '-' }}
+    </td>
+    <td class="col-platforms">
+        <div class="platform-badges">
+            {% for platform in platforms %}
+                {% set mapping = issue.mappings | selectattr('platform', 'equalto', platform) | first %}
+                {% if mapping %}
+                    <span class="badge badge-mapped" title="{{ platform }}: {{ mapping.source_issue_id }}">
+                        {{ platform | upper }} ✓
+                    </span>
+                {% else %}
+                    <span class="badge badge-unmapped" title="{{ platform }}: Not mapped">
+                        {{ platform | upper }} ✗
+                    </span>
+                {% endif %}
+            {% endfor %}
+        </div>
+    </td>
+</tr>

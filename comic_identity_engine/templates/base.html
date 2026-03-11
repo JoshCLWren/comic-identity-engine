@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Comic Identity Engine{% endblock %}</title>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <link rel="stylesheet" href="/static/css/style.css">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <header class="nav-header">
+        <nav class="nav-container">
+            <a href="/" class="nav-brand">Comic Identity Engine</a>
+            <div class="nav-links">
+                <a href="/ui/inventory" class="nav-link {% if request.url.path == '/ui/inventory' %}active{% endif %}">Inventory</a>
+                <a href="/ui/corrections" class="nav-link {% if request.url.path == '/ui/corrections' %}active{% endif %}">Corrections</a>
+                <a href="/api/docs" class="nav-link">API Docs</a>
+            </div>
+        </nav>
+    </header>
+    <main class="main-content">
+        {% block content %}{% endblock %}
+    </main>
+    <footer class="footer">
+        <div class="footer-content">
+            Comic Identity Engine
+        </div>
+    </footer>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

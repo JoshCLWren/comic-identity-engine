@@ -21,6 +21,9 @@ from comic_identity_engine.database.models import (
     ExternalMapping,
     MappingCorrection,
 )
+from comic_identity_engine.services.correction_analytics import (
+    CorrectionAnalyticsService,
+)
 
 router = APIRouter(prefix="/ui", tags=["UI"])
 
@@ -378,3 +381,106 @@ async def issue_row_partial(
 
     html += "</div></td></tr>"
     return HTMLResponse(html)
+
+
+@router.get("/corrections", response_class=HTMLResponse)
+async def corrections_page(request: Request):
+    return HTMLResponse(
+        render_template("corrections.html", request=request, platforms=ALL_PLATFORMS)
+    )
+
+
+@router.get("/partials/corrections-stats", response_class=HTMLResponse)
+async def corrections_stats_partial(db: AsyncSession = Depends(get_db)):
+    analytics = CorrectionAnalyticsService(db)
+    stats = await analytics.get_correction_stats()
+    platform_accuracy = await analytics.get_platform_accuracy()
+
+    return HTMLResponse(
+        render_template(
+            "components/corrections_stats.html",
+            stats=stats,
+            platform_accuracy=platform_accuracy,
+        )
+    )
+
+
+@router.get("/partials/corrections-list", response_class=HTMLResponse)
+async def corrections_list_partial(
+    review_status: Optional[str] = Query(None),
+    platform: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+):
+    analytics = CorrectionAnalyticsService(db)
+    corrections = await analytics.get_recent_corrections(
+        limit=limit,
+        review_status=review_status,
+        platform=platform,
+    )
+
+    rows_html = []
+    for c in corrections:
+        series_title = c.issue.series_run.title if c.issue else "Unknown"
+        issue_number = c.issue.issue_number if c.issue else "?"
+        issue_id = c.issue_id if c.issue else ""
+
+        status_badge_class = {
+            "pending": "badge-warning",
+            "reviewed": "badge-info",
+            "applied": "badge-success",
+            "rejected": "badge-danger",
+        }.get(c.review_status, "badge-secondary")
+
+        rows_html.append(
+            f'<tr class="correction-row" data-correction-id="{c.id}">'
+            f'<td class="col-series">{series_title}</td>'
+            f'<td class="col-issue">{issue_number}</td>'
+            f'<td class="col-platform">{c.source.upper()}</td>'
+            f'<td class="col-original">{c.original_source_issue_id}</td>'
+            f'<td class="col-correct">{c.correct_source_issue_id or "-"}</td>'
+            f'<td class="col-type">{c.correction_type}</td>'
+            f'<td class="col-status"><span class="badge {status_badge_class}">{c.review_status}</span></td>'
+            f'<td class="col-date">{c.created_at.strftime("%Y-%m-%d %H:%M")}</td>'
+            f'<td class="col-actions">'
+            f'<a href="/ui/issues/{issue_id}" class="btn btn-sm btn-secondary">View Issue</a>'
+            f"</td>"
+            f"</tr>"
+        )
+
+    return HTMLResponse("".join(rows_html))
+
+
+@router.get("/partials/correction-patterns", response_class=HTMLResponse)
+async def correction_patterns_partial(db: AsyncSession = Depends(get_db)):
+    analytics = CorrectionAnalyticsService(db)
+    patterns = await analytics.identify_patterns()
+
+    patterns_html = []
+    for p in patterns:
+        patterns_html.append(
+            f'<div class="pattern-card">'
+            f"<h4>{p.pattern_type.replace('_', ' ').title()}</h4>"
+            f'<p class="pattern-description">{p.description}</p>'
+            f'<p class="pattern-count"><strong>Occurrences:</strong> {p.count}</p>'
+        )
+
+        if p.examples:
+            patterns_html.append('<div class="pattern-examples">')
+            for ex in p.examples[:2]:
+                patterns_html.append(
+                    f'<div class="example-item">'
+                    f"<code>{ex.get('original_id', '?')} → {ex.get('correct_id', '?')}</code>"
+                    f"</div>"
+                )
+            patterns_html.append("</div>")
+
+        patterns_html.append("</div>")
+
+    if not patterns:
+        patterns_html.append(
+            '<div class="no-patterns"><p>No significant patterns identified yet.</p></div>'
+        )
+
+    return HTMLResponse("".join(patterns_html))

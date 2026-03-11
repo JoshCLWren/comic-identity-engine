@@ -1,0 +1,110 @@
+<div class="stats-cards">
+    <div class="stat-card stat-card-primary">
+        <div class="stat-value">{{ stats.total_issues | default(0) }}</div>
+        <div class="stat-label">Total Issues</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.total_series | default(0) }}</div>
+        <div class="stat-label">Total Series</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.total_mappings | default(0) }}</div>
+        <div class="stat-label">Total Mappings</div>
+    </div>
+    {% for coverage in stats.coverage_by_platform %}
+    <div class="stat-card stat-card-coverage">
+        <div class="stat-header">{{ coverage.platform | upper }}</div>
+        <div class="stat-bar-container">
+            <div class="stat-bar" style="width: {{ coverage.percentage }}%"></div>
+        </div>
+        <div class="stat-detail">
+            {{ coverage.mapped }} / {{ coverage.total }} ({{ coverage.percentage }}%)
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<style>
+.stats-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.stat-card {
+    background: white;
+    border-radius: 8px;
+    padding: 1rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    text-align: center;
+}
+
+.stat-card-primary {
+    background: linear-gradient(135deg, #0066cc 0%, #004499 100%);
+    color: white;
+}
+
+.stat-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.stat-label {
+    font-size: 0.75rem;
+    color: #666;
+    margin-top: 0.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.stat-card-primary .stat-label {
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.stat-card-coverage {
+    text-align: left;
+}
+
+.stat-header {
+    font-weight: 600;
+    font-size: 0.875rem;
+    margin-bottom: 0.5rem;
+}
+
+.stat-bar-container {
+    background: #eee;
+    border-radius: 4px;
+    height: 8px;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+}
+
+.stat-bar {
+    background: linear-gradient(90deg, #22c55e 0%, #16a34a 100%);
+    height: 100%;
+    transition: width 0.3s ease;
+}
+
+.stat-detail {
+    font-size: 0.75rem;
+    color: #666;
+}
+
+.stats-loading {
+    text-align: center;
+    padding: 2rem;
+    color: #666;
+}
+
+@media (max-width: 768px) {
+    .stats-cards {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .stat-value {
+        font-size: 1.5rem;
+    }
+}
+</style>

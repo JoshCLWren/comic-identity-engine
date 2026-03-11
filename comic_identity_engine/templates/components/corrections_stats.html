@@ -1,0 +1,168 @@
+<div class="corrections-stats">
+    <div class="stats-row">
+        <div class="stat-card">
+            <h3>Total Corrections</h3>
+            <p class="stat-value">{{ stats.total_corrections }}</p>
+        </div>
+        <div class="stat-card">
+            <h3>Pending Review</h3>
+            <p class="stat-value stat-warning">{{ stats.pending_review }}</p>
+        </div>
+        <div class="stat-card">
+            <h3>Reviewed</h3>
+            <p class="stat-value stat-info">{{ stats.reviewed }}</p>
+        </div>
+        <div class="stat-card">
+            <h3>Applied</h3>
+            <p class="stat-value stat-success">{{ stats.applied }}</p>
+        </div>
+        <div class="stat-card">
+            <h3>Rejected</h3>
+            <p class="stat-value stat-danger">{{ stats.rejected }}</p>
+        </div>
+    </div>
+
+    <div class="platform-accuracy-section">
+        <h3>Platform Accuracy</h3>
+        <div class="accuracy-grid">
+            {% for acc in platform_accuracy %}
+            <div class="accuracy-card">
+                <h4>{{ acc.platform.upper() }}</h4>
+                <div class="accuracy-metrics">
+                    <div class="metric">
+                        <span class="metric-label">Total Mappings:</span>
+                        <span class="metric-value">{{ acc.total_mappings }}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Accuracy:</span>
+                        <span class="metric-value">{{ acc.accuracy_rate }}%</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Corrections:</span>
+                        <span class="metric-value">{{ acc.corrected_mappings }}</span>
+                    </div>
+                </div>
+                <div class="accuracy-bar">
+                    <div class="accuracy-fill" style="width: {{ acc.accuracy_rate }}%"></div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<style>
+.corrections-stats {
+    margin-bottom: 1.5rem;
+}
+
+.stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.stat-card {
+    background: white;
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.stat-card h3 {
+    margin: 0 0 0.5rem 0;
+    font-size: 0.875rem;
+    color: #666;
+    font-weight: 500;
+}
+
+.stat-value {
+    margin: 0;
+    font-size: 1.75rem;
+    font-weight: 600;
+    color: #333;
+}
+
+.stat-warning {
+    color: #856404;
+}
+
+.stat-info {
+    color: #0c5460;
+}
+
+.stat-success {
+    color: #155724;
+}
+
+.stat-danger {
+    color: #721c24;
+}
+
+.platform-accuracy-section {
+    background: white;
+    border-radius: 8px;
+    padding: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.platform-accuracy-section h3 {
+    margin: 0 0 1rem 0;
+    font-size: 1.125rem;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 0.5rem;
+}
+
+.accuracy-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.accuracy-card {
+    background: #f8f9fa;
+    border-radius: 6px;
+    padding: 1rem;
+}
+
+.accuracy-card h4 {
+    margin: 0 0 0.75rem 0;
+    font-size: 0.9375rem;
+    color: #0066cc;
+}
+
+.accuracy-metrics {
+    margin-bottom: 0.75rem;
+}
+
+.metric {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.25rem;
+    font-size: 0.8125rem;
+}
+
+.metric-label {
+    color: #666;
+}
+
+.metric-value {
+    font-weight: 600;
+    color: #333;
+}
+
+.accuracy-bar {
+    height: 8px;
+    background: #dee2e6;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.accuracy-fill {
+    height: 100%;
+    background: #28a745;
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+</style>

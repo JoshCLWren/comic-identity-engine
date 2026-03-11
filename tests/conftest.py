@@ -24,3 +24,27 @@ def mock_response():
     response.json = AsyncMock()
     response.raise_for_status = Mock()
     return response
+
+
+@pytest.fixture
+async def db_session():
+    """Async database session for integration tests."""
+    from sqlalchemy.ext.asyncio import (
+        AsyncSession,
+        create_async_engine,
+        async_sessionmaker,
+    )
+
+    DATABASE_URL = os.environ.get(
+        "DATABASE_URL", "postgresql://user:pass@localhost/test_db"
+    )
+    ASYNC_DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
+
+    engine = create_async_engine(ASYNC_DATABASE_URL, echo=False)
+    async_session_factory = async_sessionmaker(
+        engine, class_=AsyncSession, expire_on_commit=False
+    )
+
+    async with async_session_factory() as session:
+        yield session
+        await session.rollback()

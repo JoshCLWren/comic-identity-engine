@@ -362,11 +362,34 @@ class MappingCorrection(Base):
         String(255),
         nullable=True,
     )
+    review_status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="pending",
+        index=True,
+    )
+    reviewed_by: Mapped[Optional[str]] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    review_notes: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         nullable=False,
+    )
+
+    issue: Mapped["Issue"] = relationship(
+        "Issue",
+        lazy="selectin",
     )
 
     def __repr__(self) -> str:

@@ -553,3 +553,114 @@ class CorrectionHistoryResponse(BaseModel):
 
     issue_id: UUID
     corrections: list[CorrectionHistoryItem]
+
+
+class CorrectionStatsResponse(BaseModel):
+    """Statistics about corrections.
+
+    Attributes:
+        total_corrections: Total number of corrections
+        pending_review: Number pending review
+        reviewed: Number reviewed
+        applied: Number applied to algorithm
+        rejected: Number rejected
+        by_platform: Count by platform
+        by_correction_type: Count by correction type
+        by_review_status: Count by review status
+    """
+
+    total_corrections: int
+    pending_review: int
+    reviewed: int
+    applied: int
+    rejected: int
+    by_platform: dict[str, int]
+    by_correction_type: dict[str, int]
+    by_review_status: dict[str, int]
+
+
+class PlatformAccuracyResponse(BaseModel):
+    """Accuracy metrics for a platform.
+
+    Attributes:
+        platform: Platform code
+        total_mappings: Total mappings for this platform
+        accurate_mappings: Number of accurate mappings
+        inaccurate_mappings: Number marked as inaccurate
+        corrected_mappings: Number that have been corrected
+        accuracy_rate: Percentage of accurate mappings
+        correction_rate: Percentage of corrected mappings
+    """
+
+    platform: str
+    total_mappings: int
+    accurate_mappings: int
+    inaccurate_mappings: int
+    corrected_mappings: int
+    accuracy_rate: float
+    correction_rate: float
+
+
+class CorrectionPatternResponse(BaseModel):
+    """Identified pattern from corrections.
+
+    Attributes:
+        pattern_type: Type of pattern identified
+        description: Human-readable description
+        count: Number of occurrences
+        examples: Example corrections for this pattern
+    """
+
+    pattern_type: str
+    description: str
+    count: int
+    examples: list[dict[str, Any]]
+
+
+class UpdateReviewStatusRequest(BaseModel):
+    """Request to update correction review status.
+
+    Attributes:
+        status: New review status (pending, reviewed, applied, rejected)
+        review_notes: Optional notes about the review
+    """
+
+    status: str = Field(
+        ...,
+        description="New review status",
+        examples=["reviewed"],
+        pattern=r"^(pending|reviewed|applied|rejected)$",
+    )
+    review_notes: Optional[str] = Field(
+        default=None,
+        description="Optional notes about the review",
+        examples=["Verified correction, applied to matching algorithm"],
+    )
+
+
+class CorrectionListItem(BaseModel):
+    """Single correction in list view.
+
+    Attributes:
+        id: Correction UUID
+        issue_id: Canonical issue UUID
+        series_title: Series title
+        issue_number: Issue number
+        source: Platform source
+        original_source_issue_id: Original (incorrect) ID
+        correct_source_issue_id: Correct ID (if provided)
+        correction_type: Type of correction
+        review_status: Review status
+        created_at: When correction was created
+    """
+
+    id: UUID
+    issue_id: UUID
+    series_title: str
+    issue_number: str
+    source: str
+    original_source_issue_id: str
+    correct_source_issue_id: Optional[str]
+    correction_type: str
+    review_status: str
+    created_at: datetime

@@ -1,0 +1,53 @@
+<div class="mappings-card" hx-get="/ui/partials/issue-detail/{{ issue.id }}" hx-trigger="refresh">
+    <h2>Platform Mappings</h2>
+    
+    {% for platform in platforms %}
+    {% set mapping = mapping_dict.get(platform) %}
+    <div class="mapping-row">
+        <div class="mapping-info">
+            <span class="mapping-platform">{{ platform.upper() }}</span>
+            {% if mapping %}
+                {% set url_template = platform_urls.get(platform, '') %}
+                {% if url_template and mapping.source_issue_id %}
+                    {% set platform_url = url_template.replace('{id}', mapping.source_issue_id) %}
+                    <span class="mapping-id">
+                        <a href="{{ platform_url }}" target="_blank" rel="noopener">{{ mapping.source_issue_id }}</a>
+                    </span>
+                {% else %}
+                    <span class="mapping-id">{{ mapping.source_issue_id }}</span>
+                {% endif %}
+            {% else %}
+                <span class="mapping-id">-</span>
+            {% endif %}
+        </div>
+        
+        <div class="mapping-status">
+            {% if mapping %}
+                {% if mapping.is_accurate %}
+                    <span class="status-badge mapped">Accurate</span>
+                {% else %}
+                    <span class="status-badge inaccurate">Marked Incorrect</span>
+                {% endif %}
+            {% else %}
+                <span class="status-badge unmapped">Not Mapped</span>
+            {% endif %}
+        </div>
+        
+        <div class="mapping-actions">
+            {% if mapping %}
+                {% if mapping.is_accurate %}
+                    <button type="button" class="btn btn-sm btn-secondary"
+                            onclick="openCorrectionModal('{{ platform }}', '{{ mapping.source_issue_id }}', '{{ issue.id }}')">
+                        Mark Incorrect
+                    </button>
+                {% else %}
+                    <button type="button" class="btn btn-sm btn-success"
+                            onclick="openCorrectMappingModal('{{ platform }}', '{{ mapping.source_issue_id }}', '{{ issue.id }}')">
+                        Provide Correct ID
+                    </button>
+                {% endif %}
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>

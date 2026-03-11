@@ -1,0 +1,514 @@
+{% extends "base.html" %}
+
+{% block title %}{{ issue.series_run.title }} #{{ issue.issue_number }} - Comic Identity Engine{% endblock %}
+
+{% block content %}
+<div class="issue-detail-page">
+    <div class="page-header">
+        <nav class="breadcrumb">
+            <a href="/ui/inventory">Inventory</a> /
+            <span>{{ issue.series_run.title }} #{{ issue.issue_number }}</span>
+        </nav>
+        <h1>{{ issue.series_run.title }} #{{ issue.issue_number }}</h1>
+        <p class="subtitle">
+            {{ issue.series_run.start_year }}
+            {% if issue.series_run.publisher %} &middot; {{ issue.series_run.publisher }}{% endif %}
+            {% if issue.cover_date %} &middot; {{ issue.cover_date.strftime('%B %Y') }}{% endif %}
+        </p>
+    </div>
+
+    <div class="issue-info-card">
+        <h2>Issue Information</h2>
+        <dl class="info-grid">
+            <dt>Series</dt>
+            <dd>{{ issue.series_run.title }}</dd>
+            <dt>Issue Number</dt>
+            <dd>{{ issue.issue_number }}</dd>
+            <dt>Year</dt>
+            <dd>{{ issue.series_run.start_year }}</dd>
+            <dt>Publisher</dt>
+            <dd>{{ issue.series_run.publisher or "-" }}</dd>
+            <dt>Cover Date</dt>
+            <dd>{{ issue.cover_date.isoformat() if issue.cover_date else "-" }}</dd>
+            <dt>UPC</dt>
+            <dd>{{ issue.upc or "-" }}</dd>
+            <dt>Canonical ID</dt>
+            <dd><code>{{ issue.id }}</code></dd>
+        </dl>
+    </div>
+
+    <div id="mappings-container">
+        {% include "components/issue_detail_content.html" %}
+    </div>
+</div>
+
+<div id="correction-modal" class="modal hidden">
+    <div class="modal-backdrop" onclick="closeCorrectionModal()"></div>
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Mark Mapping as Incorrect</h3>
+            <button type="button" class="modal-close" onclick="closeCorrectionModal()">&times;</button>
+        </div>
+        <form id="correction-form" hx-post="/api/v1/corrections/mark-incorrect" hx-target="#correction-result">
+            <div class="modal-body">
+                <input type="hidden" name="issue_id" id="correction-issue-id">
+                <input type="hidden" name="source" id="correction-source">
+                <input type="hidden" name="source_issue_id" id="correction-source-issue-id">
+                
+                <div class="form-group">
+                    <label>Platform</label>
+                    <input type="text" id="correction-platform-display" readonly class="readonly-input">
+                </div>
+                
+                <div class="form-group">
+                    <label>Current ID</label>
+                    <input type="text" id="correction-current-id-display" readonly class="readonly-input">
+                </div>
+                
+                <div class="form-group">
+                    <label for="correction-type">Reason</label>
+                    <select name="correction_type" id="correction-type" required>
+                        <option value="">Select a reason...</option>
+                        <option value="wrong_issue">Wrong issue number</option>
+                        <option value="wrong_series">Wrong series</option>
+                        <option value="wrong_variant">Wrong variant</option>
+                        <option value="should_not_match">Should not match any issue</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="correction-notes">Notes (optional)</label>
+                    <textarea name="notes" id="correction-notes" rows="3" 
+                              placeholder="Explain what's wrong with this mapping..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeCorrectionModal()">Cancel</button>
+                <button type="submit" class="btn btn-danger">Mark Incorrect</button>
+            </div>
+        </form>
+        <div id="correction-result"></div>
+    </div>
+</div>
+
+<div id="correct-mapping-modal" class="modal hidden">
+    <div class="modal-backdrop" onclick="closeCorrectMappingModal()"></div>
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Provide Correct Mapping</h3>
+            <button type="button" class="modal-close" onclick="closeCorrectMappingModal()">&times;</button>
+        </div>
+        <form id="correct-mapping-form" hx-post="/api/v1/corrections/provide-correct" hx-target="#correct-mapping-result">
+            <div class="modal-body">
+                <input type="hidden" name="issue_id" id="correct-issue-id">
+                <input type="hidden" name="source" id="correct-source">
+                <input type="hidden" name="incorrect_source_issue_id" id="correct-incorrect-id">
+                
+                <div class="form-group">
+                    <label>Platform</label>
+                    <input type="text" id="correct-platform-display" readonly class="readonly-input">
+                </div>
+                
+                <div class="form-group">
+                    <label>Incorrect ID</label>
+                    <input type="text" id="correct-incorrect-id-display" readonly class="readonly-input">
+                </div>
+                
+                <div class="form-group">
+                    <label for="correct-source-issue-id">Correct ID</label>
+                    <input type="text" name="correct_source_issue_id" id="correct-source-issue-id-input" 
+                           required placeholder="Enter the correct platform ID...">
+                </div>
+                
+                <div class="form-group">
+                    <label for="correct-notes">Notes (optional)</label>
+                    <textarea name="notes" id="correct-notes" rows="3" 
+                              placeholder="Any additional notes..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeCorrectMappingModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Correct Mapping</button>
+            </div>
+        </form>
+        <div id="correct-mapping-result"></div>
+    </div>
+</div>
+
+<style>
+.issue-detail-page {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 1rem;
+}
+
+.breadcrumb {
+    font-size: 0.875rem;
+    color: #666;
+    margin-bottom: 0.5rem;
+}
+
+.breadcrumb a {
+    color: #0066cc;
+    text-decoration: none;
+}
+
+.breadcrumb a:hover {
+    text-decoration: underline;
+}
+
+.page-header h1 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.75rem;
+}
+
+.subtitle {
+    color: #666;
+    margin: 0;
+}
+
+.issue-info-card {
+    background: white;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.issue-info-card h2 {
+    margin: 0 0 1rem 0;
+    font-size: 1.25rem;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 0.5rem;
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.5rem 1rem;
+}
+
+.info-grid dt {
+    font-weight: 600;
+    color: #666;
+}
+
+.info-grid dd {
+    margin: 0;
+}
+
+.info-grid code {
+    background: #f5f5f5;
+    padding: 0.125rem 0.375rem;
+    border-radius: 4px;
+    font-size: 0.875rem;
+}
+
+.mappings-card {
+    background: white;
+    border-radius: 8px;
+    padding: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.mappings-card h2 {
+    margin: 0 0 1rem 0;
+    font-size: 1.25rem;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 0.5rem;
+}
+
+.mapping-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.mapping-row:last-child {
+    border-bottom: none;
+}
+
+.mapping-info {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.mapping-platform {
+    font-weight: 600;
+    text-transform: uppercase;
+    min-width: 60px;
+}
+
+.mapping-id {
+    font-family: monospace;
+    color: #333;
+}
+
+.mapping-id a {
+    color: #0066cc;
+    text-decoration: none;
+}
+
+.mapping-id a:hover {
+    text-decoration: underline;
+}
+
+.mapping-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.status-badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.status-badge.mapped {
+    background: #d4edda;
+    color: #155724;
+}
+
+.status-badge.unmapped {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.status-badge.inaccurate {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.mapping-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.btn {
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.btn-sm {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.75rem;
+}
+
+.btn-primary {
+    background: #0066cc;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #0052a3;
+}
+
+.btn-secondary {
+    background: #f5f5f5;
+    color: #333;
+}
+
+.btn-secondary:hover {
+    background: #e5e5e5;
+}
+
+.btn-danger {
+    background: #dc3545;
+    color: white;
+}
+
+.btn-danger:hover {
+    background: #c82333;
+}
+
+.btn-success {
+    background: #28a745;
+    color: white;
+}
+
+.btn-success:hover {
+    background: #218838;
+}
+
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal.hidden {
+    display: none;
+}
+
+.modal-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.modal-content {
+    position: relative;
+    background: white;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 500px;
+    max-height: 90vh;
+    overflow: auto;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid #eee;
+}
+
+.modal-header h3 {
+    margin: 0;
+    font-size: 1.125rem;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #666;
+    padding: 0;
+    line-height: 1;
+}
+
+.modal-close:hover {
+    color: #333;
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid #eee;
+    background: #f9f9f9;
+}
+
+.form-group {
+    margin-bottom: 1rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.375rem;
+    font-weight: 500;
+    font-size: 0.875rem;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 0.875rem;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: #0066cc;
+    box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
+}
+
+.readonly-input {
+    background: #f5f5f5;
+    color: #666;
+}
+
+.col-hidden {
+    display: none;
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openCorrectionModal(platform, sourceIssueId, issueId) {
+    document.getElementById('correction-issue-id').value = issueId;
+    document.getElementById('correction-source').value = platform;
+    document.getElementById('correction-source-issue-id').value = sourceIssueId;
+    document.getElementById('correction-platform-display').value = platform.toUpperCase();
+    document.getElementById('correction-current-id-display').value = sourceIssueId;
+    document.getElementById('correction-type').value = '';
+    document.getElementById('correction-notes').value = '';
+    document.getElementById('correction-result').innerHTML = '';
+    document.getElementById('correction-modal').classList.remove('hidden');
+}
+
+function closeCorrectionModal() {
+    document.getElementById('correction-modal').classList.add('hidden');
+}
+
+function openCorrectMappingModal(platform, incorrectId, issueId) {
+    document.getElementById('correct-issue-id').value = issueId;
+    document.getElementById('correct-source').value = platform;
+    document.getElementById('correct-incorrect-id').value = incorrectId;
+    document.getElementById('correct-platform-display').value = platform.toUpperCase();
+    document.getElementById('correct-incorrect-id-display').value = incorrectId;
+    document.getElementById('correct-source-issue-id-input').value = '';
+    document.getElementById('correct-notes').value = '';
+    document.getElementById('correct-mapping-result').innerHTML = '';
+    document.getElementById('correct-mapping-modal').classList.remove('hidden');
+}
+
+function closeCorrectMappingModal() {
+    document.getElementById('correct-mapping-modal').classList.add('hidden');
+}
+
+document.getElementById('correction-form').addEventListener('htmx:afterSwap', function(evt) {
+    if (evt.detail.xhr.status === 200) {
+        closeCorrectionModal();
+        htmx.trigger('#mappings-container', 'refresh');
+    }
+});
+
+document.getElementById('correct-mapping-form').addEventListener('htmx:afterSwap', function(evt) {
+    if (evt.detail.xhr.status === 200) {
+        closeCorrectMappingModal();
+        htmx.trigger('#mappings-container', 'refresh');
+    }
+});
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeCorrectionModal();
+        closeCorrectMappingModal();
+    }
+});
+</script>
+{% endblock %}
