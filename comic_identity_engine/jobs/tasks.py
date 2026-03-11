@@ -1394,6 +1394,8 @@ async def resolve_clz_row_task(
                         error=str(e),
                     )
 
+                await session.commit()
+
                 external_mappings = await mapping_repo.find_by_issue(issue_id)
                 platform_mappings = [
                     {

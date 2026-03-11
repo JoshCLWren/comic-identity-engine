@@ -230,6 +230,176 @@ class TestResolveClzRow:
         assert result["issue_id"] == str(existing_issue_id)
         assert result["existing_mapping"] is True
 
+    async def test_resolve_clz_row_platforms_only_phase(self, mock_async_session_local):
+        """Test platforms_only phase refreshes missing platform mappings."""
+        row_data = {
+            "Series": "X-Men",
+            "Issue": "1",
+            "Publisher": "Marvel",
+            "Year": "1991",
+            "Core ComicID": "clz-001",
+        }
+
+        existing_issue_id = uuid.uuid4()
+
+        with patch(
+            "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
+        ) as mock_mapping_repo_class:
+            mock_mapping_repo = Mock()
+
+            mock_existing_mapping = Mock()
+            mock_existing_mapping.issue_id = existing_issue_id
+            mock_mapping_repo.find_by_source = AsyncMock(
+                return_value=mock_existing_mapping
+            )
+
+            existing_gcd_mapping = Mock()
+            existing_gcd_mapping.source = "gcd"
+            existing_gcd_mapping.source_issue_id = "12345"
+            existing_gcd_mapping.source_series_id = "x-men"
+            mock_mapping_repo.find_by_issue = AsyncMock(
+                return_value=[mock_existing_mapping, existing_gcd_mapping]
+            )
+
+            mock_mapping_repo.create_mapping = AsyncMock()
+            mock_mapping_repo_class.return_value = mock_mapping_repo
+
+            with patch(
+                "comic_identity_engine.jobs.tasks.CLZAdapter"
+            ) as mock_adapter_class:
+                mock_adapter = Mock()
+                mock_candidate = Mock()
+                mock_candidate.series_title = "X-Men"
+                mock_candidate.series_start_year = 1991
+                mock_candidate.publisher = "Marvel"
+                mock_candidate.issue_number = "1"
+                mock_candidate.source_issue_id = "clz-001"
+                mock_adapter.fetch_issue_from_csv_row.return_value = mock_candidate
+                mock_adapter_class.return_value = mock_adapter
+
+                with patch(
+                    "comic_identity_engine.services.platform_searcher.PlatformSearcher"
+                ) as mock_searcher_class:
+                    mock_searcher = Mock()
+                    mock_searcher.search_all_platforms = AsyncMock(
+                        return_value={
+                            "urls": {
+                                "locg": "https://www.comicbookregistry.com/issues/99999/"
+                            },
+                            "status": {"locg": "found"},
+                            "events": [],
+                        }
+                    )
+                    mock_searcher_class.return_value = mock_searcher
+
+                    with patch(
+                        "comic_identity_engine.jobs.tasks._ensure_source_mapping",
+                        new_callable=AsyncMock,
+                        return_value="created",
+                    ):
+                        with patch(
+                            "comic_identity_engine.services.url_parser.parse_url"
+                        ) as mock_parse_url:
+                            mock_parsed = Mock()
+                            mock_parsed.source_issue_id = "99999"
+                            mock_parse_url.return_value = mock_parsed
+
+                            with patch(
+                                "comic_identity_engine.jobs.tasks._record_clz_row_result",
+                                new_callable=AsyncMock,
+                            ):
+                                result = await resolve_clz_row_task(
+                                    {},
+                                    row_data,
+                                    1,
+                                    str(TEST_OPERATION_ID),
+                                    phase="platforms_only",
+                                )
+
+        assert result["resolved"] is True
+        assert result["row_index"] == 1
+        assert result["source_issue_id"] == "clz-001"
+        assert result["issue_id"] == str(existing_issue_id)
+        assert result["existing_mapping"] is True
+        assert result["refreshed"] is True
+        assert "Refreshed missing platform mappings" in result["match_explanation"]
+
+    async def test_resolve_clz_row_platforms_only_all_mapped(
+        self, mock_async_session_local
+    ):
+        """Test platforms_only phase skips when all platforms already mapped."""
+        row_data = {
+            "Series": "X-Men",
+            "Issue": "1",
+            "Publisher": "Marvel",
+            "Year": "1991",
+            "Core ComicID": "clz-001",
+        }
+
+        existing_issue_id = uuid.uuid4()
+
+        with patch(
+            "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
+        ) as mock_mapping_repo_class:
+            mock_mapping_repo = Mock()
+
+            mock_existing_mapping = Mock()
+            mock_existing_mapping.issue_id = existing_issue_id
+            mock_existing_mapping.source = "clz"
+            mock_mapping_repo.find_by_source = AsyncMock(
+                return_value=mock_existing_mapping
+            )
+
+            all_platform_mappings = [mock_existing_mapping]
+            for platform, ext_id in [
+                ("gcd", "12345"),
+                ("locg", "99999"),
+                ("ccl", "aaa"),
+                ("aa", "bbb"),
+                ("cpg", "ccc"),
+                ("hip", "ddd"),
+            ]:
+                m = Mock()
+                m.source = platform
+                m.source_issue_id = ext_id
+                m.source_series_id = f"{platform}-series"
+                all_platform_mappings.append(m)
+
+            mock_mapping_repo.find_by_issue = AsyncMock(
+                return_value=all_platform_mappings
+            )
+            mock_mapping_repo_class.return_value = mock_mapping_repo
+
+            with patch(
+                "comic_identity_engine.jobs.tasks.CLZAdapter"
+            ) as mock_adapter_class:
+                mock_adapter = Mock()
+                mock_candidate = Mock()
+                mock_candidate.series_title = "X-Men"
+                mock_candidate.series_start_year = 1991
+                mock_candidate.publisher = "Marvel"
+                mock_candidate.issue_number = "1"
+                mock_candidate.source_issue_id = "clz-001"
+                mock_adapter.fetch_issue_from_csv_row.return_value = mock_candidate
+                mock_adapter_class.return_value = mock_adapter
+
+                with patch(
+                    "comic_identity_engine.jobs.tasks._record_clz_row_result",
+                    new_callable=AsyncMock,
+                ):
+                    result = await resolve_clz_row_task(
+                        {},
+                        row_data,
+                        1,
+                        str(TEST_OPERATION_ID),
+                        phase="platforms_only",
+                    )
+
+        assert result["resolved"] is True
+        assert result["skipped"] is True
+        assert result["reason"] == "all_platforms_mapped"
+        assert result["cross_platform_found"] == 6
+
 
 @pytest.mark.asyncio
 class TestClzImportMedium:
