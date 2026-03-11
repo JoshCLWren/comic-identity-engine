@@ -21,159 +21,78 @@ This includes but is not limited to:
 ---
 
 
-**Last Updated:** 2025-01-31
+**Last Updated:** 2026-03-10
 
 ## Overview
 
-This document tracks progress on implementing the Comic Identity Engine, a domain-specific entity resolution system for comic books.
+This document tracks progress on implementing the Comic Identity Engine, a domain-specific entity resolution system for comic books with an interactive inventory management UI.
 
 ## Implementation Status
 
-### ✅ Phase 0: Foundation (Complete)
-- [x] Project structure created
-- [x] Issue number parser (54 tests, all passing)
-- [x] Candidate models (SeriesCandidate, IssueCandidate)
-- [x] Adapter base class (SourceAdapter)
-- [x] GCD adapter implementation (22 tests, all passing)
-- [x] Dependencies configured (pyproject.toml)
-- [x] Test infrastructure (pytest)
+### ✅ Phase 1: Inventory UI (Complete)
+- [x] Inventory API endpoints (`/inventory/issues`, `/inventory/stats`, `/inventory/search`)
+- [x] HTMX-based inventory UI with Jinja2 templates
+- [x] Stats cards, search, column toggles
+- [x] Issue detail view
+- [x] Static CSS styling
 
-### ✅ Phase 1: Core Infrastructure (Complete)
-- [x] Configuration management (`config.py` - 285 lines)
-- [x] Database connection management (`database.py` - 98 lines)
-- [x] Error handling hierarchy (`errors.py` - 144 lines)
-- [x] Core interfaces (`core/interfaces.py` - 91 lines)
-- [x] Memory cache with LRU (`core/cache/memory_cache.py` - 212 lines)
-- [x] Redis singleton with pooling (`core/cache/redis_singleton.py` - 201 lines)
-- [x] HTTP cache decorator (`core/cache/http_cache.py` - 115 lines)
-- [x] Documentation created (`REUSABLE_CODE_MAPPING.md`, `INFRASTRUCTURE_COPY_SUMMARY.md`)
+**Files:** `api/routers/inventory.py`, `api/routers/ui.py`, `templates/`, `static/css/style.css`
 
-**Total Lines Copied:** 1,158 lines of production-ready code
-**Tests:** 54/54 passing ✅
+### ✅ Phase 2: Corrections System (Complete)
+- [x] Database migration for `mapping_corrections` table
+- [x] `MappingCorrection` model with `is_accurate`, `source_url` fields
+- [x] Correction workflow endpoints (`/corrections/mark-incorrect`, `/corrections/provide-correct`)
+- [x] Correction modals in UI
 
-### 🚧 Phase 2: API & Testing Foundation (Pending)
-- [ ] Redis cache middleware (`api/middleware/cache.py` - 432 lines)
-  - Tag-based cache invalidation
-  - Cache versioning support
-  - Related resource invalidation
-- [ ] Fuzzy matching algorithm (`core/matching/fuzzy.py` - 91 lines)
-  - Token-based matching using SequenceMatcher
-  - Confidence scoring (0.0 to 1.0)
-  - Jaro-Winkler similarity via jellyfish
-- [ ] FastAPI app factory (`api/app.py` - 609 lines)
-  - Comprehensive error handling
-  - CORS middleware
-  - Exception handlers
-  - Health checks
-- [ ] Pytest fixtures (`tests/conftest.py` - 460 lines)
-  - Async database fixtures
-  - Test client fixtures
-  - Sample data generation
+**Files:** `database/migrations/versions/008_add_mapping_corrections.py`, `api/routers/corrections.py`, `database/models.py`
 
-**Estimated Lines:** ~1,600 lines
+### ✅ Phase 3: Idempotent Refresh (Complete)
+- [x] `refresh_clz_mappings` operation type
+- [x] `platforms_only` phase in `resolve_clz_row_task`
+- [x] Refresh endpoint (`POST /import/clz/{operation_id}/refresh-mappings`)
+- [x] Fixed critical bug: cross-platform mappings now persisted
 
-### 📋 Phase 3: DevOps (Pending)
-- [ ] Dockerfile (`docker/Dockerfile` - 93 lines)
-  - Multi-stage build
-  - Non-root user setup
-  - uv for dependency management
-- [ ] Docker Compose (`docker/docker-compose.yml` - 59 lines)
-  - PostgreSQL service
-  - Redis service
-  - Application service
-  - Health checks
+**Files:** `jobs/tasks.py`, `services/operations.py`, `api/routers/import_router.py`
 
-**Estimated Lines:** ~150 lines
+### ✅ Phase 4: Algorithm Feedback (Complete)
+- [x] Correction review workflow (pending/reviewed/applied/rejected)
+- [x] Analytics service for pattern detection and platform accuracy
+- [x] Corrections review UI at `/ui/corrections`
+- [x] API endpoints for stats, patterns, seed data extraction
+- [x] Database migration for review fields
+- [x] Tests for analytics service and API
 
-### 📋 Phase 4: Database Schema (Pending)
-- [ ] SQLAlchemy ORM models
-  - SeriesRun model
-  - Issue model
-  - Variant model
-  - ExternalMapping model
-  - Operation model
-- [ ] Alembic migration setup
-- [ ] Initial schema migration
-- [ ] Seed data migration (X-Men #-1 with all 7 platform mappings)
-
-### 📋 Phase 5: Core Services (Pending)
-- [ ] URL parser for all 7 platforms
-- [ ] Identity Resolver service (with detailed algorithm)
-  - UPC exact matching
-  - Series + issue + year matching
-  - Fuzzy title similarity
-  - Confidence scoring
-- [ ] URL Builder service
-- [ ] Operations Manager (AIP 151 lifecycle)
-
-### 📋 Phase 6: Platform Adapters (Pending)
-- [ ] League of Comic Geeks (LoCG) adapter
-- [ ] ComicCollectorLive (CCL) adapter
-- [ ] Atomic Avenue (AA) adapter
-- [ ] Comics Price Guide (CPG) adapter
-- [ ] HipComic (HIP) adapter
-- [ ] CLZ CSV import adapter
-
-### 📋 Phase 7: arq Job Queue (Pending)
-- [ ] Worker configuration
-- [ ] Job functions
-  - Bulk resolve operations
-  - CLZ import jobs
-  - Cache warming
-- [ ] Job monitoring
-
-### 📋 Phase 8: HTTP API (Pending)
-- [ ] API routes
-  - Issues endpoints
-  - Series endpoints
-  - Operations endpoints
-  - Health check
-- [ ] OpenAPI documentation
-- [ ] Error response formatting
-
-### 📋 Phase 9: CLI (Pending)
-- [ ] `cie-find` command
-- [ ] `cie-import-clz` command
-- [ ] `cie-admin` command
-- [ ] Output formatting (tables, JSON)
+**Files:** `services/correction_analytics.py`, `templates/corrections.html`, `tests/test_services/test_correction_analytics.py`, `tests/test_api/test_correction_analytics.py`
 
 ## Metrics
 
 | Metric | Value | Target |
 |--------|-------|--------|
-| Tests Passing | 54 | 100% |
-| Code Coverage | TBD | 95%+ |
-| Platform Adapters | 1/7 | 7 |
-| Lines of Code | ~2,500 | ~10,000 |
-| Documentation Files | 3 | TBD |
+| Platform Coverage (CLZ) | 99.5% | 100% |
+| Platform Coverage (GCD) | 0.4% | 100% |
+| Platform Coverage (Others) | <1% | 100% |
+| UI Routes | 2 | TBD |
+| Correction States | 4 | TBD |
 
 ## Commits
 
 | Date | Commit | Description |
 |------|--------|-------------|
-| 2025-01-31 | `[pending]` | Copy Priority 1 infrastructure (config, database, errors, cache) |
-| 2025-01-30 | `68d29f9` | Restructure project and add dependencies (housekeeping complete) |
-| 2025-01-30 | `a22beb9` | Fix indentation issue in import_clz function |
-| 2025-01-30 | `8ae3b03` | Fix remaining bugs in implementation plan |
-| 2025-01-30 | `7313fde` | Revise implementation plan based on feedback |
-| 2025-01-30 | `d8140b6` | Add initial implementation plan (before feedback) |
+| 2026-03-10 | `55684d5` | Phase 4: Algorithm feedback system |
+| 2026-03-10 | `0903b82` | Fix: Commit transaction in platforms_only phase |
+| 2026-03-10 | `f2ede7c` | Phases 1-3: Inventory UI, corrections, refresh |
+| 2026-03-10 | `fabdabd` | Add special case handling |
+| 2026-03-10 | `355fc29` | Fix CLZ import tests |
 
 ## Next Steps
 
-1. **Immediate:** Copy Phase 2 (API & Testing foundation)
-2. **Then:** Copy Phase 3 (DevOps - Docker setup)
-3. **Then:** Begin Phase 4 (Database schema)
+1. Run refresh-mappings to populate cross-platform data
+2. Use corrections to improve matching algorithms
+3. Add more platform adapters (LoCG, CCL, AA, CPG, HipComic)
 
 ## Notes
 
-- All code copied from existing projects is production-ready
-- Test suite remains functional (54/54 passing)
-- Dependencies are already in pyproject.toml
-- Estimated time saved: 40-60 hours of infrastructure development
-
-## References
-
-- `IMPLEMENTATION_PLAN.md` - Detailed 1,480-line implementation plan
-- `REUSABLE_CODE_MAPPING.md` - Maps reusable code from other projects
-- `INFRASTRUCTURE_COPY_SUMMARY.md` - Summary of Phase 1 completion
-- `AGENTS.md` - Agent guidelines for development
+- All 4 phases of the interactive inventory system are complete
+- Cross-platform mapping bug fixed and tested
+- Corrections are stored but require manual review before algorithm improvement
+- HTMX + Jinja2 architecture chosen for simplicity and server-side rendering
