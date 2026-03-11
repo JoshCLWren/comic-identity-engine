@@ -45,13 +45,6 @@ from rich.table import Table
     show_default=True,
 )
 @click.option(
-    "--timeout",
-    default=600,
-    type=int,
-    help="Timeout in seconds for waiting (default: 600, longer than cie-find)",
-    show_default=True,
-)
-@click.option(
     "--verbose",
     "-v",
     is_flag=True,
@@ -78,7 +71,6 @@ def cli_import_clz(
     csv_path: str | None,
     api_url: str,
     wait: bool,
-    timeout: int,
     verbose: bool,
     debug: bool,
     operation_id: str | None,
@@ -180,7 +172,6 @@ def cli_import_clz(
                 client=client,
                 api_url=api_url,
                 operation_id=normalized_operation_id,
-                timeout=timeout,
                 verbose=verbose,
                 console=console,
                 display_name=(
@@ -218,7 +209,6 @@ def cli_import_clz(
                         client=client,
                         api_url=api_url,
                         operation_id=normalized_operation_id,
-                        timeout=timeout,
                         verbose=verbose,
                         console=console,
                         display_name=f"{csv_file.name} (refresh)",
@@ -285,7 +275,6 @@ def _poll_import_operation(
     client: httpx.Client,
     api_url: str,
     operation_id: str,
-    timeout: int,
     verbose: bool,
     console: Console,
     display_name: str,
@@ -296,7 +285,6 @@ def _poll_import_operation(
         client: HTTP client for making requests
         api_url: Base API URL
         operation_id: UUID of the operation to poll
-        timeout: Maximum time to wait in seconds
         verbose: Whether to show verbose output
         console: Rich console for output
         display_name: Human-readable label for the operation
@@ -305,7 +293,6 @@ def _poll_import_operation(
         The completed operation response data
 
     Raises:
-        TimeoutError: If operation doesn't complete within timeout
         RuntimeError: If operation fails
     """
     import time
@@ -332,7 +319,7 @@ def _poll_import_operation(
 
         last_metadata = {}
 
-        while time.time() - start_time < timeout:
+        while True:
             response = client.get(f"{api_url}/api/v1/import/clz/{operation_id}")
             response.raise_for_status()
             data = response.json()
@@ -420,11 +407,6 @@ def _poll_import_operation(
                 return data
 
             time.sleep(poll_interval)
-
-    raise TimeoutError(
-        f"Import operation did not complete within {timeout} seconds. "
-        f"Last status: {last_metadata.get('status', 'unknown')}"
-    )
 
 
 def _generate_html_report(operation_id: str, result: dict) -> Path:
