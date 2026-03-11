@@ -87,7 +87,9 @@ class TestPlatformSearcher:
         """AA series pages are not valid issue matches."""
         result = MagicMock()
         result.listings = []
-        result.url = "https://atomicavenue.com/atomic/atomic/series/17202/1/Uncanny-XMen-The"
+        result.url = (
+            "https://atomicavenue.com/atomic/atomic/series/17202/1/Uncanny-XMen-The"
+        )
 
         url, detail = searcher._select_candidate_url(
             platform="aa",
@@ -154,14 +156,18 @@ class TestPlatformSearcher:
         assert "requested issue" in detail
 
     @pytest.mark.asyncio
-    async def test_search_all_platforms_updates_as_tasks_finish(
-        self, searcher
-    ):
+    async def test_search_all_platforms_updates_as_tasks_finish(self, searcher):
         """Results should be persisted incrementally, not after the slowest task only."""
         searcher._persist_operation_progress = AsyncMock()
 
         async def fake_runner(
-            platform, issue_id, series_title, issue_number, year, publisher, operation_id
+            platform,
+            issue_id,
+            series_title,
+            issue_number,
+            year,
+            publisher,
+            operation_id,
         ):
             delays = {"locg": 0.02, "aa": 0.0, "ccl": 0.01, "cpg": 0.0, "hip": 0.0}
             await asyncio.sleep(delays.get(platform, 0))
@@ -182,7 +188,13 @@ class TestPlatformSearcher:
             }
 
         async def fake_task(
-            platform, issue_id, series_title, issue_number, year, publisher, operation_id
+            platform,
+            issue_id,
+            series_title,
+            issue_number,
+            year,
+            publisher,
+            operation_id,
         ):
             return platform, await fake_runner(
                 platform,
@@ -218,12 +230,11 @@ class TestPlatformSearcher:
             "aa",
             "ccl",
             "cpg",
-            "hip",
         }
-        assert searcher._persist_operation_progress.await_count == 6
-        initial_snapshot = searcher._persist_operation_progress.await_args_list[0].kwargs[
-            "platform_status"
-        ]
+        assert searcher._persist_operation_progress.await_count == 5
+        initial_snapshot = searcher._persist_operation_progress.await_args_list[
+            0
+        ].kwargs["platform_status"]
         assert initial_snapshot["gcd"]["status"] == "found"
         assert initial_snapshot["locg"]["status"] == "searching"
         assert initial_snapshot["aa"]["status"] == "searching"
@@ -236,7 +247,6 @@ class TestPlatformSearcher:
             "aa",
             "ccl",
             "cpg",
-            "hip",
         }
 
     @pytest.mark.asyncio
@@ -253,7 +263,9 @@ class TestPlatformSearcher:
         fake_result.url = None
         fake_result.has_results = True
 
-        with patch.object(searcher, "_execute_strategy", AsyncMock(return_value=fake_result)):
+        with patch.object(
+            searcher, "_execute_strategy", AsyncMock(return_value=fake_result)
+        ):
             result = await searcher._search_single_platform_with_strategies(
                 platform="hip",
                 issue_id=TEST_ISSUE_ID,
@@ -281,7 +293,9 @@ class TestPlatformSearcher:
             )
         ]
 
-        with patch.object(searcher, "_call_scraper", AsyncMock(return_value=broad_result)):
+        with patch.object(
+            searcher, "_call_scraper", AsyncMock(return_value=broad_result)
+        ):
             result = await searcher._fuzzy_search(
                 scraper=scraper,
                 title="X-Men",
@@ -297,13 +311,16 @@ class TestPlatformSearcher:
         """Hard timeouts should become informative not_found results."""
         fake_settings = MagicMock(platform_search_timeout=0.01)
 
-        with patch(
-            "comic_identity_engine.services.platform_searcher.get_adapter_settings",
-            return_value=fake_settings,
-        ), patch.object(
-            searcher,
-            "_search_single_platform_with_strategies",
-            new=AsyncMock(side_effect=asyncio.TimeoutError()),
+        with (
+            patch(
+                "comic_identity_engine.services.platform_searcher.get_adapter_settings",
+                return_value=fake_settings,
+            ),
+            patch.object(
+                searcher,
+                "_search_single_platform_with_strategies",
+                new=AsyncMock(side_effect=asyncio.TimeoutError()),
+            ),
         ):
             result = await searcher._run_platform_search_with_timeout(
                 platform="locg",
@@ -320,19 +337,24 @@ class TestPlatformSearcher:
         assert "platform timeout" in result["detail"]
 
     @pytest.mark.asyncio
-    async def test_run_platform_search_without_configured_timeout_does_not_wrap(self, searcher):
+    async def test_run_platform_search_without_configured_timeout_does_not_wrap(
+        self, searcher
+    ):
         """Default behavior should not impose a hidden platform hard timeout."""
         fake_settings = MagicMock(platform_search_timeout=None)
         expected = {"status": "found", "url": "https://example.invalid"}
 
-        with patch(
-            "comic_identity_engine.services.platform_searcher.get_adapter_settings",
-            return_value=fake_settings,
-        ), patch.object(
-            searcher,
-            "_search_single_platform_with_strategies",
-            new=AsyncMock(return_value=expected),
-        ) as mock_search:
+        with (
+            patch(
+                "comic_identity_engine.services.platform_searcher.get_adapter_settings",
+                return_value=fake_settings,
+            ),
+            patch.object(
+                searcher,
+                "_search_single_platform_with_strategies",
+                new=AsyncMock(return_value=expected),
+            ) as mock_search,
+        ):
             result = await searcher._run_platform_search_with_timeout(
                 platform="locg",
                 issue_id=TEST_ISSUE_ID,
