@@ -140,12 +140,24 @@ class PlatformSearcher:
         from comic_search_lib.scrapers.locg import LoCGScraper
 
         self.scrapers = {
-            "gcd": GCDScraper(timeout=PLATFORM_SEARCH_CONFIG["gcd"]["request_timeout_sec"]),
-            "locg": LoCGScraper(timeout=PLATFORM_SEARCH_CONFIG["locg"]["request_timeout_sec"]),
-            "aa": AtomicAvenueScraper(timeout=PLATFORM_SEARCH_CONFIG["aa"]["request_timeout_sec"]),
-            "ccl": CCLScraper(timeout=PLATFORM_SEARCH_CONFIG["ccl"]["request_timeout_sec"]),
-            "cpg": CPGScraper(timeout=PLATFORM_SEARCH_CONFIG["cpg"]["request_timeout_sec"]),
-            "hip": HipScraper(timeout=PLATFORM_SEARCH_CONFIG["hip"]["request_timeout_sec"]),
+            "gcd": GCDScraper(
+                timeout=PLATFORM_SEARCH_CONFIG["gcd"]["request_timeout_sec"]
+            ),
+            "locg": LoCGScraper(
+                timeout=PLATFORM_SEARCH_CONFIG["locg"]["request_timeout_sec"]
+            ),
+            "aa": AtomicAvenueScraper(
+                timeout=PLATFORM_SEARCH_CONFIG["aa"]["request_timeout_sec"]
+            ),
+            "ccl": CCLScraper(
+                timeout=PLATFORM_SEARCH_CONFIG["ccl"]["request_timeout_sec"]
+            ),
+            "cpg": CPGScraper(
+                timeout=PLATFORM_SEARCH_CONFIG["cpg"]["request_timeout_sec"]
+            ),
+            "hip": HipScraper(
+                timeout=PLATFORM_SEARCH_CONFIG["hip"]["request_timeout_sec"]
+            ),
         }
 
     async def search_all_platforms(
@@ -176,7 +188,13 @@ class PlatformSearcher:
                 - urls: dict mapping platform -> URL (for found platforms)
                 - status: dict mapping platform -> status string
         """
-        all_platforms = ["gcd", "locg", "aa", "ccl", "cpg", "hip"]
+        all_platforms = [
+            "gcd",
+            "locg",
+            "aa",
+            "ccl",
+            "cpg",
+        ]  # hip disabled - auth issues
 
         # Mark source platform as found immediately
         platform_status: dict[str, Any] = {
@@ -466,7 +484,8 @@ class PlatformSearcher:
                             "strategy": strategy,
                             "retry": attempt + 1,
                             "reason": "match_found",
-                            "detail": candidate_detail or f"matched via strategy={strategy}",
+                            "detail": candidate_detail
+                            or f"matched via strategy={strategy}",
                         }
 
                     # Clean empty or mismatched results should move to the next

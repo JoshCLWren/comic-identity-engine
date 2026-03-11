@@ -181,39 +181,6 @@ def cli_import_clz(
                 ),
             )
 
-            original_operation_id = normalized_operation_id
-
-            if csv_file is not None:
-                if verbose or debug:
-                    console.print(
-                        "[dim]Searching for missing platform mappings...[/dim]"
-                    )
-
-                refresh_response = client.post(
-                    f"{api_url}/api/v1/import/clz/{original_operation_id}/refresh-mappings",
-                )
-                refresh_response.raise_for_status()
-                refresh_data = refresh_response.json()
-
-                refresh_operation_name = refresh_data.get("name")
-                if refresh_operation_name:
-                    normalized_operation_id = _normalize_operation_id(
-                        refresh_operation_name
-                    )
-                    if verbose or debug:
-                        console.print(
-                            f"[dim]Refresh operation ID: {normalized_operation_id}[/dim]"
-                        )
-
-                    final_data = _poll_import_operation(
-                        client=client,
-                        api_url=api_url,
-                        operation_id=normalized_operation_id,
-                        verbose=verbose,
-                        console=console,
-                        display_name=f"{csv_file.name} (refresh)",
-                    )
-
             _display_import_result(final_data, console, verbose=verbose)
 
     except httpx.HTTPStatusError as e:
