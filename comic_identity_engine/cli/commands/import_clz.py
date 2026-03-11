@@ -74,11 +74,6 @@ from rich.table import Table
     help="Requeue failed rows for a same-file import without reposting resolved rows",
     show_default=True,
 )
-@click.option(
-    "--refresh-mappings",
-    is_flag=True,
-    help="Only search for missing platform mappings (skip CLZ resolution)",
-)
 def cli_import_clz(
     csv_path: str | None,
     api_url: str,
@@ -88,7 +83,6 @@ def cli_import_clz(
     debug: bool,
     operation_id: str | None,
     retry_failed_only: bool,
-    refresh_mappings: bool,
 ) -> None:
     """Import comic data from a CLZ CSV export file.
 
@@ -102,7 +96,6 @@ def cli_import_clz(
         cie-import-clz --operation-id 550e8400-e29b-41d4-a716-446655440000
         cie-import-clz clz_export.csv --no-wait
         cie-import-clz clz_export.csv --verbose
-        cie-import-clz clz_export.csv --refresh-mappings
     """
     if csv_path and operation_id:
         raise click.UsageError(
@@ -114,8 +107,6 @@ def cli_import_clz(
         )
     if retry_failed_only and not csv_path:
         raise click.UsageError("--retry-failed-only requires a CSV path submission.")
-    if refresh_mappings and not csv_path:
-        raise click.UsageError("--refresh-mappings requires a CSV path.")
 
     console = Console(stderr=True)
 
@@ -140,10 +131,6 @@ def cli_import_clz(
             console.print(f"[dim]Importing CLZ CSV: {csv_file}[/dim]")
             if retry_failed_only:
                 console.print("[dim]Retry mode: failed rows only[/dim]")
-            if refresh_mappings:
-                console.print(
-                    "[dim]Refresh mode: search for missing platform mappings[/dim]"
-                )
         else:
             console.print(
                 f"[dim]Attaching to CLZ import operation: {normalized_operation_id}[/dim]"
@@ -179,25 +166,26 @@ def cli_import_clz(
                 if verbose or debug:
                     console.print(f"[dim]Operation ID: {normalized_operation_id}[/dim]")
 
-                if refresh_mappings:
-                    if verbose or debug:
-                        console.print("[dim]Calling refresh-mappings endpoint...[/dim]")
-
-                    refresh_response = client.post(
-                        f"{api_url}/api/v1/import/clz/{normalized_operation_id}/refresh-mappings",
+                if verbose or debug:
+                    console.print(
+                        "[dim]Searching for missing platform mappings...[/dim]"
                     )
-                    refresh_response.raise_for_status()
-                    refresh_data = refresh_response.json()
 
-                    refresh_operation_name = refresh_data.get("name")
-                    if refresh_operation_name:
-                        normalized_operation_id = _normalize_operation_id(
-                            refresh_operation_name
+                refresh_response = client.post(
+                    f"{api_url}/api/v1/import/clz/{normalized_operation_id}/refresh-mappings",
+                )
+                refresh_response.raise_for_status()
+                refresh_data = refresh_response.json()
+
+                refresh_operation_name = refresh_data.get("name")
+                if refresh_operation_name:
+                    normalized_operation_id = _normalize_operation_id(
+                        refresh_operation_name
+                    )
+                    if verbose or debug:
+                        console.print(
+                            f"[dim]Refresh operation ID: {normalized_operation_id}[/dim]"
                         )
-                        if verbose or debug:
-                            console.print(
-                                f"[dim]Refresh operation ID: {normalized_operation_id}[/dim]"
-                            )
 
             elif verbose or debug:
                 console.print(
