@@ -1836,10 +1836,6 @@ async def import_clz_task(
                 source_issue_id = (row.get("Core ComicID") or "").strip() or None
                 row_key = build_clz_row_key(source_issue_id, row_index)
 
-                # Skip already processed rows
-                if row_key in row_results:
-                    continue
-
                 # Pre-flight validation check
                 validation_error = _validate_clz_row_for_import(row, row_index)
                 if validation_error:
