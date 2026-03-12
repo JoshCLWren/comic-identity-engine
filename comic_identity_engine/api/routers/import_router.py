@@ -112,6 +112,7 @@ async def import_clz(
             file_checksum=prepared_import.file_checksum,
             initial_result=prepared_import.to_operation_result(),
             retry_failed_only=request.retry_failed_only,
+            force=request.force,
         )
 
         if should_enqueue:

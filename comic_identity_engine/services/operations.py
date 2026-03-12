@@ -161,6 +161,7 @@ class OperationsManager:
         file_checksum: str,
         initial_result: dict[str, Any],
         retry_failed_only: bool = False,
+        force: bool = False,
     ) -> tuple[Operation, bool]:
         """Create or resume a checksum-addressed import operation.
 
@@ -219,6 +220,35 @@ class OperationsManager:
                 operation_type=operation_type,
                 input_hash=idempotency_key,
                 result=initial_result_with_version,
+            )
+            return operation, True
+
+        # Handle force flag: clear all row results and reprocess everything
+        if force:
+            logger.info(
+                "Force reprocessing requested, clearing all row results",
+                operation_id=str(existing.id),
+                file_checksum=file_checksum,
+            )
+            forced_result = dict(existing.result or {})
+            forced_result["_code_version"] = current_code_version
+            forced_result["row_results"] = {}
+            forced_result["processed"] = 0
+            forced_result["resolved"] = 0
+            forced_result["failed"] = 0
+            forced_result["errors"] = []
+            forced_result["progress"] = 0.0
+            forced_result["active_row_keys"] = []
+            forced_result["forced_count"] = (
+                int(forced_result.get("forced_count", 0) or 0) + 1
+            )
+            forced_result["summary"] = "Force reprocessing: cleared all row results"
+
+            operation = await self.operation_repo.update_status(
+                existing,
+                status="pending",
+                result=forced_result,
+                clear_error_message=True,
             )
             return operation, True
 

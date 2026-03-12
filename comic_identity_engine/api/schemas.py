@@ -104,6 +104,7 @@ class ImportClzRequest(BaseModel):
     Attributes:
         file_path: Path to the uploaded CSV file
         retry_failed_only: Requeue only rows that previously failed for this file
+        force: Clear all existing results and reprocess all rows
     """
 
     model_config = ConfigDict(
@@ -112,6 +113,7 @@ class ImportClzRequest(BaseModel):
                 {
                     "file_path": "/uploads/collections/clz_collection_2024.csv",
                     "retry_failed_only": True,
+                    "force": False,
                 }
             ]
         }
@@ -126,6 +128,11 @@ class ImportClzRequest(BaseModel):
         default=True,
         description="Requeue failed rows from an existing same-file import without reposting resolved work",
         examples=[True],
+    )
+    force: bool = Field(
+        default=False,
+        description="Force reprocessing by clearing all existing row results",
+        examples=[False],
     )
 
 

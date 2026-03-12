@@ -67,6 +67,11 @@ from rich.table import Table
     help="Requeue failed rows for a same-file import without reposting resolved rows",
     show_default=True,
 )
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Force reprocessing by clearing all existing row results",
+)
 def cli_import_clz(
     csv_path: str | None,
     api_url: str,
@@ -75,6 +80,7 @@ def cli_import_clz(
     debug: bool,
     operation_id: str | None,
     retry_failed_only: bool,
+    force: bool,
 ) -> None:
     """Import comic data from a CLZ CSV export file.
 
@@ -99,6 +105,12 @@ def cli_import_clz(
         )
     if retry_failed_only and not csv_path:
         raise click.UsageError("--retry-failed-only requires a CSV path submission.")
+    if force and not csv_path:
+        raise click.UsageError("--force requires a CSV path submission.")
+
+    # Force implies no-retry-failed-only
+    if force:
+        retry_failed_only = False
 
     console = Console(stderr=True)
 
@@ -121,8 +133,10 @@ def cli_import_clz(
     if verbose or debug:
         if csv_file is not None:
             console.print(f"[dim]Importing CLZ CSV: {csv_file}[/dim]")
-            if retry_failed_only:
-                console.print("[dim]Retry mode: failed rows only[/dim]")
+            if force:
+                console.print("[dim]Mode: force reprocess all rows[/dim]")
+            elif retry_failed_only:
+                console.print("[dim]Mode: retry failed rows only[/dim]")
         else:
             console.print(
                 f"[dim]Attaching to CLZ import operation: {normalized_operation_id}[/dim]"
@@ -144,6 +158,7 @@ def cli_import_clz(
                     json={
                         "file_path": str(csv_file.absolute()),
                         "retry_failed_only": retry_failed_only,
+                        "force": force,
                     },
                 )
                 response.raise_for_status()
