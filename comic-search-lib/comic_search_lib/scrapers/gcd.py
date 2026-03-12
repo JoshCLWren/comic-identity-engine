@@ -17,6 +17,7 @@ from selectolax.lexbor import LexborHTMLParser
 
 from comic_search_lib.exceptions import NetworkError, ParseError, RateLimitError
 from comic_search_lib.models import Comic, SearchResult, ComicListing, ComicPrice
+from comic_search_lib.resilience import CircuitBreaker
 
 logger = logging.getLogger(__name__)
 
@@ -28,13 +29,25 @@ class GCDScraper:
     API_BASE = f"{BASE_URL}/api"
     ISSUE_URL_TEMPLATE = f"{BASE_URL}/issue/"
 
-    def __init__(self, timeout: float = 30.0):
+    def __init__(
+        self,
+        timeout: float = 30.0,
+        failure_threshold: int = 10,
+        reset_timeout_seconds: int = 120,
+    ):
         """Initialize scraper.
 
         Args:
             timeout: HTTP request timeout in seconds
+            failure_threshold: Circuit breaker failures before opening
+            reset_timeout_seconds: Circuit breaker reset timeout
         """
         self.timeout = timeout
+        self._circuit_breaker = CircuitBreaker(
+            name="gcd",
+            failure_threshold=failure_threshold,
+            reset_timeout_seconds=reset_timeout_seconds,
+        )
 
     async def search_comic(
         self,
@@ -43,7 +56,7 @@ class GCDScraper:
         year: Optional[int] = None,
         publisher: Optional[str] = None,
     ) -> SearchResult:
-        """Search for a comic on GCD using their API.
+        """Search for a comic on GCD using their API with circuit breaker protection.
 
         Note: GCD API doesn't have a direct search endpoint. This implementation
         tries to find the issue by constructing likely URLs and parsing responses.
@@ -69,8 +82,11 @@ class GCDScraper:
             publisher=publisher,
         )
 
-        async with httpx.AsyncClient(follow_redirects=True) as client:
-            return await self._search_with_client(comic, client)
+        async def _do_search():
+            async with httpx.AsyncClient(follow_redirects=True) as client:
+                return await self._search_with_client(comic, client)
+
+        return await self._circuit_breaker.call_with_retry(_do_search)
 
     async def _search_with_client(
         self, comic: Comic, client: httpx.AsyncClient

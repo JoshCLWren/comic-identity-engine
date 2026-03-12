@@ -60,22 +60,25 @@ def _prefer_workspace_comic_search_lib() -> None:
 # Platform-specific search configurations
 PLATFORM_SEARCH_CONFIG = {
     "gcd": {
-        "max_retries": 4,
         "request_timeout_sec": 15,
         "strategies": ["exact", "no_year", "normalized_title"],
-        "retry_delay_sec": 2,
+        "circuit_breaker": {
+            "failure_threshold": 10,
+            "reset_timeout_seconds": 120,
+        },
         "notes": "Excellent search, authoritative source",
     },
     "locg": {
-        "max_retries": 3,
         "request_timeout_sec": 30,
         "strategies": ["exact", "no_year", "normalized_title", "fuzzy_title"],
-        "retry_delay_sec": 2,
+        "circuit_breaker": {
+            "failure_threshold": 5,
+            "reset_timeout_seconds": 180,
+        },
         "notes": "Good search but rate limited - need backoff",
     },
     "aa": {
-        "max_retries": 3,
-        "request_timeout_sec": 6,
+        "request_timeout_sec": 10,
         "strategies": [
             "exact",
             "no_year",
@@ -83,12 +86,14 @@ PLATFORM_SEARCH_CONFIG = {
             "fuzzy_title",
             "simplified_tokens",
         ],
-        "retry_delay_sec": 2,
+        "circuit_breaker": {
+            "failure_threshold": 5,
+            "reset_timeout_seconds": 120,
+        },
         "notes": "Finicky HTML parsing, needs multiple strategies",
     },
     "ccl": {
-        "max_retries": 3,
-        "request_timeout_sec": 6,
+        "request_timeout_sec": 10,
         "strategies": [
             "exact",
             "no_year",
@@ -96,21 +101,28 @@ PLATFORM_SEARCH_CONFIG = {
             "fuzzy_title",
             "alt_issue_format",
         ],
-        "retry_delay_sec": 2,
+        "circuit_breaker": {
+            "failure_threshold": 5,
+            "reset_timeout_seconds": 120,
+        },
         "notes": "Requires session cookies, session issues common",
     },
     "cpg": {
-        "max_retries": 2,
-        "request_timeout_sec": 5,
+        "request_timeout_sec": 10,
         "strategies": ["exact", "no_year"],
-        "retry_delay_sec": 1,
+        "circuit_breaker": {
+            "failure_threshold": 3,
+            "reset_timeout_seconds": 60,
+        },
         "notes": "Poor search functionality, don't waste time",
     },
     "hip": {
-        "max_retries": 2,
-        "request_timeout_sec": 6,
+        "request_timeout_sec": 10,
         "strategies": ["exact", "no_year", "normalized_title", "fuzzy_title"],
-        "retry_delay_sec": 2,
+        "circuit_breaker": {
+            "failure_threshold": 5,
+            "reset_timeout_seconds": 120,
+        },
         "notes": "Occasional timeouts, needs retries",
     },
 }
