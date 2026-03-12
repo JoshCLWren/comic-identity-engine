@@ -12,7 +12,7 @@ import re
 from typing import Any, Dict, List, Optional
 from urllib.parse import urljoin
 
-import httpx
+import aiohttp
 from selectolax.lexbor import LexborHTMLParser
 
 from comic_search_lib.exceptions import NetworkError, ParseError, RateLimitError
@@ -83,15 +83,18 @@ class GCDScraper:
         )
 
         async def _do_search():
-            async with httpx.AsyncClient(follow_redirects=True) as client:
-                return await self._search_with_client(comic, client)
+            from comic_search_lib.http_pool import get_http_pool
+
+            pool = await get_http_pool()
+            async with pool.get_session(self.BASE_URL) as session:
+                return await self._search_with_session(comic, session)
 
         return await self._circuit_breaker.call_with_retry(_do_search)
 
-    async def _search_with_client(
-        self, comic: Comic, client: httpx.AsyncClient
+    async def _search_with_session(
+        self, comic: Comic, session: aiohttp.ClientSession
     ) -> SearchResult:
-        """Search using an httpx client."""
+        """Search using an aiohttp session with shared TCP connection."""
         result = SearchResult(comic=comic, listings=[], prices=[])
 
         try:
@@ -116,18 +119,16 @@ class GCDScraper:
 
             logger.debug(f"Searching GCD series with params: {params}")
 
-            response = await client.get(
+            async with session.get(
                 search_url,
                 params=params,
-                timeout=self.timeout,
                 headers={
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
                     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
                 },
-            )
-
-            response.raise_for_status()
-            html = response.text
+            ) as response:
+                response.raise_for_status()
+                html = await response.text()
 
             if not html:
                 logger.debug("No response from GCD")
@@ -153,9 +154,9 @@ class GCDScraper:
 
                 # Fetch the series page
                 try:
-                    series_response = await client.get(series_url, timeout=self.timeout)
-                    series_response.raise_for_status()
-                    series_html = series_response.text
+                    async with session.get(series_url) as series_response:
+                        series_response.raise_for_status()
+                        series_html = await series_response.text()
 
                     # Parse issues from the series page
                     issues = self._parse_issues_from_series(
@@ -191,30 +192,15 @@ class GCDScraper:
             logger.debug(f"Found {len(result.listings)} GCD entries")
             return result
 
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 429:
-                raise RateLimitError(
-                    "Rate limited by GCD",
-                    source="gcd",
-                    original_error=e,
-                )
+        except aiohttp.ClientResponseError as e:
             raise NetworkError(
-                f"HTTP error: {e}",
+                f"GCD returned HTTP {e.status}",
                 source="gcd",
                 original_error=e,
-                status_code=e.response.status_code,
-            )
-        except httpx.RequestError as e:
+            ) from e
+        except aiohttp.ClientError as e:
             raise NetworkError(
-                f"Network error: {e}",
-                source="gcd",
-                original_error=e,
-            )
-        except Exception as e:
-            if isinstance(e, (NetworkError, ParseError, RateLimitError)):
-                raise
-            raise ParseError(
-                f"Error parsing GCD results: {e}",
+                f"GCD network request failed: {e}",
                 source="gcd",
                 original_error=e,
             ) from e
