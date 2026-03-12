@@ -18,8 +18,9 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Union
 
-from playwright.async_api import Page, async_playwright
+from playwright.async_api import Page
 
+from comic_search_lib.browser_pool import browser_page
 from comic_search_lib.exceptions import SearchError
 from comic_search_lib.models.comic import Comic, ComicListing, ComicPrice, SearchResult
 
@@ -47,62 +48,6 @@ class LoCGScraper:
     def __init__(self, timeout: int = 30):
         """Initialize the LoCG scraper."""
         self.timeout = timeout
-        self._playwright = None
-        self._context = None
-
-    async def _get_browser_context(self):
-        """Get or create a persistent browser context."""
-        if self._context is not None:
-            return self._context
-
-        user_data_dir = (
-            Path(__file__).resolve().parents[3] / ".cache" / "playwright" / "locg"
-        )
-        user_data_dir.mkdir(parents=True, exist_ok=True)
-
-        self._playwright = await async_playwright().start()
-        self._context = await self._playwright.chromium.launch_persistent_context(
-            str(user_data_dir),
-            headless=True,
-            args=[
-                "--disable-blink-features=AutomationControlled",
-                "--disable-gpu",
-                "--disable-dev-shm-usage",
-                "--no-sandbox",
-                "--disable-background-timer-throttling",
-                "--disable-backgrounding-occluded-windows",
-                "--disable-renderer-backgrounding",
-                "--no-first-run",
-                "--no-default-browser-check",
-                "--force-color-profile=srgb",
-            ],
-            user_agent=self.DEFAULT_USER_AGENT,
-            ignore_https_errors=True,
-            viewport={"width": 1280, "height": 800},
-            locale="en-US",
-            timezone_id="America/Chicago",
-        )
-        return self._context
-
-    async def close(self) -> None:
-        """Close the browser context and Playwright resources."""
-        if self._context:
-            try:
-                await asyncio.wait_for(self._context.close(), timeout=10.0)
-            except asyncio.TimeoutError:
-                logger.warning("Timeout closing LoCG browser context")
-            except Exception as exc:
-                logger.debug("Error closing LoCG browser context: %s", exc)
-            self._context = None
-
-        if self._playwright:
-            try:
-                await asyncio.wait_for(self._playwright.stop(), timeout=10.0)
-            except asyncio.TimeoutError:
-                logger.warning("Timeout stopping LoCG Playwright instance")
-            except Exception as exc:
-                logger.debug("Error stopping LoCG Playwright instance: %s", exc)
-            self._playwright = None
 
     async def search_comic(self, comic: Union[Comic, Dict[str, Any]]) -> SearchResult:
         """Search for a comic issue on LoCG."""
@@ -110,11 +55,9 @@ class LoCGScraper:
         search_start = asyncio.get_event_loop().time()
 
         try:
-            context = await self._get_browser_context()
-            page = await context.new_page()
-            page.set_default_timeout(self.timeout * 1000)
+            async with browser_page() as page:
+                page.set_default_timeout(self.timeout * 1000)
 
-            try:
                 await self._apply_stealth(page)
 
                 issue_match = await self._search_issue_workflow(page, comic_obj)
@@ -160,11 +103,6 @@ class LoCGScraper:
                 result.listings.append(listing)
                 result.prices.append(price)
                 return result
-            finally:
-                try:
-                    await asyncio.wait_for(page.close(), timeout=5.0)
-                except asyncio.TimeoutError:
-                    logger.warning("Timeout closing LoCG page")
         except Exception as exc:
             raise SearchError(
                 f"Search failed: {exc}",
@@ -255,7 +193,7 @@ class LoCGScraper:
     ) -> List[Dict[str, Any]]:
         """Search LoCG and extract series results from the page."""
         search_url = f"{self.SEARCH_URL}?keyword={query.replace(' ', '+')}"
-        logger.debug("Searching LoCG series results", query=query, url=search_url)
+        logger.debug(f"Searching LoCG series results: query={query}, url={search_url}")
 
         await page.goto(
             search_url,
@@ -536,4 +474,4 @@ class LoCGScraper:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit."""
-        await self.close()
+        pass

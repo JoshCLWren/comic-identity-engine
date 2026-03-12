@@ -11,8 +11,8 @@ import re
 from typing import Any, Dict, List, Optional
 
 import httpx
-from playwright.async_api import async_playwright
 
+from comic_search_lib.browser_pool import browser_page
 from comic_search_lib.exceptions import SearchError
 from comic_search_lib.models.comic import Comic, SearchResult
 
@@ -35,53 +35,10 @@ class CPGScraper:
 
         Args:
             timeout (int): Default timeout in seconds for operations
-            profile_dir (Optional[str]): Directory for persistent browser profile
+            profile_dir (Optional[str]): Directory for persistent browser profile (deprecated, using browser pool)
         """
         self.timeout = timeout
-        self.profile_dir = profile_dir or "/tmp/cpg_profile"
-        self._playwright = None
-        self._browser = None
-
-    async def _get_browser_context(self):
-        """Get or create browser context with persistent profile."""
-        if self._browser is None:
-            self._playwright = await async_playwright().start()
-
-            # Use Chrome with persistent context to bypass CloudFlare
-            self._browser = await self._playwright.chromium.launch_persistent_context(
-                user_data_dir=self.profile_dir,
-                headless=True,
-                args=[
-                    "--disable-blink-features=AutomationControlled",
-                    "--no-first-run",
-                    "--no-default-browser-check",
-                ],
-                channel="chrome",
-                viewport={"width": 1280, "height": 800},
-            )
-        return self._browser
-
-    async def close(self) -> None:
-        """Close the browser and cleanup resources."""
-        logger.debug("Cleaning up CPGScraper resources")
-
-        if self._browser:
-            try:
-                await asyncio.wait_for(self._browser.close(), timeout=10.0)
-            except asyncio.TimeoutError:
-                logger.warning("Timeout closing browser")
-            except Exception as e:
-                logger.debug(f"Error closing browser: {e}")
-            self._browser = None
-
-        if self._playwright:
-            try:
-                await asyncio.wait_for(self._playwright.stop(), timeout=10.0)
-            except asyncio.TimeoutError:
-                logger.warning("Timeout stopping playwright")
-            except Exception as e:
-                logger.error(f"Error stopping playwright: {e}")
-            self._playwright = None
+        self.profile_dir = profile_dir
 
     async def search_comic(
         self,
@@ -313,15 +270,9 @@ class CPGScraper:
             Dict with issue details or None
         """
         try:
-            browser = await self._get_browser_context()
-
-            if browser.pages:
-                page = browser.pages[0]
-            else:
-                page = await browser.new_page()
-
-            await page.goto(url, timeout=self.timeout * 1000)
-            await asyncio.sleep(2)
+            async with browser_page() as page:
+                await page.goto(url, timeout=self.timeout * 1000)
+                await asyncio.sleep(2)
 
             details: Dict[str, Any] = {
                 "url": url,
@@ -377,4 +328,4 @@ class CPGScraper:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit."""
-        await self.close()
+        pass
