@@ -37,7 +37,7 @@ class BrowserPool:
 
     def __init__(
         self,
-        max_pages: int = 10,
+        max_pages: int = 20,
         headless: bool = True,
         user_data_dir: Path | None = None,
     ):

@@ -37,13 +37,13 @@ class DatabaseSettings(BaseSettings):
         json_schema_extra={"env": "TEST_DATABASE_URL"},
     )
     pool_size: int = Field(
-        default=10,
+        default=20,
         alias="DB_POOL_SIZE",
         ge=1,
         description="SQLAlchemy connection pool size",
     )
     max_overflow: int = Field(
-        default=20,
+        default=40,
         alias="DB_MAX_OVERFLOW",
         ge=0,
         description="Additional temporary SQLAlchemy connections allowed beyond pool_size",
