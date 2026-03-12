@@ -59,10 +59,10 @@ def _prefer_workspace_comic_search_lib() -> None:
 # Platform-specific search configurations
 PLATFORM_SEARCH_CONFIG = {
     "gcd": {
-        "max_retries": 2,
-        "request_timeout_sec": 6,
+        "max_retries": 4,
+        "request_timeout_sec": 15,
         "strategies": ["exact", "no_year", "normalized_title"],
-        "retry_delay_sec": 1,
+        "retry_delay_sec": 2,
         "notes": "Excellent search, authoritative source",
     },
     "locg": {
