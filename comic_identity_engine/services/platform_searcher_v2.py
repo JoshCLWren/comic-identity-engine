@@ -67,7 +67,7 @@ PLATFORM_SEARCH_CONFIG = {
     },
     "locg": {
         "max_retries": 3,
-        "request_timeout_sec": 6,
+        "request_timeout_sec": 30,
         "strategies": ["exact", "no_year", "normalized_title", "fuzzy_title"],
         "retry_delay_sec": 2,
         "notes": "Good search but rate limited - need backoff",

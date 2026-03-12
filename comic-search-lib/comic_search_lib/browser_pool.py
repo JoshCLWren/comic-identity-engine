@@ -142,6 +142,7 @@ class BrowserPool:
                     raise RuntimeError("Browser context not initialized")
 
                 page = await self._context.new_page()
+                page.set_default_timeout(30000)
                 self._leased_pages.add(page)
                 logger.debug(
                     f"Created new page {id(page)} ({len(self._leased_pages)} total leased)"
@@ -171,6 +172,7 @@ class BrowserPool:
             raise RuntimeError("Browser context not initialized")
 
         new_page = await self._context.new_page()
+        new_page.set_default_timeout(30000)
         await self._available_pages.put(new_page)
         logger.debug(
             f"Replaced released page with new page ({self._available_pages.qsize()} available)"
