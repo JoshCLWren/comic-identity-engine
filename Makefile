@@ -1,10 +1,10 @@
-.PHONY: help stop start-api start-worker restart-api restart-worker clean
+.PHONY: help stop start-api start-worker restart-api restart-worker clean queue-clear queue-status queue-flush fresh
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
 	@echo ''
 	@echo 'Available targets:'
-	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-15s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 stop: ## Stop all services (API and worker)
 	@echo "Stopping Comic Identity Engine services..."
@@ -64,3 +64,60 @@ status: ## Show status of all services
 	else \
 		echo "✗ Infrastructure: Not running"; \
 	fi
+
+queue-status: ## Show job queue status
+	@echo "Job Queue Status:"
+	@echo ""
+	@if docker compose ps redis | grep -q "Up"; then \
+		queue_count=$$(docker compose exec -T redis redis-cli -n 0 LLEN "cie:local:queue" 2>/dev/null || echo "0"); \
+		echo "Jobs in queue: $$queue_count"; \
+		if [ "$$queue_count" != "0" ]; then \
+			echo ""; \
+			echo "Next 10 jobs:"; \
+			docker compose exec -T redis redis-cli -n 0 LRANGE "cie:local:queue" 0 9 2>/dev/null || echo "Unable to fetch jobs"; \
+		fi; \
+	else \
+		echo "✗ Redis not running - cannot check queue"; \
+	fi
+
+queue-clear: ## Clear all jobs from the worker queue
+	@echo "Clearing job queue..."
+	@if docker compose ps redis | grep -q "Up"; then \
+		queue_count=$$(docker compose exec -T redis redis-cli -n 0 LLEN "cie:local:queue" 2>/dev/null || echo "0"); \
+		if [ "$$queue_count" != "0" ]; then \
+			echo "Found $$queue_count jobs in queue"; \
+			read -p "Clear all jobs? [y/N] " confirm; \
+			if [ "$$confirm" = "y" ] || [ "$$confirm" = "Y" ]; then \
+				docker compose exec -T redis redis-cli -n 0 DEL "cie:local:queue" > /dev/null 2>&1; \
+				docker compose exec -T redis redis-cli -n 0 DEL "arq:queue:cie:local:queue" > /dev/null 2>&1; \
+				echo "✓ Queue cleared"; \
+			else \
+				echo "Cancelled"; \
+			fi; \
+		else \
+			echo "✓ Queue is already empty"; \
+		fi; \
+	else \
+		echo "✗ Redis not running - cannot clear queue"; \
+		exit 1; \
+	fi
+
+queue-flush: ## Force flush all ARQ keys from Redis (use if queue-clear doesn't work)
+	@echo "Flushing all ARQ data from Redis..."
+	@if docker compose ps redis | grep -q "Up"; then \
+		echo "This will delete ALL job queue data and results"; \
+		read -p "Continue? [y/N] " confirm; \
+		if [ "$$confirm" = "y" ] || [ "$$confirm" = "Y" ]; then \
+			docker compose exec -T redis redis-cli -n 0 KEYS "arq:*" | xargs docker compose exec -T redis redis-cli -n 0 DEL 2>/dev/null; \
+			docker compose exec -T redis redis-cli -n 0 DEL "cie:local:queue" > /dev/null 2>&1; \
+			echo "✓ All ARQ data flushed"; \
+		else \
+			echo "Cancelled"; \
+		fi; \
+	else \
+		echo "✗ Redis not running"; \
+		exit 1; \
+	fi
+
+fresh: queue-clear stop ## Clear queue and stop services for fresh start
+	@echo "Ready for fresh start - use 'make start-worker' when ready"
