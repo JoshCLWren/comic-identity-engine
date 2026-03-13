@@ -25,6 +25,10 @@ from comic_identity_engine.services.operations import (
 from comic_identity_engine.services.canonical_repair import (
     CanonicalRepairService,
 )
+from comic_identity_engine.services.series_page_extractor import (
+    SeriesPageExtractor,
+    SeriesExtractionResult,
+)
 
 __all__ = [
     "parse_url",
@@ -35,4 +39,6 @@ __all__ = [
     "build_urls",
     "OperationsManager",
     "CanonicalRepairService",
+    "SeriesPageExtractor",
+    "SeriesExtractionResult",
 ]

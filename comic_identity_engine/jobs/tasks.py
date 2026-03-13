@@ -1583,6 +1583,7 @@ async def _create_bulk_mappings_for_scraped_issues(
                 source_series_id=candidate.source_series_id,
                 source_url=url,
             )
+            await session.commit()
 
             for row_index, row, row_key in series_rows:
                 if row_key in row_results:
@@ -1606,6 +1607,7 @@ async def _create_bulk_mappings_for_scraped_issues(
                             source_issue_id=clz_candidate.source_issue_id,
                             source_series_id=clz_candidate.source_series_id,
                         )
+                        await session.commit()
 
                         external_mappings = await mapping_repo.find_by_issue(
                             result.issue_id
