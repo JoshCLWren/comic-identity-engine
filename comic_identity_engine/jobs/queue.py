@@ -356,6 +356,52 @@ class JobQueue:
             phase="platforms_only",
         )
 
+    async def enqueue_series_bulk(
+        self,
+        series_rows: list[tuple[int, dict[str, str], str]],
+        operation_id: uuid.UUID,
+    ) -> Job:
+        """Enqueue a series bulk extraction job.
+
+        This task processes all rows from a single series using the series
+        page bulk extraction strategy, which is 10-100x faster than individual
+        issue search.
+
+        Args:
+            series_rows: List of (row_index, row_data, row_key) tuples for same series
+            operation_id: UUID of the parent import operation
+
+        Returns:
+            arq Job instance.
+
+        Raises:
+            ConnectionError: If unable to connect to Redis.
+
+        Examples:
+            >>> series_rows = [(1, {"Series": "X-Men", "Issue": "1"}, "xmen|1991|1")]
+            >>> job = await queue.enqueue_series_bulk(series_rows, operation_id)
+        """
+        pool = await self._get_pool()
+
+        series_title = (
+            series_rows[0][1].get("Series", "Unknown") if series_rows else "Unknown"
+        )
+        year = series_rows[0][1].get("Year", "") if series_rows else ""
+
+        logger.info(
+            "Enqueueing series bulk extraction job",
+            series_title=series_title,
+            year=year,
+            row_count=len(series_rows),
+            operation_id=str(operation_id),
+        )
+
+        return await pool.enqueue_job(
+            "_process_series_bulk_task",
+            series_rows=series_rows,
+            operation_id=str(operation_id),
+        )
+
     async def enqueue_http_request(
         self,
         url: str,

@@ -66,6 +66,7 @@ from comic_identity_engine.jobs.error_handling import handle_task_error
 from comic_identity_engine.services import (
     IdentityResolver,
     OperationsManager,
+    SeriesPageExtractor,
     parse_url,
 )
 from comic_identity_engine.services.imports import (
@@ -1182,6 +1183,977 @@ async def _mark_clz_row_active(
 ALL_PLATFORMS = {"gcd", "locg", "ccl", "aa", "cpg", "hip"}
 
 
+def _group_clz_rows_by_series(
+    rows: list[tuple[int, dict[str, str], str]],
+) -> dict[str, list[tuple[int, dict[str, str], str]]]:
+    """Group CLZ CSV rows by series (title + year).
+
+    Args:
+        rows: List of (row_index, row_data, row_key) tuples
+
+    Returns:
+        Dictionary mapping series_key to list of rows
+        series_key format: "{series_title}|{year}"
+    """
+    from collections import defaultdict
+
+    series_groups: defaultdict[str, list[tuple[int, dict[str, str], str]]] = (
+        defaultdict(list)
+    )
+
+    for row_index, row, row_key in rows:
+        series_title = (row.get("Series") or "").strip()
+        year = row.get("Year") or row.get("Cover Year") or ""
+        year = str(year).strip() if year else ""
+
+        if not series_title:
+            continue
+
+        series_key = f"{series_title}|{year}"
+        series_groups[series_key].append((row_index, row, row_key))
+
+    return dict(series_groups)
+
+
+async def _process_series_bulk_task(
+    ctx: dict[str, Any],
+    series_rows: list[tuple[int, dict[str, str], str]],
+    operation_id: str,
+) -> dict[str, Any]:
+    """Process all rows from a single series using bulk extraction.
+
+    This task implements the series page bulk extraction strategy:
+    1. Search for FIRST issue on all platforms
+    2. For each platform where found, extract series page URL
+    3. Scrape ALL issue URLs from series page
+    4. Create mappings for all CSV rows that match scraped issues
+
+    Args:
+        ctx: ARQ context dictionary
+        series_rows: List of (row_index, row_data, row_key) tuples for same series
+        operation_id: UUID of the parent import operation
+
+    Returns:
+        Dictionary with bulk processing results:
+        - series_key: Series identifier (title|year)
+        - total_rows: Number of rows in this series
+        - resolved: Number of rows resolved
+        - row_results: Dict mapping row_key to row result
+        - platforms_used: List of platforms where series was found
+        - issues_per_platform: Dict mapping platform to count of issues scraped
+        - summary: Brief text summary
+    """
+    operation_uuid = uuid.UUID(operation_id)
+    async with AsyncSessionLocal() as session:
+        try:
+            if not series_rows:
+                return {
+                    "series_key": "empty",
+                    "total_rows": 0,
+                    "resolved": 0,
+                    "row_results": {},
+                    "platforms_used": [],
+                    "issues_per_platform": {},
+                    "summary": "No rows to process",
+                }
+
+            first_row_index, first_row, _ = series_rows[0]
+            series_title = (first_row.get("Series") or "").strip()
+            year = (first_row.get("Year") or first_row.get("Cover Year") or "").strip()
+            series_key = f"{series_title}|{year}"
+
+            logger.info(
+                "Starting series bulk extraction",
+                operation_id=operation_id,
+                series_key=series_key,
+                row_count=len(series_rows),
+            )
+
+            adapter = CLZAdapter()
+            first_issue_candidate = adapter.fetch_issue_from_csv_row(first_row)
+
+            mapping_repo = ExternalMappingRepository(session)
+            operations_manager = OperationsManager(session)
+
+            row_results: dict[str, dict[str, Any]] = {}
+            platforms_used: list[str] = []
+            issues_per_platform: dict[str, int] = {}
+
+            resolved_count = 0
+
+            for row_index, row, row_key in series_rows:
+                await _mark_clz_row_active(
+                    operation_uuid,
+                    row_index=row_index,
+                    source_issue_id=row.get("Core ComicID"),
+                )
+
+            try:
+                from comic_identity_engine.services.platform_searcher import (
+                    PlatformSearcher,
+                )
+
+                searcher = PlatformSearcher(session)
+                cross_platform_result = await searcher.search_all_platforms(
+                    issue_id=operation_uuid,
+                    series_title=first_issue_candidate.series_title,
+                    issue_number=first_issue_candidate.issue_number,
+                    year=first_issue_candidate.series_start_year,
+                    publisher=first_issue_candidate.publisher,
+                    operation_id=operation_uuid,
+                    source_platform="clz",
+                    operations_manager=operations_manager,
+                )
+
+                cross_platform_urls = cross_platform_result.get("urls", {})
+
+                logger.info(
+                    "Cross-platform search for series completed",
+                    operation_id=operation_id,
+                    series_key=series_key,
+                    found_platforms=list(cross_platform_urls.keys()),
+                )
+
+                if not cross_platform_urls:
+                    logger.warning(
+                        "No platforms found for series, falling back to individual row processing",
+                        operation_id=operation_id,
+                        series_key=series_key,
+                    )
+
+                    for row_index, row, row_key in series_rows:
+                        try:
+                            row_result = await _process_single_clz_row(
+                                session=session,
+                                row=row,
+                                row_index=row_index,
+                                row_key=row_key,
+                                operation_uuid=operation_uuid,
+                                phase="full",
+                            )
+                            row_results[row_key] = row_result
+                            if row_result.get("resolved"):
+                                resolved_count += 1
+                        except Exception as e:
+                            logger.error(
+                                "Individual row processing failed",
+                                operation_id=operation_id,
+                                row_index=row_index,
+                                error=str(e),
+                            )
+                            row_results[row_key] = {
+                                "row_index": row_index,
+                                "row_key": row_key,
+                                "source_issue_id": row.get("Core ComicID"),
+                                "resolved": False,
+                                "error": str(e),
+                            }
+
+                    await session.commit()
+
+                    return {
+                        "series_key": series_key,
+                        "total_rows": len(series_rows),
+                        "resolved": resolved_count,
+                        "row_results": row_results,
+                        "platforms_used": [],
+                        "issues_per_platform": {},
+                        "summary": f"Series {series_key}: {resolved_count}/{len(series_rows)} resolved via individual fallback",
+                    }
+
+                series_extractor = SeriesPageExtractor()
+
+                for platform, found_url in cross_platform_urls.items():
+                    if not found_url:
+                        continue
+
+                    try:
+                        logger.info(
+                            "Extracting series page URL",
+                            operation_id=operation_id,
+                            platform=platform,
+                            found_url=found_url,
+                        )
+
+                        series_url = await series_extractor.extract_series_url(
+                            found_url, platform
+                        )
+
+                        logger.info(
+                            "Scraping all issues from series page",
+                            operation_id=operation_id,
+                            platform=platform,
+                            series_url=series_url,
+                        )
+
+                        issue_urls = await series_extractor.scrape_all_issues(
+                            series_url, platform
+                        )
+
+                        logger.info(
+                            "Scraped issues from series page",
+                            operation_id=operation_id,
+                            platform=platform,
+                            issues_count=len(issue_urls),
+                        )
+
+                        platforms_used.append(platform)
+                        issues_per_platform[platform] = len(issue_urls)
+
+                        await _create_bulk_mappings_for_scraped_issues(
+                            session=session,
+                            operation_uuid=operation_uuid,
+                            series_rows=series_rows,
+                            platform=platform,
+                            issue_urls=issue_urls,
+                            row_results=row_results,
+                        )
+
+                    except Exception as e:
+                        logger.warning(
+                            "Series page extraction failed for platform",
+                            operation_id=operation_id,
+                            platform=platform,
+                            error=str(e),
+                            error_type=type(e).__name__,
+                        )
+
+                await session.commit()
+
+                for row_result in row_results.values():
+                    await _record_clz_row_result(operation_uuid, row_result)
+                    if row_result.get("resolved"):
+                        resolved_count += 1
+
+                logger.info(
+                    "Series bulk extraction completed",
+                    operation_id=operation_id,
+                    series_key=series_key,
+                    platforms_used=platforms_used,
+                    resolved=resolved_count,
+                    total=len(series_rows),
+                )
+
+                return {
+                    "series_key": series_key,
+                    "total_rows": len(series_rows),
+                    "resolved": resolved_count,
+                    "row_results": row_results,
+                    "platforms_used": platforms_used,
+                    "issues_per_platform": issues_per_platform,
+                    "summary": f"Series {series_key}: {resolved_count}/{len(series_rows)} resolved using {len(platforms_used)} platforms",
+                }
+
+            except Exception as e:
+                logger.error(
+                    "Series bulk extraction failed, falling back to individual processing",
+                    operation_id=operation_id,
+                    series_key=series_key,
+                    error=str(e),
+                    error_type=type(e).__name__,
+                )
+
+                for row_index, row, row_key in series_rows:
+                    try:
+                        row_result = await _process_single_clz_row(
+                            session=session,
+                            row=row,
+                            row_index=row_index,
+                            row_key=row_key,
+                            operation_uuid=operation_uuid,
+                            phase="full",
+                        )
+                        row_results[row_key] = row_result
+                        if row_result.get("resolved"):
+                            resolved_count += 1
+                    except Exception as row_error:
+                        logger.error(
+                            "Individual row processing failed",
+                            operation_id=operation_id,
+                            row_index=row_index,
+                            error=str(row_error),
+                        )
+                        row_results[row_key] = {
+                            "row_index": row_index,
+                            "row_key": row_key,
+                            "source_issue_id": row.get("Core ComicID"),
+                            "resolved": False,
+                            "error": str(row_error),
+                        }
+
+                await session.commit()
+
+                return {
+                    "series_key": series_key,
+                    "total_rows": len(series_rows),
+                    "resolved": resolved_count,
+                    "row_results": row_results,
+                    "platforms_used": [],
+                    "issues_per_platform": {},
+                    "summary": f"Series {series_key}: {resolved_count}/{len(series_rows)} resolved via individual fallback (bulk failed)",
+                }
+
+        except Exception as e:
+            logger.error(
+                "Series bulk task failed",
+                operation_id=operation_id,
+                error=str(e),
+                error_type=type(e).__name__,
+                traceback=traceback.format_exc(),
+            )
+            raise
+
+
+async def _create_bulk_mappings_for_scraped_issues(
+    session: Any,
+    operation_uuid: uuid.UUID,
+    series_rows: list[tuple[int, dict[str, str], str]],
+    platform: str,
+    issue_urls: list[str],
+    row_results: dict[str, dict[str, Any]],
+) -> None:
+    """Create external mappings for scraped issues that match CLZ rows.
+
+    This function:
+    1. Fetches each scraped issue to get canonical issue_id
+    2. Finds matching CLZ rows by series + issue number
+    3. Creates external mappings for matches
+
+    Args:
+        session: Database session
+        operation_uuid: Operation UUID
+        series_rows: List of (row_index, row_data, row_key) tuples
+        platform: Platform code (gcd, aa, etc.)
+        issue_urls: List of scraped issue URLs
+        row_results: Dict to populate with row results (modified in-place)
+    """
+    from comic_identity_engine.services.url_parser import parse_url
+
+    adapter = get_adapter(platform)
+    clz_adapter = CLZAdapter()
+    mapping_repo = ExternalMappingRepository(session)
+
+    for url in issue_urls:
+        try:
+            parsed_url = parse_url(url)
+
+            candidate = await adapter.fetch_issue(parsed_url.source_issue_id)
+
+            resolver = IdentityResolver(session)
+            result = await resolver.resolve_issue(
+                parsed_url=parsed_url,
+                upc=candidate.upc,
+                series_title=candidate.series_title,
+                series_start_year=candidate.series_start_year,
+                issue_number=candidate.issue_number,
+                cover_date=candidate.cover_date,
+                variant_suffix=(
+                    getattr(candidate, "variant_suffix", None)
+                    or getattr(parsed_url, "variant_suffix", None)
+                ),
+                variant_name=getattr(candidate, "variant_name", None),
+            )
+
+            if not result.issue_id:
+                continue
+
+            await _ensure_source_mapping(
+                mapping_repo=mapping_repo,
+                issue_id=result.issue_id,
+                source=platform,
+                source_issue_id=parsed_url.source_issue_id,
+                source_series_id=candidate.source_series_id,
+            )
+
+            for row_index, row, row_key in series_rows:
+                if row_key in row_results:
+                    continue
+
+                try:
+                    clz_candidate = clz_adapter.fetch_issue_from_csv_row(row)
+
+                    if _issues_match(
+                        candidate_issue_number=candidate.issue_number,
+                        clz_issue_number=clz_candidate.issue_number,
+                        candidate_series=candidate.series_title,
+                        clz_series=clz_candidate.series_title,
+                        candidate_year=candidate.series_start_year,
+                        clz_year=clz_candidate.series_start_year,
+                    ):
+                        await _ensure_source_mapping(
+                            mapping_repo=mapping_repo,
+                            issue_id=result.issue_id,
+                            source="clz",
+                            source_issue_id=clz_candidate.source_issue_id,
+                            source_series_id=clz_candidate.source_series_id,
+                        )
+
+                        external_mappings = await mapping_repo.find_by_issue(
+                            result.issue_id
+                        )
+                        platform_mappings = [
+                            {
+                                "platform": m.source,
+                                "external_id": m.source_issue_id,
+                                "source_series_id": m.source_series_id or "",
+                                "source_url": getattr(m, "source_url", None),
+                            }
+                            for m in external_mappings
+                            if m.source != "clz"
+                        ]
+
+                        row_results[row_key] = {
+                            "row_index": row_index,
+                            "row_key": row_key,
+                            "source_issue_id": clz_candidate.source_issue_id,
+                            "resolved": True,
+                            "issue_id": str(result.issue_id),
+                            "existing_mapping": False,
+                            "cross_platform_found": len(platform_mappings),
+                            "platform_coverage": len(platform_mappings),
+                            "completion_stage": (
+                                "resolved"
+                                if len(platform_mappings) >= 5
+                                else "partial"
+                                if len(platform_mappings) > 0
+                                else "clz_only"
+                            ),
+                            "row_data": dict(row),
+                            "platform_mappings": platform_mappings,
+                            "match_explanation": f"Matched via series page bulk extraction on {platform}",
+                            "bulk_method": True,
+                            "source_url": url,
+                        }
+                except Exception as e:
+                    logger.debug(
+                        "Failed to match scraped issue to CLZ row",
+                        operation_id=str(operation_uuid),
+                        platform=platform,
+                        url=url,
+                        row_index=row_index,
+                        error=str(e),
+                    )
+
+        except Exception as e:
+            logger.warning(
+                "Failed to process scraped issue",
+                operation_id=str(operation_uuid),
+                platform=platform,
+                url=url,
+                error=str(e),
+            )
+
+
+def _issues_match(
+    candidate_issue_number: str | None,
+    clz_issue_number: str | None,
+    candidate_series: str | None,
+    clz_series: str | None,
+    candidate_year: int | None,
+    clz_year: int | None,
+) -> bool:
+    """Check if a scraped issue matches a CLZ row.
+
+    Args:
+        candidate_issue_number: Issue number from scraped issue
+        clz_issue_number: Issue number from CLZ row
+        candidate_series: Series title from scraped issue
+        clz_series: Series title from CLZ row
+        candidate_year: Series year from scraped issue
+        clz_year: Series year from CLZ row
+
+    Returns:
+        True if issues match
+    """
+    if not candidate_issue_number or not clz_issue_number:
+        return False
+
+    if candidate_issue_number.lower().strip() != clz_issue_number.lower().strip():
+        return False
+
+    if candidate_series and clz_series:
+        candidate_normalized = candidate_series.lower().strip()
+        clz_normalized = clz_series.lower().strip()
+        if (
+            candidate_normalized not in clz_normalized
+            and clz_normalized not in candidate_normalized
+        ):
+            return False
+
+    if candidate_year and clz_year:
+        if abs(candidate_year - clz_year) > 1:
+            return False
+
+    return True
+
+
+async def _process_single_clz_row(
+    session: Any,
+    row: dict[str, str],
+    row_index: int,
+    row_key: str,
+    operation_uuid: uuid.UUID,
+    phase: str = "full",
+) -> dict[str, Any]:
+    """Process a single CLZ row (fallback when bulk extraction fails).
+
+    This is extracted from resolve_clz_row_task to allow reuse.
+
+    Args:
+        session: Database session
+        row: CSV row dictionary
+        row_index: Row index (1-based)
+        row_key: Unique row identifier
+        operation_uuid: Operation UUID
+        phase: Processing phase ("full" or "platforms_only")
+
+    Returns:
+        Row result dictionary
+    """
+    operation_id = str(operation_uuid)
+
+    raw_source_issue_id = (row.get("Core ComicID") or "").strip() or None
+    row_key = build_clz_row_key(raw_source_issue_id, row_index)
+
+    logger.info(
+        "Processing CLZ row (individual fallback)",
+        operation_id=operation_id,
+        row=row_index,
+        source_issue_id=raw_source_issue_id,
+        phase=phase,
+    )
+
+    adapter = CLZAdapter()
+    issue_candidate = adapter.fetch_issue_from_csv_row(row)
+    source_issue_id = issue_candidate.source_issue_id
+    row_key = build_clz_row_key(source_issue_id, row_index)
+
+    mapping_repo = ExternalMappingRepository(session)
+    operations_manager = OperationsManager(session)
+
+    if phase == "platforms_only":
+        if not source_issue_id:
+            error_msg = f"Missing CLZ ID for platforms_only refresh on row {row_index}"
+            logger.warning(error_msg, operation_id=operation_id, row=row_index)
+            return {
+                "row_index": row_index,
+                "row_key": row_key,
+                "source_issue_id": None,
+                "resolved": False,
+                "error": error_msg,
+                "row_data": dict(row),
+            }
+
+        existing_mapping = await mapping_repo.find_by_source("clz", source_issue_id)
+        if existing_mapping is None:
+            error_msg = (
+                f"No CLZ mapping found for platforms_only refresh: {source_issue_id}"
+            )
+            logger.warning(error_msg, operation_id=operation_id, row=row_index)
+            return {
+                "row_index": row_index,
+                "row_key": row_key,
+                "source_issue_id": source_issue_id,
+                "resolved": False,
+                "error": error_msg,
+                "row_data": dict(row),
+            }
+
+        issue_id = existing_mapping.issue_id
+        external_mappings = await mapping_repo.find_by_issue(issue_id)
+        mapped_platforms = {m.source for m in external_mappings}
+        missing_platforms = ALL_PLATFORMS - mapped_platforms
+
+        if not missing_platforms:
+            logger.info(
+                "All platforms already mapped, skipping",
+                operation_id=operation_id,
+                row=row_index,
+                source_issue_id=source_issue_id,
+                issue_id=str(issue_id),
+            )
+            return {
+                "row_index": row_index,
+                "row_key": row_key,
+                "source_issue_id": source_issue_id,
+                "resolved": True,
+                "skipped": True,
+                "reason": "all_platforms_mapped",
+                "issue_id": str(issue_id),
+                "existing_mapping": True,
+                "cross_platform_found": len(mapped_platforms - {"clz"}),
+                "platform_coverage": len(mapped_platforms - {"clz"}),
+                "completion_stage": "resolved",
+                "row_data": dict(row),
+                "platform_mappings": [
+                    {
+                        "platform": m.source,
+                        "external_id": m.source_issue_id,
+                        "source_series_id": m.source_series_id or "",
+                    }
+                    for m in external_mappings
+                    if m.source != "clz"
+                ],
+            }
+
+        cross_platform_count = 0
+        platform_mappings: list[dict[str, str]] = []
+
+        try:
+            from comic_identity_engine.services.platform_searcher import (
+                PlatformSearcher,
+            )
+
+            searcher = PlatformSearcher(session)
+            cross_platform_result = await searcher.search_all_platforms(
+                issue_id=issue_id,
+                series_title=issue_candidate.series_title,
+                issue_number=issue_candidate.issue_number,
+                year=issue_candidate.series_start_year,
+                publisher=issue_candidate.publisher,
+                operation_id=operation_uuid,
+                source_platform="clz",
+                operations_manager=operations_manager,
+            )
+
+            cross_platform_urls = cross_platform_result.get("urls", {})
+            for platform, found_url in cross_platform_urls.items():
+                if found_url and platform != "clz":
+                    try:
+                        from comic_identity_engine.services.url_parser import parse_url
+
+                        parsed_found = parse_url(found_url)
+                        await _ensure_source_mapping(
+                            mapping_repo=mapping_repo,
+                            issue_id=issue_id,
+                            source=platform,
+                            source_issue_id=parsed_found.source_issue_id,
+                            source_series_id=None,
+                        )
+                        logger.info(
+                            "Created external mapping for found platform (refresh)",
+                            operation_id=operation_id,
+                            row=row_index,
+                            issue_id=str(issue_id),
+                            platform=platform,
+                            source_issue_id=parsed_found.source_issue_id,
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            "Failed to create external mapping for platform (refresh)",
+                            operation_id=operation_id,
+                            row=row_index,
+                            platform=platform,
+                            url=found_url,
+                        )
+        except Exception as e:
+            logger.error(
+                "Cross-platform search failed (refresh)",
+                operation_id=operation_id,
+                row=row_index,
+                error_type=type(e).__name__,
+            )
+
+        await session.commit()
+
+        external_mappings = await mapping_repo.find_by_issue(issue_id)
+        platform_mappings = [
+            {
+                "platform": m.source,
+                "external_id": m.source_issue_id,
+                "source_series_id": m.source_series_id or "",
+            }
+            for m in external_mappings
+            if m.source != "clz"
+        ]
+        cross_platform_count = len(platform_mappings)
+
+        return {
+            "row_index": row_index,
+            "row_key": row_key,
+            "source_issue_id": source_issue_id,
+            "resolved": cross_platform_count > 0,
+            "issue_id": str(issue_id),
+            "existing_mapping": True,
+            "cross_platform_found": cross_platform_count,
+            "platform_coverage": cross_platform_count,
+            "completion_stage": (
+                "resolved"
+                if cross_platform_count >= 5
+                else "partial"
+                if cross_platform_count > 0
+                else "clz_only"
+            ),
+            "row_data": dict(row),
+            "platform_mappings": platform_mappings,
+            "match_explanation": "Refreshed missing platform mappings",
+            "refreshed": True,
+        }
+
+    existing_mapping = await mapping_repo.find_by_source("clz", source_issue_id)
+
+    if existing_mapping is not None:
+        logger.info(
+            "Existing CLZ mapping found",
+            operation_id=operation_id,
+            row=row_index,
+            source_issue_id=source_issue_id,
+            issue_id=str(existing_mapping.issue_id),
+        )
+
+        issue_id = existing_mapping.issue_id
+
+        cross_platform_count = 0
+        platform_mappings: list[dict[str, str]] = []
+
+        try:
+            from comic_identity_engine.services.platform_searcher import (
+                PlatformSearcher,
+            )
+
+            searcher = PlatformSearcher(session)
+            cross_platform_result = await searcher.search_all_platforms(
+                issue_id=issue_id,
+                series_title=issue_candidate.series_title,
+                issue_number=issue_candidate.issue_number,
+                year=issue_candidate.series_start_year,
+                publisher=issue_candidate.publisher,
+                operation_id=operation_uuid,
+                source_platform="clz",
+                operations_manager=operations_manager,
+            )
+
+            cross_platform_urls = cross_platform_result.get("urls", {})
+            for platform, found_url in cross_platform_urls.items():
+                if found_url and platform != "clz":
+                    try:
+                        from comic_identity_engine.services.url_parser import parse_url
+
+                        parsed_found = parse_url(found_url)
+                        await _ensure_source_mapping(
+                            mapping_repo=mapping_repo,
+                            issue_id=issue_id,
+                            source=platform,
+                            source_issue_id=parsed_found.source_issue_id,
+                            source_series_id=None,
+                        )
+                        logger.info(
+                            "Created external mapping for found platform",
+                            operation_id=operation_id,
+                            row=row_index,
+                            issue_id=str(issue_id),
+                            platform=platform,
+                            source_issue_id=parsed_found.source_issue_id,
+                        )
+                    except Exception as e:
+                        logger.error(
+                            "Failed to create external mapping for platform",
+                            operation_id=operation_id,
+                            row=row_index,
+                            platform=platform,
+                            url=found_url,
+                        )
+        except Exception as e:
+            logger.error(
+                "Cross-platform search failed",
+                operation_id=operation_id,
+                row=row_index,
+                error_type=type(e).__name__,
+            )
+
+        external_mappings = await mapping_repo.find_by_issue(issue_id)
+        platform_mappings = [
+            {
+                "platform": m.source,
+                "external_id": m.source_issue_id,
+                "source_series_id": m.source_series_id or "",
+            }
+            for m in external_mappings
+            if m.source != "clz"
+        ]
+        cross_platform_count = len(platform_mappings)
+
+        await session.commit()
+
+        return {
+            "row_index": row_index,
+            "row_key": row_key,
+            "source_issue_id": source_issue_id,
+            "resolved": cross_platform_count > 0,
+            "issue_id": str(issue_id),
+            "existing_mapping": True,
+            "cross_platform_found": cross_platform_count,
+            "platform_coverage": cross_platform_count,
+            "completion_stage": (
+                "resolved"
+                if cross_platform_count >= 5
+                else "partial"
+                if cross_platform_count > 0
+                else "clz_only"
+            ),
+            "row_data": dict(row),
+            "platform_mappings": platform_mappings,
+            "match_explanation": "Reused existing CLZ mapping",
+        }
+
+    from comic_identity_engine.services import ParsedUrl
+
+    parsed_url = ParsedUrl(
+        platform="clz",
+        source_issue_id=source_issue_id,
+        source_series_id=issue_candidate.source_series_id,
+    )
+
+    resolver = IdentityResolver(session)
+    result = await resolver.resolve_issue(
+        parsed_url=parsed_url,
+        upc=issue_candidate.upc,
+        series_title=issue_candidate.series_title,
+        series_start_year=issue_candidate.series_start_year,
+        issue_number=issue_candidate.issue_number,
+        cover_date=issue_candidate.cover_date,
+        variant_suffix=issue_candidate.variant_suffix,
+        variant_name=getattr(issue_candidate, "variant_name", None),
+    )
+
+    if not result.issue_id:
+        error_msg = f"Failed to resolve issue: {result.explanation}"
+        logger.warning(
+            "Failed to resolve CLZ row",
+            operation_id=operation_id,
+            row=row_index,
+            source_issue_id=source_issue_id,
+            error=error_msg,
+        )
+        return {
+            "row_index": row_index,
+            "row_key": row_key,
+            "source_issue_id": source_issue_id,
+            "resolved": False,
+            "error": error_msg,
+            "row_data": dict(row),
+        }
+
+    source_mapping_action = await _ensure_source_mapping(
+        mapping_repo=mapping_repo,
+        issue_id=result.issue_id,
+        source="clz",
+        source_issue_id=source_issue_id,
+        source_series_id=issue_candidate.source_series_id,
+    )
+
+    if source_mapping_action == "created":
+        logger.info(
+            "Created CLZ external mapping",
+            operation_id=operation_id,
+            row=row_index,
+            source_issue_id=source_issue_id,
+            issue_id=str(result.issue_id),
+        )
+    else:
+        logger.info(
+            "Reused existing CLZ external mapping",
+            operation_id=operation_id,
+            row=row_index,
+            source_issue_id=source_issue_id,
+            issue_id=str(result.issue_id),
+        )
+
+    cross_platform_count = 0
+    platform_mappings: list[dict[str, str]] = []
+
+    if result.issue_id and result.best_match:
+        try:
+            from comic_identity_engine.services.platform_searcher import (
+                PlatformSearcher,
+            )
+
+            searcher = PlatformSearcher(session)
+            cross_platform_result = await searcher.search_all_platforms(
+                issue_id=result.issue_id,
+                series_title=result.best_match.series_title,
+                issue_number=result.best_match.issue_number,
+                year=result.best_match.series_start_year,
+                publisher=None,
+                operation_id=operation_uuid,
+                source_platform="clz",
+                operations_manager=operations_manager,
+            )
+
+            cross_platform_urls = cross_platform_result.get("urls", {})
+            for platform, found_url in cross_platform_urls.items():
+                if found_url and platform != "clz":
+                    try:
+                        from comic_identity_engine.services.url_parser import parse_url
+
+                        parsed_found = parse_url(found_url)
+                        await _ensure_source_mapping(
+                            mapping_repo=mapping_repo,
+                            issue_id=result.issue_id,
+                            source=platform,
+                            source_issue_id=parsed_found.source_issue_id,
+                            source_series_id=None,
+                        )
+                        logger.info(
+                            "Created external mapping for found platform",
+                            operation_id=operation_id,
+                            row=row_index,
+                            issue_id=str(result.issue_id),
+                            platform=platform,
+                            source_issue_id=parsed_found.source_issue_id,
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            "Failed to create external mapping for platform",
+                            operation_id=operation_id,
+                            row=row_index,
+                            platform=platform,
+                            url=found_url,
+                        )
+        except Exception as e:
+            logger.warning(
+                "Cross-platform search failed",
+                operation_id=operation_id,
+                row=row_index,
+            )
+
+    if result.issue_id:
+        external_mappings = await mapping_repo.find_by_issue(result.issue_id)
+        platform_mappings = [
+            {
+                "platform": m.source,
+                "external_id": m.source_issue_id,
+                "source_series_id": m.source_series_id or "",
+            }
+            for m in external_mappings
+            if m.source != "clz"
+        ]
+        cross_platform_count = len(platform_mappings)
+
+    await session.commit()
+
+    return {
+        "row_index": row_index,
+        "row_key": row_key,
+        "source_issue_id": source_issue_id,
+        "resolved": cross_platform_count > 0,
+        "issue_id": str(result.issue_id),
+        "existing_mapping": False,
+        "cross_platform_found": cross_platform_count,
+        "platform_coverage": cross_platform_count,
+        "completion_stage": (
+            "resolved"
+            if cross_platform_count >= 5
+            else "partial"
+            if cross_platform_count > 0
+            else "clz_only"
+        ),
+        "row_data": dict(row),
+        "platform_mappings": platform_mappings,
+        "match_explanation": result.explanation,
+    }
+
+
 async def resolve_clz_row_task(
     ctx: dict[str, Any],
     row_data: dict[str, str],
@@ -2097,12 +3069,42 @@ async def import_clz_task(
 
             remaining_rows = validated_rows
 
-            if remaining_rows:
-                result_dict["summary"] = (
-                    f"Enqueued {len(remaining_rows)} pending CLZ row tasks for processing ({len(skipped_rows)} skipped)"
-                )
-            else:
+            if not remaining_rows:
                 result_dict["summary"] = _build_clz_import_summary(result_dict)
+                await operations_manager.update_operation(
+                    operation_uuid,
+                    "running",
+                    result=result_dict,
+                )
+                await session.commit()
+
+                if total_rows and processed >= total_rows:
+                    completed_result = {
+                        **result_dict,
+                        "summary": _build_clz_import_summary(result_dict),
+                        "progress": 1.0,
+                    }
+                    await operations_manager.mark_completed(
+                        operation_uuid,
+                        completed_result,
+                    )
+                    await session.commit()
+                    logger.info(
+                        "CLZ import resumed into completed state",
+                        operation_id=operation_id,
+                        total_rows=total_rows,
+                    )
+                    return completed_result
+
+                return result_dict
+
+            series_groups = _group_clz_rows_by_series(remaining_rows)
+            series_count = len(series_groups)
+
+            result_dict["summary"] = (
+                f"Enqueued {len(remaining_rows)} CLZ rows across {series_count} series for bulk processing ({len(skipped_rows)} skipped)"
+            )
+            result_dict["series_count"] = series_count
 
             await operations_manager.update_operation(
                 operation_uuid,
@@ -2114,19 +3116,19 @@ async def import_clz_task(
             from comic_identity_engine.jobs.queue import JobQueue
 
             logger.info(
-                "Enqueueing CLZ row tasks",
+                "Enqueueing CLZ series bulk tasks",
                 operation_id=operation_id,
                 total_rows=total_rows,
                 remaining_rows=len(remaining_rows),
+                series_count=series_count,
             )
 
             jobs = []
             queue = JobQueue()
             try:
-                for row_index, row, _row_key in remaining_rows:
-                    job = await queue.enqueue_resolve_clz_row(
-                        row_data=row,
-                        row_index=row_index,
+                for series_key, series_rows in series_groups.items():
+                    job = await queue.enqueue_series_bulk(
+                        series_rows=series_rows,
                         operation_id=operation_uuid,
                     )
                     jobs.append(job)
@@ -2138,9 +3140,10 @@ async def import_clz_task(
                         await maybe_awaitable
 
             logger.info(
-                "All CLZ row tasks enqueued",
+                "All CLZ series bulk tasks enqueued",
                 operation_id=operation_id,
                 job_count=len(jobs),
+                series_count=series_count,
             )
 
             if total_rows and processed >= total_rows:
