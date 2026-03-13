@@ -34,6 +34,7 @@ async def db_session():
         create_async_engine,
         async_sessionmaker,
     )
+    from sqlalchemy import text
 
     DATABASE_URL = os.environ.get(
         "DATABASE_URL", "postgresql://user:pass@localhost/test_db"
@@ -46,5 +47,18 @@ async def db_session():
     )
 
     async with async_session_factory() as session:
+        # Clean up any existing test data before starting
+        await session.execute(text("DELETE FROM mapping_corrections"))
+        await session.execute(text("DELETE FROM external_mappings"))
+        await session.execute(text("DELETE FROM variants"))
+        await session.execute(text("DELETE FROM issues"))
+        await session.execute(text("DELETE FROM series_runs"))
+        await session.commit()
+
+        # Begin transaction for test isolation
+        await session.begin()
+
         yield session
+
+        # Rollback transaction to clean up test data
         await session.rollback()

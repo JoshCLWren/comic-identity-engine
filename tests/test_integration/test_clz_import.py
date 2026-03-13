@@ -196,7 +196,8 @@ class TestResolveClzRow:
                                     str(TEST_OPERATION_ID),
                                 )
 
-        assert result["resolved"] is True
+        assert result["resolved"] is False  # CLZ only, no cross-platform mappings
+        assert result["completion_stage"] == "clz_only"
         assert result["row_index"] == 1
         assert result["source_issue_id"] == "clz-001"
         assert "issue_id" in result
@@ -233,7 +234,9 @@ class TestResolveClzRow:
                 str(TEST_OPERATION_ID),
             )
 
-        assert result["resolved"] is True
+        assert result["resolved"] is False  # CLZ only, no cross-platform mappings
+        assert result["completion_stage"] == "clz_only"
+        assert result["platform_coverage"] == 0
         assert result["row_index"] == 1
         assert result["source_issue_id"] == "clz-001"
         assert result["issue_id"] == str(existing_issue_id)

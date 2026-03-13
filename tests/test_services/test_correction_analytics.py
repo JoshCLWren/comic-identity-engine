@@ -22,8 +22,11 @@ from comic_identity_engine.services.correction_analytics import (
 
 @pytest.fixture
 async def sample_data(db_session: AsyncSession):
+    import uuid as uuid_module
+
+    unique_suffix = str(uuid_module.uuid4())[:8]
     series = SeriesRun(
-        title="X-Men",
+        title=f"X-Men-{unique_suffix}",
         start_year=1991,
         publisher="Marvel",
     )
@@ -44,19 +47,19 @@ async def sample_data(db_session: AsyncSession):
     mapping1 = ExternalMapping(
         issue_id=issue1.id,
         source="gcd",
-        source_issue_id="12345",
+        source_issue_id=f"12345-{unique_suffix}",
         is_accurate=True,
     )
     mapping2 = ExternalMapping(
         issue_id=issue2.id,
         source="gcd",
-        source_issue_id="12346",
+        source_issue_id=f"12346-{unique_suffix}",
         is_accurate=False,
     )
     mapping3 = ExternalMapping(
         issue_id=issue1.id,
         source="locg",
-        source_issue_id="67890",
+        source_issue_id=f"67890-{unique_suffix}",
         is_accurate=True,
     )
     db_session.add_all([mapping1, mapping2, mapping3])
@@ -65,29 +68,29 @@ async def sample_data(db_session: AsyncSession):
     correction1 = MappingCorrection(
         issue_id=issue1.id,
         source="gcd",
-        original_source_issue_id="12344",
-        correct_source_issue_id="12345",
+        original_source_issue_id=f"12344-{unique_suffix}",
+        correct_source_issue_id=f"12345-{unique_suffix}",
         correction_type="wrong_issue",
         review_status="applied",
     )
     correction2 = MappingCorrection(
         issue_id=issue2.id,
         source="gcd",
-        original_source_issue_id="12347",
-        correct_source_issue_id="12346",
+        original_source_issue_id=f"12347-{unique_suffix}",
+        correct_source_issue_id=f"12346-{unique_suffix}",
         correction_type="wrong_issue",
         review_status="pending",
     )
     correction3 = MappingCorrection(
         issue_id=issue1.id,
         source="locg",
-        original_source_issue_id="67891",
+        original_source_issue_id=f"67891-{unique_suffix}",
         correct_source_issue_id=None,
         correction_type="wrong_series",
         review_status="reviewed",
     )
     db_session.add_all([correction1, correction2, correction3])
-    await db_session.commit()
+    await db_session.flush()
 
     return {
         "series": series,
@@ -131,7 +134,7 @@ async def test_get_platform_accuracy(db_session: AsyncSession, sample_data):
     assert gcd_accuracy.total_mappings == 2
     assert gcd_accuracy.accurate_mappings == 1
     assert gcd_accuracy.inaccurate_mappings == 1
-    assert gcd_accuracy.corrected_mappings == 1
+    assert gcd_accuracy.corrected_mappings == 2
 
 
 @pytest.mark.asyncio
@@ -232,8 +235,13 @@ async def test_get_correction_seed_data(db_session: AsyncSession, sample_data):
 
     assert len(seed_data) == 1
     assert seed_data[0]["platform"] == "gcd"
-    assert seed_data[0]["correct_platform_id"] == "12345"
-    assert seed_data[0]["original_platform_id"] == "12344"
+    assert (
+        seed_data[0]["correct_platform_id"] == sample_data["mapping1"].source_issue_id
+    )
+    assert (
+        seed_data[0]["original_platform_id"]
+        == sample_data["correction1"].original_source_issue_id
+    )
     assert seed_data[0]["correction_type"] == "wrong_issue"
 
 

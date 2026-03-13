@@ -94,41 +94,94 @@ class GCDScraper:
     async def _search_with_session(
         self, comic: Comic, session: aiohttp.ClientSession
     ) -> SearchResult:
-        """Search using an aiohttp session with shared TCP connection."""
+        """Search using GCD's JSON API instead of HTML scraping."""
         result = SearchResult(comic=comic, listings=[], prices=[])
 
         try:
-            # GCD doesn't have a public search API, so we need to search via their web interface
-            # or use a series-based approach. For now, let's try the series search endpoint.
+            # Use GCD's JSON API to search for series
+            # API endpoint: https://www.comics.org/api/series/
+            api_url = f"{self.API_BASE}/series/"
 
-            # Approach: Try to find the series first, then search for issues
-            search_url = f"{self.BASE_URL}/search/advanced/"
-
-            # Build search parameters for the web interface
-            params = {
-                "query_type": "series",
-                "keywords": comic.title,
-                "method": "icontains",
-            }
-
+            params = {}
+            if comic.title:
+                params["name"] = comic.title
             if comic.year:
-                params["year_begun"] = str(comic.year)
-
+                params["year_began"] = str(comic.year)
             if comic.publisher:
                 params["publisher"] = comic.publisher
 
-            logger.debug(f"Searching GCD series with params: {params}")
+            logger.debug(f"Searching GCD API with params: {params}")
 
-            async with session.get(
-                search_url,
-                params=params,
-                headers={
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                },
-            ) as response:
+            headers = {
+                "Accept": "application/json",
+            }
+
+            async with session.get(api_url, params=params, headers=headers) as response:
                 response.raise_for_status()
-                html = await response.text()
+
+                # Check if response is JSON (not HTML login page)
+                content_type = response.headers.get("Content-Type", "")
+                if "text/html" in content_type:
+                    logger.warning(
+                        "GCD returned HTML instead of JSON (possibly blocked)"
+                    )
+                    return result
+
+                try:
+                    data = await response.json()
+                except Exception:
+                    logger.warning("GCD response is not valid JSON")
+                    return result
+
+            # Parse series from API response
+            series_list = self._parse_series_from_api(data)
+
+            if not series_list:
+                logger.debug(f"No GCD series found for {comic.title}")
+                return result
+
+            # For each series, try to find the issue using the API
+            for series in series_list[:3]:
+                series_id = series.get("id", "")
+                if not series_id:
+                    continue
+
+                logger.debug(f"Checking series ID: {series_id}")
+
+                try:
+                    # Use GCD API to get issues for this series
+                    issues = await self._fetch_issues_from_api(
+                        session, series_id, str(comic.issue)
+                    )
+
+                    for issue in issues:
+                        comic_listing = ComicListing(
+                            store="GCD",
+                            title=issue.get("title", ""),
+                            price="N/A",
+                            grade="",
+                            url=issue.get("url", ""),
+                            image_url=issue.get("image_url", ""),
+                            store_type="gcd",
+                            metadata={
+                                "issue_id": issue.get("issue_id", ""),
+                                "series_id": series_id,
+                                "publisher": series.get("publisher", ""),
+                                "publication_date": issue.get("publication_date", ""),
+                            },
+                        )
+                        result.listings.append(comic_listing)
+
+                    if result.listings:
+                        result.url = f"{self.BASE_URL}/series/{series_id}/"
+                        break
+
+                except Exception as e:
+                    logger.debug(f"Error fetching issues for series {series_id}: {e}")
+                    continue
+
+            logger.debug(f"Found {len(result.listings)} GCD entries")
+            return result
 
             if not html:
                 logger.debug("No response from GCD")
@@ -136,6 +189,7 @@ class GCDScraper:
 
             # Parse series from the search results
             series_list = self._parse_series_results(html)
+            print(f"📊 [GCD] Found {len(series_list)} series")
 
             if not series_list:
                 logger.debug(f"No GCD series found for {comic.title}")
@@ -150,6 +204,7 @@ class GCDScraper:
                 if not series_url.startswith("http"):
                     series_url = urljoin(self.BASE_URL, series_url)
 
+                print(f"   Series: {series.get('title', 'Unknown')} -> {series_url}")
                 logger.debug(f"Checking series: {series_url}")
 
                 # Fetch the series page
@@ -162,6 +217,7 @@ class GCDScraper:
                     issues = self._parse_issues_from_series(
                         series_html, str(comic.issue)
                     )
+                    print(f"     Found {len(issues)} matching issues")
 
                     for issue in issues:
                         comic_listing = ComicListing(
@@ -220,11 +276,23 @@ class GCDScraper:
             if not table:
                 table = parser.css_first("table")
 
+            print(f"   [GCD Parser] Looking for results table...")
+            print(f"   [GCD Parser] Found listing_table: {table is not None}")
+            print(f"   [GCD Parser] Found any table: {table is not None}")
+
             if not table:
                 logger.debug("No results table found in GCD response")
+                # Try to find any links to series pages as fallback
+                all_links = parser.css("a[href*='/series/']")
+                print(f"   [GCD Parser] Fallback: found {len(all_links)} series links")
+                for link in all_links[:5]:
+                    href = link.attributes.get("href", "")
+                    text = link.text().strip()[:50]
+                    print(f"      - {text}: {href}")
                 return []
 
             rows = table.css("tr")
+            print(f"   [GCD Parser] Found {len(rows)} table rows")
 
             for row in rows:
                 try:
@@ -270,6 +338,12 @@ class GCDScraper:
                     continue
 
             logger.debug(f"Parsed {len(results)} series from GCD")
+            print(f"   [GCD Parser] Successfully parsed {len(results)} series")
+            return results
+
+        except Exception as e:
+            logger.error(f"Error parsing series results: {e}")
+            print(f"   [GCD Parser] ERROR: {e}")
             return results
 
         except Exception as e:
@@ -415,3 +489,121 @@ class GCDScraper:
             pass
 
         return ""
+
+    def _parse_series_from_api(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Parse series from GCD API JSON response.
+
+        Args:
+            data: JSON response from GCD API
+
+        Returns:
+            List of series dictionaries
+        """
+        results = []
+
+        try:
+            # GCD API response format: {"results": [...]} or direct array
+            if isinstance(data, dict):
+                series_array = data.get("results", data.get("series", []))
+            elif isinstance(data, list):
+                series_array = data
+            else:
+                return []
+
+            for series in series_array:
+                if not isinstance(series, dict):
+                    continue
+
+                series_id = series.get("id") or series.get("series_id")
+                if not series_id:
+                    continue
+
+                results.append(
+                    {
+                        "id": str(series_id),
+                        "title": series.get("name", series.get("title", "")),
+                        "publisher": series.get("publisher", {}).get("name", "")
+                        if isinstance(series.get("publisher"), dict)
+                        else series.get("publisher", ""),
+                        "year": series.get("year_began", series.get("year")),
+                    }
+                )
+
+            logger.debug(f"Parsed {len(results)} series from GCD API")
+            return results
+
+        except Exception as e:
+            logger.error(f"Error parsing API series response: {e}")
+            return []
+
+    async def _fetch_issues_from_api(
+        self, session: aiohttp.ClientSession, series_id: str, issue_number: str
+    ) -> List[Dict[str, Any]]:
+        """Fetch issues for a series from GCD API.
+
+        Args:
+            session: aiohttp client session
+            series_id: GCD series ID
+            issue_number: Issue number to filter by
+
+        Returns:
+            List of matching issue dictionaries
+        """
+        results = []
+
+        try:
+            # Use GCD API to get issues for this series
+            # API endpoint: https://www.comics.org/api/series/{series_id}/issues/
+            issues_url = f"{self.API_BASE}/series/{series_id}/issues/"
+
+            async with session.get(
+                issues_url, headers={"Accept": "application/json"}
+            ) as response:
+                response.raise_for_status()
+
+                data = await response.json()
+
+            # Parse issues from API response
+            if isinstance(data, dict):
+                issues_array = data.get("results", data.get("issues", []))
+            elif isinstance(data, list):
+                issues_array = data
+            else:
+                return []
+
+            for issue in issues_array:
+                if not isinstance(issue, dict):
+                    continue
+
+                issue_id = issue.get("id") or issue.get("issue_id")
+                if not issue_id:
+                    continue
+
+                # Check if issue number matches
+                issue_num = issue.get("number", issue.get("issue", ""))
+                if not self._issue_matches(str(issue_num), issue_number):
+                    continue
+
+                # Build issue URL
+                url = f"{self.BASE_URL}/issue/{issue_id}/"
+
+                # Extract publication date
+                pub_date = issue.get("publication_date") or issue.get("date")
+                if isinstance(pub_date, dict):
+                    pub_date = pub_date.get("date", "")
+
+                results.append(
+                    {
+                        "title": issue.get("display_name", f"#{issue_num}"),
+                        "url": url,
+                        "issue_id": str(issue_id),
+                        "publication_date": str(pub_date) if pub_date else "",
+                        "image_url": "",  # GCD API may not include images
+                    }
+                )
+
+            return results
+
+        except Exception as e:
+            logger.debug(f"Error fetching issues from API: {e}")
+            return []

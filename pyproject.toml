@@ -38,6 +38,7 @@ dependencies = [
     # Comic Search Library (for cross-platform search)
     "comic-search-lib",
     "jinja2>=3.1.6",
+    "aiohttp>=3.13.3",
 ]
 
 [dependency-groups]

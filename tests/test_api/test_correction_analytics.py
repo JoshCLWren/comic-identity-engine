@@ -16,8 +16,11 @@ from comic_identity_engine.database.models import (
 
 @pytest.fixture
 async def setup_corrections(db_session: AsyncSession):
+    import uuid as uuid_module
+
+    unique_suffix = str(uuid_module.uuid4())[:8]
     series = SeriesRun(
-        title="Amazing Spider-Man",
+        title=f"Amazing Spider-Man-{unique_suffix}",
         start_year=1963,
         publisher="Marvel",
     )
@@ -38,13 +41,13 @@ async def setup_corrections(db_session: AsyncSession):
     mapping1 = ExternalMapping(
         issue_id=issue1.id,
         source="gcd",
-        source_issue_id="10001",
+        source_issue_id=f"10001-{unique_suffix}",
         is_accurate=True,
     )
     mapping2 = ExternalMapping(
         issue_id=issue2.id,
         source="gcd",
-        source_issue_id="10002",
+        source_issue_id=f"10002-{unique_suffix}",
         is_accurate=False,
     )
     db_session.add_all([mapping1, mapping2])
@@ -53,8 +56,8 @@ async def setup_corrections(db_session: AsyncSession):
     correction1 = MappingCorrection(
         issue_id=issue1.id,
         source="gcd",
-        original_source_issue_id="10000",
-        correct_source_issue_id="10001",
+        original_source_issue_id=f"10000-{unique_suffix}",
+        correct_source_issue_id=f"10001-{unique_suffix}",
         correction_type="wrong_issue",
         review_status="applied",
         user_notes="Corrected issue number",
@@ -62,14 +65,14 @@ async def setup_corrections(db_session: AsyncSession):
     correction2 = MappingCorrection(
         issue_id=issue2.id,
         source="gcd",
-        original_source_issue_id="10003",
+        original_source_issue_id=f"10003-{unique_suffix}",
         correct_source_issue_id=None,
         correction_type="wrong_series",
         review_status="pending",
         user_notes="Wrong series",
     )
     db_session.add_all([correction1, correction2])
-    await db_session.commit()
+    await db_session.flush()
 
     return {
         "series": series,

@@ -237,9 +237,12 @@ def _parse_locg_url(url: str) -> ParsedUrl:
             source_series_id=series_id,
         )
 
-    # Match issue page patterns
-    # Pattern 1: /comic/SERIES_ID/ISSUE_ID (two numeric IDs)
-    double_id_match = re.search(r"/comic/(\d+)/(\d+)", url)
+    # Match issue page patterns - ORDER MATTERS!
+
+    # Pattern 1: /comic/SERIES_ID/ISSUE_ID (two numeric IDs separated by /)
+    # This matches URLs like /comic/111275/1169529 where we have two numbers
+    # Must check BEFORE single ID pattern to correctly extract both IDs
+    double_id_match = re.search(r"/comic/(\d+)/(\d+)(?:/|$)", url)
     if double_id_match:
         series_id = double_id_match.group(1)
         issue_id = double_id_match.group(2)
@@ -249,19 +252,13 @@ def _parse_locg_url(url: str) -> ParsedUrl:
             source_series_id=series_id,
         )
 
-    # Pattern 2: /comic/SERIES_ID/slug-ISSUE_NUM (issue number in slug)
-    slug_issue_match = re.search(r"/comic/(\d+)/[^/]+-(\d+)", url)
-    if slug_issue_match:
-        series_id = slug_issue_match.group(1)
-        issue_num = slug_issue_match.group(2)
-        return ParsedUrl(
-            platform="locg",
-            source_issue_id=issue_num,
-            source_series_id=series_id,
-        )
-
-    # Pattern 3: /comic/ISSUE_ID[/slug] (just issue ID)
-    issue_match = re.search(r"/comic/(\d+)", url)
+    # Pattern 2: /comic/ISSUE_ID[/slug] (single issue ID with optional slug)
+    # This matches URLs like /comic/9092122/x-force-47 where 9092122 is the issue ID
+    # This is the MOST COMMON LoCG URL format for issue pages
+    # Must NOT match URLs already handled by Pattern 1 (double-ID URLs)
+    # The regex matches: /comic/NUMBER or /comic/NUMBER/ or /comic/NUMBER/slug
+    # But NOT /comic/NUMBER/NUMBER (which would be a double-ID URL)
+    issue_match = re.search(r"/comic/(\d+)(?:/.*)?$", url)
     if issue_match:
         issue_id = issue_match.group(1)
         return ParsedUrl(

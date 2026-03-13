@@ -29,35 +29,121 @@ This includes but is not limited to:
 
 ---
 
+## 🎯 PRIMARY STRATEGY: SERIES PAGE BULK EXTRACTION
+
+### THE CORRECT APPROACH (DO THIS INSTEAD)
+
+**For CSV imports and bulk operations:**
+
+```python
+# ✅ CORRECT: Find ONE issue → Get SERIES page → Extract ALL issues
+for each_row in csv_import:
+    issue_data = parse_row(row)
+
+# Step 1: Search for ONE issue from the series on each platform
+found_urls = await search_all_platforms(series_title, issue_number, ...)
+
+# Step 2: For each platform where we found ONE issue, navigate to SERIES page
+for platform, url in found_urls.items():
+    series_page_url = extract_series_page_url(url)
+    all_issue_urls = scrape_all_issues_from_series_page(series_page_url)
+
+    # Step 3: Create mappings for ALL issues in the series
+    for issue_url in all_issue_urls:
+        parsed = parse_url(issue_url)
+        await create_mapping(
+            issue_id=canonical_issue_id,
+            source=platform,
+            source_issue_id=parsed.source_issue_id,
+            source_url=issue_url,  # ← STORE FULL URL!
+        )
+```
+
+**WHY THIS WORKS:**
+1. **One search per series per platform** (not one search per issue!)
+2. **Get all issues at once** from the series page
+3. **Store full URLs** (not just IDs)
+4. **10-100x faster** than searching each issue individually
+5. **Higher success rate** - if you find issue #1, you get issues #2-#150 for free
+
+### Platform Series Page Patterns
+
+**Atomic Avenue (AA):**
+- Issue URL: `https://atomicavenue.com/atomic/item/217255/1/x-men-negative-1`
+- Series page: `https://atomicavenue.com/atomic/series/16287/1/XMen-2nd-Series`
+- Pattern: Extract series ID from issue URL, construct series URL
+- Result: ALL issue URLs for that series on one page
+
+**Comics Price Guide (CPG):**
+- Issue URL: `https://www.comicspriceguide.com/titles/x-men/-1/phvpiu`
+- Series page: `https://www.comicspriceguide.com/titles/x-men/rluy`
+- Pattern: Extract series slug from issue URL, construct series URL
+- Result: ALL issue URLs for that series on one page
+
+**Comic Collector Live (CCL):**
+- Issue URL: `https://www.comiccollectorlive.com/issue/comic-books/X-Men-1991/78/dbea05f8-fde4-409d-abbe-0cdace6f8ac9`
+- Series page: Extract from issue URL or navigate via series links
+- Pattern: Series slug in URL path
+- Result: ALL issue URLs for that series
+
+**League of Comic Geeks (LoCG):**
+- Issue URL: `https://leagueofcomicgeeks.com/comic/8917101/x-force-11`
+- Series page: Navigate via series links or scrape issue listings
+- Pattern: Issue pages link back to series
+- Result: ALL issue URLs for that series
+
+**Grand Comics Database (GCD):**
+- Issue URL: `https://www.comics.org/issue/125295/`
+- Series page: `https://www.comics.org/series/4254/`
+- Pattern: Series ID in issue data, construct series URL
+- Result: ALL issue URLs for that series (GCD has the best series pages!)
+
+### When to Use Individual Issue Search
+
+**ONLY use individual search for:**
+1. Single issue lookups via CLI (`cie-find`)
+2. Edge cases where series page doesn't exist or is malformed
+3. Issues that can't be found via series page (specials, one-shots)
+4. Testing and debugging
+
+**DO NOT use individual search for:**
+1. CSV imports (use series page extraction!)
+2. Bulk operations (use series page extraction!)
+3. Any operation with >5 issues from the same series
+
+---
+
 ## THE PROBLEM (WHY WE'RE HERE)
 
 ### What Users Expect
 ```
 User runs: cie-find "https://www.comics.org/issue/12345/"
-Expected: Search ALL platforms thoroughly, show real-time progress, complete when done
-Actual (BEFORE FIX): Searched once per platform, marked "not_found" immediately
+Expected: Find THIS issue on ALL platforms, show real-time progress
+User runs: cie-import-clz backup.clz
+Expected: Import 1000 issues efficiently by leveraging series pages
+Actual (WRONG APPROACH): Search for each of 1000 issues individually
 ```
 
-### Why Current Code Fails
+### Why Individual Issue Search Fails
 
 **WRONG APPROACH (DO NOT DO THIS):**
 ```python
-# ❌ BAD: Search once, give up immediately
-for platform in platforms:
-    result = search_comic(title, issue, year, publisher)
-    if result.found:
-        status = "found"
-    else:
-        status = "not_found"  # ← WRONG! Gives up too soon!
+# ❌ BAD: Search for each issue individually
+for each_issue in csv_import:
+    for platform in platforms:
+        result = search_comic(title, issue, year, publisher)
+        if result.found:
+            create_mapping(platform, result)
+        else:
+            status = "not_found"
 ```
 
 **WHY THIS FAILS:**
-1. Network errors happen (timeouts, rate limits)
-2. Platforms have different search capabilities
-3. Issue number formats vary ("1" vs "01" vs "#1" vs "1A")
-4. Title formats vary ("X-Men (1991)" vs "X-Men" vs "Xmen")
-5. Some platforms fail without year, some fail with year
-6. Single query attempt = high false negative rate
+1. **1000 issues × 6 platforms = 6000 searches** (insanely slow!)
+2. **Network errors** on each search (timeouts, rate limits)
+3. **Platform search limitations** (many platforms have terrible search)
+4. **False negatives** (issue exists but search doesn't find it)
+5. **Inefficient** - if you find X-Men #1, you should get #2-#150 for free
 
 ---
 

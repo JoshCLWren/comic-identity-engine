@@ -61,7 +61,7 @@ def _prefer_workspace_comic_search_lib() -> None:
 PLATFORM_SEARCH_CONFIG = {
     "gcd": {
         "request_timeout_sec": 15,
-        "strategies": ["exact", "no_year", "normalized_title"],
+        "strategies": ["exact", "no_year", "subtitle_only", "normalized_title"],
         "circuit_breaker": {
             "failure_threshold": 10,
             "reset_timeout_seconds": 120,
@@ -70,7 +70,13 @@ PLATFORM_SEARCH_CONFIG = {
     },
     "locg": {
         "request_timeout_sec": 30,
-        "strategies": ["exact", "no_year", "normalized_title", "fuzzy_title"],
+        "strategies": [
+            "exact",
+            "no_year",
+            "subtitle_only",
+            "normalized_title",
+            "fuzzy_title",
+        ],
         "circuit_breaker": {
             "failure_threshold": 5,
             "reset_timeout_seconds": 180,
@@ -82,6 +88,7 @@ PLATFORM_SEARCH_CONFIG = {
         "strategies": [
             "exact",
             "no_year",
+            "subtitle_only",
             "normalized_title",
             "fuzzy_title",
             "simplified_tokens",
@@ -185,6 +192,28 @@ class PlatformSearcher:
     ) -> dict[str, Any]:
         """Search all platforms in parallel with multiple strategies.
 
+        ⚠️ IMPORTANT: When to use this function ⚠️
+
+        **USE THIS FOR:**
+        - Single issue lookups (CLI: cie-find)
+        - Testing and debugging
+        - Edge cases where series page extraction failed
+
+        **DO NOT USE FOR:**
+        - CSV imports (use series_page_extractor instead!)
+        - Bulk operations (use series_page_extractor instead!)
+        - Any operation with >5 issues from the same series
+
+        **WHY:**
+        This function searches for ONE issue on ALL platforms.
+        For bulk imports, you should:
+        1. Find ONE issue from a series on all platforms (using this function)
+        2. Extract series page URLs from the results
+        3. Scrape ALL issues from each series page
+        4. Create mappings for all issues at once
+
+        See: SERIES_PAGE_STRATEGY.md for the bulk extraction pattern.
+
         Args:
             issue_id: Canonical issue UUID
             series_title: Series title
@@ -217,7 +246,7 @@ class PlatformSearcher:
         }
 
         # Create tasks for all other platforms
-        tasks: list[asyncio.Task[tuple[str, Optional[str]]]] = []
+        tasks: list[asyncio.Task[tuple[str, dict[str, Any]]]] = []
         for platform in all_platforms:
             if platform == source_platform:
                 continue
@@ -259,8 +288,19 @@ class PlatformSearcher:
 
         found_urls = {}
         for completed_task in asyncio.as_completed(tasks):
+            logger.debug(
+                "DEBUG: Task completed, processing result",
+                task_type=type(completed_task),
+            )
             try:
                 platform, result = await completed_task
+                logger.debug(
+                    "DEBUG: Task result received",
+                    platform=platform,
+                    result_type=type(result),
+                    has_url="url" in result,
+                    url=result.get("url") if isinstance(result, dict) else "not_a_dict",
+                )
             except Exception as e:
                 platform = getattr(e, "platform", "unknown")
                 platform_status[platform] = {
@@ -274,8 +314,14 @@ class PlatformSearcher:
                     error=str(e),
                 )
             else:
-                if result["url"]:
-                    found_urls[platform] = result["url"]
+                if result.get("url"):
+                    found_urls[platform] = result.get("url")
+                    logger.info(
+                        "DEBUG: Added URL to found_urls",
+                        platform=platform,
+                        url=result.get("url"),
+                        total_found=len(found_urls),
+                    )
                     platform_status[platform] = self._build_platform_entry(
                         status="found",
                         strategy=result.get("strategy"),
@@ -284,6 +330,15 @@ class PlatformSearcher:
                         detail=result.get("detail"),
                     )
                 else:
+                    logger.debug(
+                        "DEBUG: Platform search result has no URL",
+                        platform=platform,
+                        result_keys=list(result.keys())
+                        if isinstance(result, dict)
+                        else "not_a_dict",
+                        result_status=result.get("status"),
+                        result_url=result.get("url"),
+                    )
                     platform_status[platform] = self._build_platform_entry(
                         status=result.get("status", "not_found"),
                         strategy=result.get("strategy"),
@@ -424,7 +479,12 @@ class PlatformSearcher:
 
         if not scraper:
             logger.warning("Scraper not available", platform=platform)
-            return None
+            return {
+                "url": None,
+                "status": "not_found",
+                "reason": "scraper_unavailable",
+                "detail": f"scraper not configured for platform={platform}",
+            }
 
         start_time = time.time()
         attempted_strategies: list[str] = []
@@ -440,100 +500,96 @@ class PlatformSearcher:
                 operation_id, platform, status_key, strategy=strategy, retry=1
             )
 
-            # Retry with exponential backoff
-            for attempt in range(config["max_retries"]):
-                attempts += 1
-                try:
-                    timeout_seconds = self._get_platform_timeout_seconds()
-                    if (
-                        timeout_seconds is not None
-                        and time.time() - start_time > timeout_seconds
-                    ):
-                        logger.warning(
-                            "Platform search timeout",
-                            platform=platform,
-                            duration_sec=timeout_seconds,
-                        )
-                        return {
-                            "url": None,
-                            "status": "not_found",
-                            "strategy": strategy,
-                            "retry": attempt + 1,
-                            "reason": "timeout",
-                            "detail": (
-                                f"exceeded {timeout_seconds:.1f}s while "
-                                f"running strategy={strategy}"
-                            ),
-                        }
-
-                    # Execute search with this strategy
-                    result = await self._execute_strategy(
-                        scraper=scraper,
-                        strategy=strategy,
-                        series_title=series_title,
-                        issue_number=issue_number,
-                        year=year,
-                        publisher=publisher,
-                    )
-
-                    candidate_url, candidate_detail = self._select_candidate_url(
+            try:
+                timeout_seconds = self._get_platform_timeout_seconds()
+                if (
+                    timeout_seconds is not None
+                    and time.time() - start_time > timeout_seconds
+                ):
+                    logger.warning(
+                        "Platform search timeout",
                         platform=platform,
+                        duration_sec=timeout_seconds,
+                    )
+                    return {
+                        "url": None,
+                        "status": "not_found",
+                        "strategy": strategy,
+                        "retry": 1,
+                        "reason": "timeout",
+                        "detail": (
+                            f"exceeded {timeout_seconds:.1f}s while "
+                            f"running strategy={strategy}"
+                        ),
+                    }
+
+                # Execute search with this strategy (scraper handles retries internally via circuit breaker)
+                result = await self._execute_strategy(
+                    scraper=scraper,
+                    strategy=strategy,
+                    series_title=series_title,
+                    issue_number=issue_number,
+                    year=year,
+                    publisher=publisher,
+                )
+
+                logger.debug(
+                    "DEBUG: Strategy completed",
+                    platform=platform,
+                    strategy=strategy,
+                    has_result=result is not None,
+                    result_url=getattr(result, "url", None) if result else None,
+                )
+
+                candidate_url, candidate_detail = self._select_candidate_url(
+                    platform=platform,
+                    result=result,
+                    series_title=series_title,
+                    issue_number=issue_number,
+                )
+                if candidate_url:
+                    # FOUND! Return the exact discovered URL.
+                    url = await self._create_mapping_from_search_result(
+                        platform=platform,
+                        issue_id=issue_id,
                         result=result,
-                        series_title=series_title,
-                        issue_number=issue_number,
+                        selected_url=candidate_url,
                     )
-                    if candidate_url:
-                        # FOUND! Return the exact discovered URL.
-                        url = await self._create_mapping_from_search_result(
-                            platform=platform,
-                            issue_id=issue_id,
-                            result=result,
-                            selected_url=candidate_url,
-                        )
-                        return {
-                            "url": url,
-                            "status": "found",
-                            "strategy": strategy,
-                            "retry": attempt + 1,
-                            "reason": "match_found",
-                            "detail": candidate_detail
-                            or f"matched via strategy={strategy}",
-                        }
+                    return {
+                        "url": url,
+                        "status": "found",
+                        "strategy": strategy,
+                        "retry": 1,
+                        "reason": "match_found",
+                        "detail": candidate_detail
+                        or f"matched via strategy={strategy}",
+                    }
 
-                    # Clean empty or mismatched results should move to the next
-                    # strategy, not be retried as if they were transient failures.
-                    if candidate_detail:
-                        last_error = candidate_detail
-                    break
+                # Clean empty or mismatched results should move to the next
+                # strategy, not be retried as if they were transient failures.
+                if candidate_detail:
+                    last_error = candidate_detail
 
-                except NetworkError as e:
-                    last_error = str(e)
-                    if attempt < config["max_retries"] - 1:
-                        await asyncio.sleep(config["retry_delay_sec"] * (2**attempt))
-                    else:
-                        logger.error(
-                            "Platform search failed after retries",
-                            platform=platform,
-                            error=str(e),
-                        )
-                        return {
-                            "url": None,
-                            "status": "failed",
-                            "strategy": strategy,
-                            "retry": attempt + 1,
-                            "reason": "network_error",
-                            "detail": f"network error after retries: {e}",
-                        }
-                except Exception as e:
-                    last_error = str(e)
-                    logger.error(
-                        "Strategy failed",
-                        platform=platform,
-                        strategy=strategy,
-                        error=str(e),
-                    )
-                    # Try next strategy
-                    break
+            except NetworkError as e:
+                last_error = str(e)
+                logger.error(
+                    "Platform search failed (network error)",
+                    platform=platform,
+                    strategy=strategy,
+                    error=str(e),
+                )
+                # Try next strategy
+                continue
+            except Exception as e:
+                last_error = str(e)
+                logger.error(
+                    "Strategy failed",
+                    platform=platform,
+                    strategy=strategy,
+                    error=str(e),
+                )
+                # Try next strategy
+                continue
 
         # All strategies exhausted
         reason = "no_match"
@@ -581,6 +637,11 @@ class PlatformSearcher:
 
         if strategy == "no_year":
             search_year = None
+        elif strategy == "subtitle_only":
+            if ":" in series_title:
+                search_title = series_title.split(":", 1)[1].strip()
+            else:
+                return None
         elif strategy == "normalized_title":
             search_title = self._normalize_series_name(series_title)
         elif strategy == "fuzzy_title":
@@ -609,6 +670,17 @@ class PlatformSearcher:
             search_title = " ".join(tokens)
         elif strategy not in ("exact",):
             raise ValueError(f"Unknown strategy: {strategy}")
+
+        # DEBUG: Print search parameters BEFORE calling scraper
+        platform = scraper.__class__.__name__.replace("Scraper", "").lower()
+        print(f"\n{'=' * 80}")
+        print(f"🔍 DEBUG: [{platform.upper()}] Executing strategy: {strategy}")
+        print(f"   Search parameters:")
+        print(f"     title:    '{search_title}'")
+        print(f"     issue:    '{search_issue}'")
+        print(f"     year:     {search_year}")
+        print(f"     publisher: '{search_publisher}'")
+        print(f"{'=' * 80}\n")
 
         return await self._call_scraper(
             scraper=scraper,
@@ -704,13 +776,37 @@ class PlatformSearcher:
         for issue pages. This method only accepts URLs that match the requested
         title/issue pair closely enough to be credible.
         """
+        logger.debug(
+            "DEBUG: _select_candidate_url called",
+            platform=platform,
+            has_result=result is not None,
+            result_type=type(result).__name__ if result else None,
+        )
+
         if not result:
+            logger.debug("DEBUG: _select_candidate_url - no result, returning None")
             return None, None
 
         if platform == "aa":
             direct_url = getattr(result, "url", None)
+            logger.debug(
+                "DEBUG: _select_candidate_url - AA platform",
+                has_url=direct_url is not None,
+                url=direct_url,
+                has_item_slash=direct_url and "/item/" in direct_url,
+            )
             if direct_url and "/item/" in direct_url:
+                logger.info(
+                    "DEBUG: AA URL selected",
+                    url=direct_url,
+                    reason="matched issue page via strategy result",
+                )
                 return direct_url, "matched issue page via strategy result"
+            logger.warning(
+                "DEBUG: AA URL rejected",
+                url=direct_url,
+                reason="result did not identify an issue page",
+            )
             return None, "result did not identify an issue page"
 
         listings = getattr(result, "listings", None) or []
@@ -829,7 +925,9 @@ class PlatformSearcher:
         if re.fullmatch(r"-?\d+(?:\.\d+)?", cleaned):
             return cleaned
         if re.fullmatch(r"-?\d+(?:[-/][a-z0-9]+)+", cleaned):
-            return re.match(r"-?\d+(?:\.\d+)?", cleaned).group(0)
+            match = re.match(r"-?\d+(?:\.\d+)?", cleaned)
+            if match:
+                return match.group(0)
         if cleaned == "1/2":
             return cleaned
         return None
@@ -898,6 +996,7 @@ class PlatformSearcher:
         """
         # Determine scraper type by class name
         scraper_class = scraper.__class__.__name__
+        platform = scraper_class.replace("Scraper", "").lower()
 
         # Scrapers that accept Comic object or dict
         if scraper_class in ("LoCGScraper", "CCLScraper", "HipScraper"):
@@ -907,16 +1006,46 @@ class PlatformSearcher:
                 "year": year,
                 "publisher": publisher,
             }
-            return await scraper.search_comic(comic_dict)
+            print(f"🔗 DEBUG: Calling {scraper_class}.search_comic() with dict:")
+            print(f"   {comic_dict}")
+            result = await scraper.search_comic(comic_dict)
+        else:
+            # Scrapers that accept individual parameters
+            # GCDScraper, CPGScraper, AtomicAvenueScraper
+            print(f"🔗 DEBUG: Calling {scraper_class}.search_comic() with args:")
+            print(
+                f"   title={title!r}, issue={issue!r}, year={year}, publisher={publisher!r}"
+            )
+            result = await scraper.search_comic(
+                title=title,
+                issue=issue,
+                year=year,
+                publisher=publisher,
+            )
 
-        # Scrapers that accept individual parameters
-        # GCDScraper, CPGScraper, AtomicAvenueScraper
-        return await scraper.search_comic(
-            title=title,
-            issue=issue,
-            year=year,
-            publisher=publisher,
-        )
+        # DEBUG: Print result after search completes
+        print(f"\n📊 DEBUG: [{platform.upper()}] Search completed:")
+        if result:
+            result_url = getattr(result, "url", None)
+            print(f"   ✓ Result found!")
+            print(f"   Result URL: {result_url}")
+            listings = getattr(result, "listings", None)
+            if listings:
+                print(f"   Listings count: {len(listings)}")
+                for i, listing in enumerate(listings[:5]):
+                    listing_url = getattr(listing, "url", "N/A")
+                    listing_title = getattr(listing, "title", "N/A")
+                    print(f"     Listing {i + 1}: {listing_url}")
+                    print(f"       Title: {listing_title}")
+                    if hasattr(listing, "metadata") and listing.metadata:
+                        print(f"       Metadata: {listing.metadata}")
+            else:
+                print(f"   ⚠️  No listings found in result")
+        else:
+            print(f"   ✗ No result returned")
+        print(f"{'=' * 80}\n")
+
+        return result
 
     def _normalize_series_name(self, name: str) -> str:
         """Normalize series name for fuzzy matching.

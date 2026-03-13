@@ -54,8 +54,9 @@ class TestParseUrl:
         result = parse_url(url)
 
         assert result.platform == "locg"
-        assert result.source_issue_id == "1"
-        assert result.source_series_id == "111275"
+        # LoCG URLs use /comic/ISSUE_ID[/slug] format where the first number is the issue ID
+        assert result.source_issue_id == "111275"
+        assert result.source_series_id is None
 
     def test_parse_ccl_url_with_guid(self):
         """Test parsing CCL URL with GUID."""

@@ -21,6 +21,30 @@ This includes but is not limited to:
 
 ---
 
+## ⚠️ CRITICAL: READ THESE DOCS FIRST ⚠️
+
+**BEFORE modifying cross-platform search or import code, you MUST read:**
+
+1. **SERIES_PAGE_STRATEGY.md** - The PRIMARY strategy for bulk imports
+   - Explains why series page extraction is 10-100x faster
+   - Shows platform-specific URL patterns (GCD, AA, CPG, CCL, LoCG)
+   - Provides code examples for each platform
+   - **This is what you should implement for CSV imports!**
+
+2. **CROSS_PLATFORM_SEARCH.md** - Individual issue search strategy
+   - For single issue lookups (CLI: cie-find)
+   - For edge cases and testing
+   - NOT for bulk imports!
+
+3. **CRITICAL_BUGS_PLAN.md** - Known issues that need fixing
+   - Missing commit() after creating mappings
+   - LoCG URL parser bugs
+   - GCD scraper needs JSON API rewrite
+
+**If you don't read these, you will implement the wrong thing and frustrate the user.**
+
+---
+
 ## Project Overview
 
 Comic Identity Engine is a domain-specific entity resolution system for comic books. Currently in initial design phase.
