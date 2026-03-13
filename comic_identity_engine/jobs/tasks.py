@@ -136,6 +136,7 @@ async def _handle_existing_mapping(
                             source=platform,
                             source_issue_id=parsed_found.source_issue_id,
                             source_series_id=parsed_found.source_series_id,
+                            source_url=found_url,
                         )
                         logger.info(
                             "Created external mapping for found platform",
@@ -240,6 +241,7 @@ async def _fetch_and_resolve_issue(
             source=parsed_url.platform,
             source_issue_id=parsed_url.source_issue_id,
             source_series_id=candidate.source_series_id,
+            source_url=url,
         )
 
         logger.info(
@@ -292,6 +294,7 @@ async def _fetch_and_resolve_issue(
                             source=platform,
                             source_issue_id=parsed_found.source_issue_id,
                             source_series_id=None,
+                            source_url=found_url,
                         )
                         logger.info(
                             "Created external mapping for found platform",
@@ -357,6 +360,7 @@ async def _ensure_source_mapping(
     source: str,
     source_issue_id: str,
     source_series_id: str | None,
+    source_url: str | None = None,
 ) -> str:
     """Ensure a source mapping exists and points at the resolved issue.
 
@@ -379,6 +383,7 @@ async def _ensure_source_mapping(
             source=source,
             source_issue_id=source_issue_id,
             source_series_id=source_series_id,
+            source_url=source_url,
         )
         return "created"
     except DuplicateEntityError:
@@ -1186,16 +1191,17 @@ ALL_PLATFORMS = {"gcd", "locg", "ccl", "aa", "cpg", "hip"}
 def _group_clz_rows_by_series(
     rows: list[tuple[int, dict[str, str], str]],
 ) -> dict[str, list[tuple[int, dict[str, str], str]]]:
-    """Group CLZ CSV rows by series (title + year).
+    """Group CLZ CSV rows by series (title + volume + year).
 
     Args:
         rows: List of (row_index, row_data, row_key) tuples
 
     Returns:
         Dictionary mapping series_key to list of rows
-        series_key format: "{series_title}|{year}"
+        series_key format: "{series_title}|{volume}|{year}"
     """
     from collections import defaultdict
+    import re
 
     series_groups: defaultdict[str, list[tuple[int, dict[str, str], str]]] = (
         defaultdict(list)
@@ -1209,7 +1215,19 @@ def _group_clz_rows_by_series(
         if not series_title:
             continue
 
-        series_key = f"{series_title}|{year}"
+        volume = None
+        volume_patterns = [
+            r"\bvol\.?\s*(\d+)",
+            r"\bvolume\s*(\d+)",
+            r"\bseries\s*(\d+)",
+        ]
+        for pattern in volume_patterns:
+            match = re.search(pattern, series_title, re.IGNORECASE)
+            if match:
+                volume = match.group(1)
+                break
+
+        series_key = f"{series_title}|{volume or ''}|{year}"
         series_groups[series_key].append((row_index, row, row_key))
 
     return dict(series_groups)
@@ -1563,6 +1581,7 @@ async def _create_bulk_mappings_for_scraped_issues(
                 source=platform,
                 source_issue_id=parsed_url.source_issue_id,
                 source_series_id=candidate.source_series_id,
+                source_url=url,
             )
 
             for row_index, row, row_key in series_rows:
@@ -1668,7 +1687,15 @@ def _issues_match(
     if not candidate_issue_number or not clz_issue_number:
         return False
 
-    if candidate_issue_number.lower().strip() != clz_issue_number.lower().strip():
+    from comic_identity_engine.parsing import parse_issue_candidate
+
+    candidate_parsed = parse_issue_candidate(candidate_issue_number)
+    clz_parsed = parse_issue_candidate(clz_issue_number)
+
+    if not candidate_parsed.success or not clz_parsed.success:
+        return False
+
+    if candidate_parsed.canonical_issue_number != clz_parsed.canonical_issue_number:
         return False
 
     if candidate_series and clz_series:
@@ -1829,6 +1856,7 @@ async def _process_single_clz_row(
                             source=platform,
                             source_issue_id=parsed_found.source_issue_id,
                             source_series_id=None,
+                            source_url=found_url,
                         )
                         logger.info(
                             "Created external mapping for found platform (refresh)",
@@ -1936,6 +1964,7 @@ async def _process_single_clz_row(
                             source=platform,
                             source_issue_id=parsed_found.source_issue_id,
                             source_series_id=None,
+                            source_url=found_url,
                         )
                         logger.info(
                             "Created external mapping for found platform",
@@ -2093,6 +2122,7 @@ async def _process_single_clz_row(
                             source=platform,
                             source_issue_id=parsed_found.source_issue_id,
                             source_series_id=None,
+                            source_url=found_url,
                         )
                         logger.info(
                             "Created external mapping for found platform",
@@ -2355,6 +2385,7 @@ async def resolve_clz_row_task(
                                     source=platform,
                                     source_issue_id=parsed_found.source_issue_id,
                                     source_series_id=None,
+                                    source_url=found_url,
                                 )
                                 logger.info(
                                     "Created external mapping for found platform (refresh)",
@@ -2509,6 +2540,7 @@ async def resolve_clz_row_task(
                                     source=platform,
                                     source_issue_id=parsed_found.source_issue_id,
                                     source_series_id=None,
+                                    source_url=found_url,
                                 )
                                 logger.info(
                                     "Created external mapping for found platform",
@@ -2702,6 +2734,7 @@ async def resolve_clz_row_task(
                                     source=platform,
                                     source_issue_id=parsed_found.source_issue_id,
                                     source_series_id=None,
+                                    source_url=found_url,
                                 )
                                 logger.info(
                                     "Created external mapping for found platform",

@@ -657,6 +657,7 @@ class ExternalMappingRepository:
         source: str,
         source_issue_id: str,
         source_series_id: Optional[str] = None,
+        source_url: Optional[str] = None,
     ) -> ExternalMapping:
         """Create a new external mapping.
 
@@ -665,6 +666,7 @@ class ExternalMappingRepository:
             source: Source platform code
             source_issue_id: Issue ID on the source platform
             source_series_id: Optional series ID on the source platform
+            source_url: Optional source URL for the mapping
 
         Returns:
             Created ExternalMapping entity
@@ -688,6 +690,7 @@ class ExternalMappingRepository:
             source=source,
             source_issue_id=source_issue_id,
             source_series_id=source_series_id,
+            source_url=source_url,
         )
         self.session.add(mapping)
         try:
