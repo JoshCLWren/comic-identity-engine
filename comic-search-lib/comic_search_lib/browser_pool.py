@@ -106,7 +106,7 @@ class BrowserPool:
                     ignore_https_errors=True,
                 )
 
-            self._context.set_default_timeout(30000)
+            self._context.set_default_timeout(300000)  # 10x: 5 minutes instead of 30s
             self._initialized = True
 
             logger.info("Browser pool initialized")
@@ -142,7 +142,7 @@ class BrowserPool:
                     raise RuntimeError("Browser context not initialized")
 
                 page = await self._context.new_page()
-                page.set_default_timeout(30000)
+                page.set_default_timeout(300000)  # 10x: 5 minutes instead of 30s
                 self._leased_pages.add(page)
                 logger.debug(
                     f"Created new page {id(page)} ({len(self._leased_pages)} total leased)"
@@ -172,7 +172,7 @@ class BrowserPool:
             raise RuntimeError("Browser context not initialized")
 
         new_page = await self._context.new_page()
-        new_page.set_default_timeout(30000)
+        new_page.set_default_timeout(300000)  # 10x: 5 minutes instead of 30s
         await self._available_pages.put(new_page)
         logger.debug(
             f"Replaced released page with new page ({self._available_pages.qsize()} available)"

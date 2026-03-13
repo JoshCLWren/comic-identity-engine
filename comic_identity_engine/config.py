@@ -145,8 +145,8 @@ class ArqSettings(BaseSettings):
         json_schema_extra={"env": "ARQ_POLL_INTERVAL"},
     )
     arq_job_timeout: int = Field(
-        default=300,
-        description="Default job timeout in seconds",
+        default=3000,
+        description="Default job timeout in seconds (10x: 3000s = 50 minutes)",
         json_schema_extra={"env": "ARQ_JOB_TIMEOUT"},
     )
     arq_keep_result: int = Field(
