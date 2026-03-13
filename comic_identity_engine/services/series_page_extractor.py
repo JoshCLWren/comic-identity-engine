@@ -503,6 +503,10 @@ class SeriesPageExtractor:
     async def _scrape_aa_series_page(self, series_url: str) -> list[str]:
         """Scrape all AA issue URLs from series page.
 
+        AA issue URLs have the format: /atomic/item/ITEM_ID/1/slug
+        The slug is required for the URL to work (404s without it).
+        We construct the slug from the link text if not present in href.
+
         Args:
             series_url: AA series URL
 
@@ -521,11 +525,61 @@ class SeriesPageExtractor:
         issue_urls = []
         for link in issue_links:
             href = link.get("href")
-            if href:
-                if href.startswith("/"):
-                    parsed = urlparse(series_url)
-                    href = f"{parsed.scheme}://{parsed.netloc}{href}"
+            if not href:
+                continue
+
+            # Convert to string if needed (BeautifulSoup returns AttributeValueList)
+            if not isinstance(href, str):
+                href = str(href)
+
+            if href.startswith("/"):
+                parsed = urlparse(series_url)
+                href = f"{parsed.scheme}://{parsed.netloc}{href}"
+
+            # AA URLs must have a slug
+            # Full URL: https://atomicavenue.com/atomic/item/ITEM_ID/1/slug
+            # Split: ['https:', '', 'atomicavenue.com', 'atomic', 'item', 'ITEM_ID', '1', 'slug']
+            # Count: 8 parts
+            # Without slug: ['https:', '', 'atomicavenue.com', 'atomic', 'item', 'ITEM_ID', '1']
+            # Count: 7 parts
+            path_parts = href.rstrip("/").split("/")
+
+            if len(path_parts) >= 8:
+                # URL already has slug, use as-is
                 issue_urls.append(href)
+            elif len(path_parts) == 7:
+                # URL is missing slug, try to construct it from link text
+                # Expected format: /atomic/item/ITEM_ID/1
+                # We need to add a slug like "issue-1" or similar
+                link_text = link.get_text(strip=True)
+
+                # Try to extract issue number from link text
+                # AA link text is usually like "#1" or "Issue #1"
+                issue_match = re.search(r"#?(\d+)", link_text)
+
+                if issue_match:
+                    issue_num = issue_match.group(1)
+                    # Construct URL with slug
+                    # AA format: /atomic/item/ITEM_ID/1/issue-NUM
+                    slug = f"issue-{issue_num}"
+                    constructed_url = f"{href}/{slug}"
+                    issue_urls.append(constructed_url)
+                else:
+                    # Can't construct slug, skip this URL
+                    self._logger.debug(
+                        "_scrape_aa_series_page.cannot_construct_slug",
+                        url=href,
+                        link_text=link_text,
+                        reason="Cannot extract issue number from link text",
+                    )
+            else:
+                # Malformed URL
+                self._logger.debug(
+                    "_scrape_aa_series_page.malformed_url",
+                    url=href,
+                    path_parts=len(path_parts),
+                    reason="URL path has unexpected structure",
+                )
 
         if not issue_urls:
             self._logger.warning(
@@ -630,6 +684,7 @@ class SeriesPageExtractor:
         """Scrape all CCL issue URLs from series page with pagination.
 
         CCL may paginate large series.
+        CCL issue URLs are in the format: /issue/comic-books/SERIES-SLUG/issue-NUM/GUID
 
         Args:
             series_url: CCL series URL
@@ -649,18 +704,43 @@ class SeriesPageExtractor:
             html = await self._fetch_html(paginated_url, "ccl")
             soup = BeautifulSoup(html, "html.parser")
 
-            issue_links = soup.select('a[href*="/issue/comic-books/"]')
+            # Try multiple selectors for CCL issue links
+            # CCL uses various link formats across different page layouts
+            selectors = [
+                'a[href*="/issue/comic-books/"]',
+                'a[href*="/issue/"]',
+                "a.issue-link",
+                'a[href*="comic-books"]',
+            ]
+
+            issue_links = []
+            for selector in selectors:
+                found = soup.select(selector)
+                if found:
+                    issue_links.extend(found)
+                    break  # Use first successful selector
 
             if not issue_links:
+                # No links found on this page, might be end of pagination
                 break
 
+            page_had_issues = False
             for link in issue_links:
                 href = link.get("href")
-                if href:
+                if href and isinstance(href, str):
                     if href.startswith("/"):
                         parsed = urlparse(series_url)
                         href = f"{parsed.scheme}://{parsed.netloc}{href}"
-                    all_issues_set.add(href)
+
+                    # Only add URLs that look like issue URLs (contain GUID)
+                    # CCL issue URLs have GUID at the end: /issue/comic-books/X-Men-1991/issue-1/UUID
+                    if "/issue/" in href and len(href.rstrip("/").split("/")) >= 6:
+                        all_issues_set.add(href)
+                        page_had_issues = True
+
+            if not page_had_issues:
+                # No valid issue URLs found on this page
+                break
 
             page += 1
 

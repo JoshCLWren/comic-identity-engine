@@ -27,6 +27,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    volumes:
+      - /tmp:/tmp
     command: ["uv", "run", "uvicorn", "comic_identity_engine.api.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
 
   # Worker service
@@ -55,6 +57,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    volumes:
+      - /tmp:/tmp
     command: ["uv", "run", "python", "-m", "comic_identity_engine.jobs.worker"]
 
   # CI service for running tests and linting

@@ -1551,18 +1551,30 @@ async def _create_bulk_mappings_for_scraped_issues(
     clz_adapter = CLZAdapter()
     mapping_repo = ExternalMappingRepository(session)
 
+    first_row_data = series_rows[0][1]
+    clz_year = first_row_data.get("Year") or first_row_data.get("Cover Year")
+    if isinstance(clz_year, str):
+        try:
+            clz_year = int(clz_year.strip())
+        except (ValueError, AttributeError):
+            clz_year = None
+    elif not isinstance(clz_year, int):
+        clz_year = None
+
     for url in issue_urls:
         try:
             parsed_url = parse_url(url)
 
-            candidate = await adapter.fetch_issue(parsed_url.source_issue_id)
+            candidate = await adapter.fetch_issue(
+                parsed_url.source_issue_id, full_url=parsed_url.full_url
+            )
 
             resolver = IdentityResolver(session)
             result = await resolver.resolve_issue(
                 parsed_url=parsed_url,
                 upc=candidate.upc,
                 series_title=candidate.series_title,
-                series_start_year=candidate.series_start_year,
+                series_start_year=candidate.series_start_year or clz_year,
                 issue_number=candidate.issue_number,
                 cover_date=candidate.cover_date,
                 variant_suffix=(
