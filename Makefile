@@ -8,23 +8,13 @@ help: ## Show this help message
 
 stop: ## Stop all services (API and worker)
 	@echo "Stopping Comic Identity Engine services..."
-	@pkill -9 -f "cie-api" 2>/dev/null || echo "✓ API not running"
-	@pkill -9 -f "cie-worker" 2>/dev/null || echo "✓ Worker not running"
+	@docker compose stop api worker >/dev/null 2>&1 || true
+	@-pkill -9 -f "cie-api" >/dev/null 2>&1 || true
+	@-pkill -9 -f "cie-worker" >/dev/null 2>&1 || true
 	@sleep 1
-	@if pgrep -f "cie-api" > /dev/null 2>/dev/null; then \
-		echo "⚠️  API still running, force killing..."; \
-		killall -9 cie-api 2>/dev/null || true; \
-		sleep 1; \
-	fi
-	@if pgrep -f "cie-worker" > /dev/null 2>/dev/null; then \
-		echo "⚠️  Worker still running, force killing..."; \
-		killall -9 cie-worker 2>/dev/null || true; \
-		sleep 1; \
-	fi
-	@if lsof -ti:8000 > /dev/null 2>&1; then \
-		echo "⚠️  Port 8000 still in use, killing..."; \
-		kill -9 $$(lsof -ti:8000) 2>/dev/null || true; \
-	fi
+	@killall -9 cie-api >/dev/null 2>&1 || true
+	@killall -9 cie-worker >/dev/null 2>&1 || true
+	@sleep 1
 	@echo "✓ All services stopped"
 
 start-api: ## Start the API server
