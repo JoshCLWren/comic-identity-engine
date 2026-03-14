@@ -23,6 +23,10 @@ from comic_identity_engine.adapters.gcd import GCDAdapter
 from comic_identity_engine.adapters.cpg import CPGAdapter
 from comic_identity_engine.adapters.locg import LoCGAdapter
 from comic_identity_engine.adapters.hip import HIPAdapter
+from comic_identity_engine.adapters.hip_auth import (
+    AuthenticatedHIPAdapter,
+    create_authenticated_hip_adapter,
+)
 from comic_identity_engine.adapters.ccl import CCLAdapter
 from comic_identity_engine.adapters.clz import CLZAdapter
 
@@ -37,6 +41,8 @@ __all__ = [
     "CPGAdapter",
     "LoCGAdapter",
     "HIPAdapter",
+    "AuthenticatedHIPAdapter",
+    "create_authenticated_hip_adapter",
     "CCLAdapter",
     "CLZAdapter",
 ]

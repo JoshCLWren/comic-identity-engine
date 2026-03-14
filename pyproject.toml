@@ -20,6 +20,8 @@ dependencies = [
     # HTML Parsing
     "selectolax>=0.3",
     "beautifulsoup4>=4.12",
+    # Browser Automation (for authenticated scraping)
+    "playwright>=1.48",
     # Retry Logic
     "tenacity>=9.0",
     # Fuzzy Matching
