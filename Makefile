@@ -8,34 +8,63 @@ help: ## Show this help message
 
 stop: ## Stop all services (API and worker)
 	@echo "Stopping Comic Identity Engine services..."
-	@if pgrep -f "cie-api" > /dev/null; then \
-		pkill -f "cie-api" && echo "✓ Stopped API"; \
-	else \
-		echo "✓ API not running"; \
+	@pkill -9 -f "cie-api" 2>/dev/null || echo "✓ API not running"
+	@pkill -9 -f "cie-worker" 2>/dev/null || echo "✓ Worker not running"
+	@sleep 1
+	@if pgrep -f "cie-api" > /dev/null 2>/dev/null; then \
+		echo "⚠️  API still running, force killing..."; \
+		killall -9 cie-api 2>/dev/null || true; \
+		sleep 1; \
 	fi
-	@if pgrep -f "cie-worker" > /dev/null; then \
-		pkill -f "cie-worker" && echo "✓ Stopped worker"; \
-	else \
-		echo "✓ Worker not running"; \
+	@if pgrep -f "cie-worker" > /dev/null 2>/dev/null; then \
+		echo "⚠️  Worker still running, force killing..."; \
+		killall -9 cie-worker 2>/dev/null || true; \
+		sleep 1; \
 	fi
-	@echo "All services stopped"
+	@if lsof -ti:8000 > /dev/null 2>&1; then \
+		echo "⚠️  Port 8000 still in use, killing..."; \
+		kill -9 $$(lsof -ti:8000) 2>/dev/null || true; \
+	fi
+	@echo "✓ All services stopped"
 
 start-api: ## Start the API server
+	@if lsof -ti:8000 > /dev/null 2>&1; then \
+		echo "✗ Port 8000 already in use. Run 'make stop' first."; \
+		exit 1; \
+	fi
 	@echo "Starting API server..."
-	@uv run cie-api &
+	@nohup uv run cie-api > logs/api.log 2>&1 &
+	@sleep 2
+	@if pgrep -f "cie-api" > /dev/null; then \
+		echo "✓ API started (http://localhost:8000)"; \
+	else \
+		echo "✗ API failed to start - check logs/api.log"; \
+		exit 1; \
+	fi
 
 start-worker: ## Start the worker
+	@if pgrep -f "cie-worker" > /dev/null; then \
+		echo "✗ Worker already running. Run 'make stop' first."; \
+		exit 1; \
+	fi
 	@echo "Starting worker..."
-	@uv run cie-worker &
+	@nohup uv run cie-worker > logs/worker.log 2>&1 &
+	@sleep 2
+	@if pgrep -f "cie-worker" > /dev/null; then \
+		echo "✓ Worker started"; \
+	else \
+		echo "✗ Worker failed to start - check logs/worker.log"; \
+		exit 1; \
+	fi
 
 restart-api: stop start-api ## Restart the API server
-	@echo "API restarted"
+	@echo "✓ API restarted"
 
 restart-worker: stop start-worker ## Restart the worker
-	@echo "Worker restarted"
+	@echo "✓ Worker restarted"
 
 restart: stop restart-api restart-worker ## Restart all services
-	@echo "All services restarted"
+	@echo "✓ All services restarted"
 
 clean: ## Remove Python cache and build artifacts
 	@echo "Cleaning cache files..."
@@ -43,13 +72,13 @@ clean: ## Remove Python cache and build artifacts
 	@find . -type f -name "*.pyc" -delete 2>/dev/null || true
 	@find . -type f -name "*.pyo" -delete 2>/dev/null || true
 	@rm -rf .pytest_cache .mypy_cache .ruff_cache
-	@echo "Cache files cleaned"
+	@echo "✓ Cache files cleaned"
 
 status: ## Show status of all services
 	@echo "Comic Identity Engine Status:"
 	@echo ""
 	@if pgrep -f "cie-api" > /dev/null; then \
-		echo "✓ API: Running"; \
+		echo "✓ API: Running (http://localhost:8000)"; \
 	else \
 		echo "✗ API: Not running"; \
 	fi
@@ -63,6 +92,12 @@ status: ## Show status of all services
 		echo "✓ Infrastructure: Running (postgres, redis)"; \
 	else \
 		echo "✗ Infrastructure: Not running"; \
+	fi
+	@echo ""
+	@if lsof -ti:8000 > /dev/null 2>&1; then \
+		echo "✓ Port 8000: In use"; \
+	else \
+		echo "✗ Port 8000: Available"; \
 	fi
 
 queue-status: ## Show job queue status
@@ -120,4 +155,4 @@ queue-flush: ## Force flush all ARQ keys from Redis (use if queue-clear doesn't 
 	fi
 
 fresh: queue-clear stop ## Clear queue and stop services for fresh start
-	@echo "Ready for fresh start - use 'make start-worker' when ready"
+	@echo "Ready for fresh start - use 'make start-api' and 'make start-worker'"
