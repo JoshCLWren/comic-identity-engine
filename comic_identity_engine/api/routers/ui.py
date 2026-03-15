@@ -19,7 +19,6 @@ from comic_identity_engine.database.models import (
     Issue,
     SeriesRun,
     ExternalMapping,
-    MappingCorrection,
 )
 from comic_identity_engine.services.correction_analytics import (
     CorrectionAnalyticsService,

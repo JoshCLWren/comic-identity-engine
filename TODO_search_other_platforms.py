@@ -5,7 +5,6 @@ After resolving the primary URL, search for the same comic on other platforms
 using the metadata (title, issue #, year, etc.)
 """
 
-import asyncio
 from typing import Any
 
 from comic_identity_engine.adapters import (
@@ -16,7 +15,6 @@ from comic_identity_engine.adapters import (
     HIPAdapter,
     LoCGAdapter,
 )
-from comic_identity_engine.adapters.base import SourceAdapter
 
 
 async def search_other_platforms(

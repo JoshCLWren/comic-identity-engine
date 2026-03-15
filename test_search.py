@@ -14,7 +14,7 @@ async def search_comic(title: str, issue: str, year: int = None):
 
         if result.listings:
             listing = result.listings[0]
-            print(f"✓ Found on CPG:")
+            print("✓ Found on CPG:")
             print(f"  Title: {listing.title}")
             print(f"  URL: {listing.url}")
             if listing.image_url:

@@ -15,7 +15,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Union
 
 from playwright.async_api import Page

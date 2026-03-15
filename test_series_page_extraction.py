@@ -3,7 +3,6 @@
 
 import asyncio
 import uuid
-from pathlib import Path
 
 from comic_identity_engine.database.connection import AsyncSessionLocal
 from comic_identity_engine.database.repositories import ExternalMappingRepository
@@ -31,7 +30,7 @@ async def test_series_page_extractor():
         # Verify they're full URLs
         for url in issue_urls[:3]:
             assert url.startswith("https://"), f"Not a full URL: {url}"
-        print(f"   ✓ All URLs are full URLs (not just IDs)")
+        print("   ✓ All URLs are full URLs (not just IDs)")
 
     except Exception as e:
         print(f"   ✗ FAILED: {e}")
@@ -65,11 +64,11 @@ async def test_url_storage():
         # Verify it was actually saved
         retrieved = await repo.find_by_source("gcd", "125295")
         if not retrieved:
-            print(f"   ✗ FAILED: Mapping not found in database")
+            print("   ✗ FAILED: Mapping not found in database")
             return False
 
         if retrieved.source_url != test_url:
-            print(f"   ✗ FAILED: source_url not stored correctly")
+            print("   ✗ FAILED: source_url not stored correctly")
             print(f"      Expected: {test_url}")
             print(f"      Got: {retrieved.source_url}")
             return False
@@ -79,7 +78,7 @@ async def test_url_storage():
         # Cleanup
         await session.delete(mapping)
         await session.commit()
-        print(f"   ✓ Test mapping cleaned up")
+        print("   ✓ Test mapping cleaned up")
 
     return True
 

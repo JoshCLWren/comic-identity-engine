@@ -35,7 +35,7 @@ async def test_gcd_scraper_search_xmen_1963():
     # GCD should return results for this well-known comic
     # Note: GCD is a database, not a marketplace, so results represent catalog entries
     if result.has_results:
-        print(f"\n=== GCD RESULTS ===")
+        print("\n=== GCD RESULTS ===")
         print(f"Has results: {result.has_results}")
         print(f"URL: {result.url}")
         print(f"Listings found: {len(result.listings)}")

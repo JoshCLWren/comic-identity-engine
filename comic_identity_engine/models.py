@@ -1,117 +1,62 @@
 """Internal candidate models for source ingestion.
 
-These models represent the intermediate state between raw source data
-and the canonical entity model. They are intentionally flexible to
-accommodate variations across different comic platforms.
+These models are now re-exported from longbox_commons.models for compatibility.
+The module provides compatibility shims for deprecated methods.
+
+Prefer importing from longbox_commons.models directly in new code.
 """
 
-from dataclasses import dataclass
-from datetime import date
-from typing import Any, Optional
+from longbox_commons.models import (
+    ComicIdentity,
+    IssueCandidate as LongboxIssueCandidate,
+    SeriesCandidate as LongboxSeriesCandidate,
+    SeriesInfo,
+)
+
+from typing import Any
 
 
-@dataclass
-class SeriesCandidate:
-    """Intermediate series representation from a source platform.
+class SeriesCandidate(LongboxSeriesCandidate):
+    """Compatibility wrapper for longbox_commons.SeriesCandidate.
 
-    This is NOT the canonical series entity - it's a candidate that
-    will be reconciled against the canonical database during ingestion.
+    Adds deprecated to_dict() method for backward compatibility.
     """
 
-    # Source identification
-    source: str  # e.g., "gcd", "locg", "ccl", "clz", "aa", "cpg"
-    source_series_id: str
-
-    # Core series metadata
-    series_title: str
-    series_start_year: Optional[int]
-    publisher: Optional[str]
-
-    # Optional fields for future enhancement
-    series_end_year: Optional[int] = None
-    volume_number: Optional[int] = None
-
-    # Audit/debug
-    raw_payload: Optional[dict[str, Any]] = None
-
     def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for serialization."""
-        return {
-            "source": self.source,
-            "source_series_id": self.source_series_id,
-            "series_title": self.series_title,
-            "series_start_year": self.series_start_year,
-            "publisher": self.publisher,
-            "series_end_year": self.series_end_year,
-            "volume_number": self.volume_number,
-        }
+        """Convert to dictionary for serialization.
+
+        Deprecated: Use .model_dump() instead (Pydantic method).
+        """
+        data = self.model_dump(exclude={"raw_payload"})
+        return {k: v for k, v in data.items() if v is not None}
 
 
-@dataclass
-class IssueCandidate:
-    """Intermediate issue representation from a source platform.
+class IssueCandidate(LongboxIssueCandidate):
+    """Compatibility wrapper for longbox_commons.IssueCandidate.
 
-    This is NOT the canonical issue entity - it's a candidate that
-    will be reconciled against the canonical database during ingestion.
-
-    The issue_number field must be validated using parse_issue_candidate()
-    before this object is created.
+    Adds deprecated to_dict() and get_display_issue_number() methods
+    for backward compatibility.
     """
 
-    # Source identification
-    source: str
-    source_series_id: str
-    source_issue_id: str
-
-    # Series reference
-    series_title: str
-    series_start_year: Optional[int]
-    publisher: Optional[str]
-
-    # Issue metadata
-    issue_number: str  # Canonical form, validated by parse_issue_candidate()
-    variant_suffix: Optional[
-        str
-    ]  # Extracted variant code (e.g., "A", "DE", "WIZ.SIGNED")
-
-    # Publication metadata
-    cover_date: Optional[date] = None
-    publication_date: Optional[date] = None  # On-sale date if different
-
-    # Optional fields for future enhancement
-    price: Optional[float] = None
-    page_count: Optional[int] = None
-    upc: Optional[str] = None  # Universal Product Code - strong cross-platform key
-    isbn: Optional[str] = None
-    variant_name: Optional[str] = None  # Human-readable variant description
-
-    # Audit/debug
-    raw_payload: Optional[dict[str, Any]] = None
-
     def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for serialization."""
-        return {
-            "source": self.source,
-            "source_series_id": self.source_series_id,
-            "source_issue_id": self.source_issue_id,
-            "series_title": self.series_title,
-            "series_start_year": self.series_start_year,
-            "publisher": self.publisher,
-            "issue_number": self.issue_number,
-            "variant_suffix": self.variant_suffix,
-            "cover_date": self.cover_date.isoformat() if self.cover_date else None,
-            "publication_date": self.publication_date.isoformat()
-            if self.publication_date
-            else None,
-            "price": self.price,
-            "page_count": self.page_count,
-            "upc": self.upc,
-            "isbn": self.isbn,
-            "variant_name": self.variant_name,
-        }
+        """Convert to dictionary for serialization.
+
+        Deprecated: Use .model_dump() instead (Pydantic method).
+        """
+        data = self.model_dump(exclude={"raw_payload"})
+        return {k: v for k, v in data.items() if v is not None}
 
     def get_display_issue_number(self) -> str:
-        """Get the display form of issue number with variant suffix."""
-        if self.variant_suffix:
-            return f"{self.issue_number}.{self.variant_suffix}"
-        return self.issue_number
+        """Get the display form of issue number with variant suffix.
+
+        Deprecated: Use .display_issue_number() instead.
+        """
+        return self.display_issue_number()
+
+
+__all__ = [
+    "SeriesCandidate",
+    "IssueCandidate",
+    "SeriesInfo",
+    "ComicIdentity",
+]

@@ -23,8 +23,8 @@ from comic_identity_engine.adapters import (
     ValidationError,
 )
 from comic_identity_engine.core.http_client import HttpClient
-from comic_identity_engine.models import IssueCandidate, SeriesCandidate
-from comic_identity_engine.parsing import parse_issue_candidate
+from longbox_commons import parse_issue_candidate
+from longbox_commons.models import IssueCandidate, SeriesCandidate
 
 
 class LoCGAdapter(SourceAdapter):

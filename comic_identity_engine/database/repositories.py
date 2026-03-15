@@ -303,7 +303,6 @@ class IssueRepository:
         Returns:
             List of matching Issue entities
         """
-        from sqlalchemy import or_
 
         if not series_issue_pairs:
             return []
@@ -638,7 +637,6 @@ class ExternalMappingRepository:
         Returns:
             List of ExternalMapping entities that match the provided IDs
         """
-        from sqlalchemy import or_
 
         if not source_issue_ids:
             return []

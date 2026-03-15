@@ -1,7 +1,7 @@
 """Error handling utilities for comic-identity-engine tasks."""
 
 import uuid
-from typing import Any, Callable
+from typing import Any
 
 from sqlalchemy.exc import SQLAlchemyError
 

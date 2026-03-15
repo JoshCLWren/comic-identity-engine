@@ -5,7 +5,6 @@ This module provides functionality to scrape comic data from HipComic.com,
 focusing on finding the best prices for wishlist items.
 """
 
-import asyncio
 import logging
 import os
 import re

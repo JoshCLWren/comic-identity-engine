@@ -675,7 +675,7 @@ class PlatformSearcher:
         platform = scraper.__class__.__name__.replace("Scraper", "").lower()
         print(f"\n{'=' * 80}")
         print(f"🔍 DEBUG: [{platform.upper()}] Executing strategy: {strategy}")
-        print(f"   Search parameters:")
+        print("   Search parameters:")
         print(f"     title:    '{search_title}'")
         print(f"     issue:    '{search_issue}'")
         print(f"     year:     {search_year}")
@@ -1027,7 +1027,7 @@ class PlatformSearcher:
         print(f"\n📊 DEBUG: [{platform.upper()}] Search completed:")
         if result:
             result_url = getattr(result, "url", None)
-            print(f"   ✓ Result found!")
+            print("   ✓ Result found!")
             print(f"   Result URL: {result_url}")
             listings = getattr(result, "listings", None)
             if listings:
@@ -1040,9 +1040,9 @@ class PlatformSearcher:
                     if hasattr(listing, "metadata") and listing.metadata:
                         print(f"       Metadata: {listing.metadata}")
             else:
-                print(f"   ⚠️  No listings found in result")
+                print("   ⚠️  No listings found in result")
         else:
-            print(f"   ✗ No result returned")
+            print("   ✗ No result returned")
         print(f"{'=' * 80}\n")
 
         return result

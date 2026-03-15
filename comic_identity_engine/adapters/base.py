@@ -18,7 +18,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
-from comic_identity_engine.models import IssueCandidate, SeriesCandidate
+from longbox_commons.models import IssueCandidate, SeriesCandidate
 
 if TYPE_CHECKING:
     from comic_identity_engine.core.http_client import HttpClient

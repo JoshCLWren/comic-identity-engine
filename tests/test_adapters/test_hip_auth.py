@@ -12,7 +12,7 @@ from comic_identity_engine.adapters.hip_auth import (
     AuthenticatedHIPAdapter,
     create_authenticated_hip_adapter,
 )
-from comic_identity_engine.models import IssueCandidate
+from longbox_commons.models import IssueCandidate
 
 
 @pytest.fixture

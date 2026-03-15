@@ -1,7 +1,6 @@
 """Tests for correction analytics service."""
 
 import uuid
-from datetime import datetime
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession

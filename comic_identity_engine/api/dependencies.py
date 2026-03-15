@@ -16,7 +16,6 @@ USAGE:
         ...
 """
 
-from collections.abc import AsyncGenerator
 from typing import Annotated
 
 from fastapi import Depends

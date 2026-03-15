@@ -6,7 +6,6 @@ These tests measure queue throughput, worker utilization, and import performance
 import asyncio
 import time
 import uuid
-from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -120,7 +119,7 @@ async def test_queue_throughput_high_volume():
     assert result["tasks_per_second"] > 0
     assert result["average_queue_depth"] > 0
 
-    print(f"\n=== Queue Throughput Test Results ===")
+    print("\n=== Queue Throughput Test Results ===")
     print(f"Total tasks: {result['total_tasks']}")
     print(f"Completed tasks: {result['completed_tasks']}")
     print(f"Elapsed time: {result['elapsed_seconds']:.2f}s")
@@ -155,7 +154,7 @@ async def test_worker_utilization_parallel():
     assert result["completed_tasks"] == 100
     assert result["average_worker_utilization"] == 1.0
 
-    print(f"\n=== Worker Utilization Test Results ===")
+    print("\n=== Worker Utilization Test Results ===")
     print(f"Total tasks: {result['total_tasks']}")
     print(f"Completed tasks: {result['completed_tasks']}")
     print(f"Elapsed time: {result['elapsed_seconds']:.2f}s")
@@ -280,7 +279,7 @@ async def test_clz_import_performance_small():
     assert metrics_dict["total_tasks"] == 10
     assert metrics_dict["completed_tasks"] == 10
 
-    print(f"\n=== CLZ Import Performance Test (Small CSV) ===")
+    print("\n=== CLZ Import Performance Test (Small CSV) ===")
     print(f"Total rows: {metrics_dict['total_tasks']}")
     print(f"Resolved: {metrics_dict['completed_tasks']}")
     print(f"Elapsed time: {metrics_dict['elapsed_seconds']:.2f}s")
@@ -405,7 +404,7 @@ async def test_clz_import_performance_medium():
     assert metrics_dict["total_tasks"] == 100
     assert metrics_dict["completed_tasks"] == 100
 
-    print(f"\n=== CLZ Import Performance Test (Medium CSV) ===")
+    print("\n=== CLZ Import Performance Test (Medium CSV) ===")
     print(f"Total rows: {metrics_dict['total_tasks']}")
     print(f"Resolved: {metrics_dict['completed_tasks']}")
     print(f"Elapsed time: {metrics_dict['elapsed_seconds']:.2f}s")

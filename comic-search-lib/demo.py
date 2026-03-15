@@ -39,7 +39,7 @@ async def main():
             print(f"  Prices: {len(result.prices)}")
 
             if result.listings:
-                print(f"\n  Top 3 listings:")
+                print("\n  Top 3 listings:")
                 for i, listing in enumerate(result.listings[:3], 1):
                     print(f"    {i}. {listing.store}")
                     print(f"       Price: {listing.price}")

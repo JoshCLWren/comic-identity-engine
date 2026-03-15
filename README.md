@@ -346,6 +346,33 @@ curl http://localhost:8000/api/v1/jobs/{operation_id}
 
 The API includes auto-generated OpenAPI documentation at `http://localhost:8000/docs`.
 
+## Dependencies
+
+This project uses custom consolidated packages for comic domain logic:
+
+```
+comic-identity-engine
+├── longbox-commons       # Comic domain models, parsing, CLZ I/O
+├── comic-search-lib      # Simplified search client
+├── Standard Python packages:
+│   ├── FastAPI          # REST API framework
+│   ├── SQLAlchemy       # ORM (async)
+│   ├── Alembic          # Database migrations
+│   ├── arq              # Job queue (Redis)
+│   ├── Playwright       # Browser automation
+│   └── PostgreSQL       # Database (via asyncpg)
+└── App-specific modules:
+    ├── adapters/        # Platform adapters (GCD, LoCG, CCL, AA, CPG, HIP, CLZ)
+    ├── services/        # Entity resolution, URL parsing
+    └── parsing/         # Issue number normalization (re-exports from longbox-commons)
+```
+
+### Custom Package Usage
+
+- **longbox-commons**: Provides `IssueCandidate`, `SeriesInfo` models, title/issue parsing
+- **comic-search-lib**: Simplified cross-platform search client
+- Platform adapters import models from `longbox_commons.models` for consistency
+
 ## Development Guidelines
 
 See `AGENTS.md` for detailed:

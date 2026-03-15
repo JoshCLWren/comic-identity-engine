@@ -25,8 +25,8 @@ from comic_identity_engine.adapters import (
     ValidationError,
 )
 from comic_identity_engine.core.http_client import HttpClient
-from comic_identity_engine.models import IssueCandidate, SeriesCandidate
-from comic_identity_engine.parsing import parse_issue_candidate
+from longbox_commons import parse_issue_candidate
+from longbox_commons.models import IssueCandidate, SeriesCandidate
 
 
 class HIPAdapter(SourceAdapter):
@@ -70,11 +70,10 @@ class HIPAdapter(SourceAdapter):
             "Sec-Fetch-User": "?1",
             "Sec-Fetch-Dest": "document",
             "sec-ch-ua": (
-                '"Chromium";v="133", "Not(A:Brand";v="99", '
-                '"Google Chrome";v="133"'
+                '"Chromium";v="133", "Not(A:Brand";v="99", "Google Chrome";v="133"'
             ),
             "sec-ch-ua-mobile": "?0",
-            'sec-ch-ua-platform': '"Windows"',
+            "sec-ch-ua-platform": '"Windows"',
         }
 
     async def fetch_series(self, source_series_id: str) -> SeriesCandidate:

@@ -15,8 +15,8 @@ from urllib.parse import urljoin
 import aiohttp
 from selectolax.lexbor import LexborHTMLParser
 
-from comic_search_lib.exceptions import NetworkError, ParseError, RateLimitError
-from comic_search_lib.models import Comic, SearchResult, ComicListing, ComicPrice
+from comic_search_lib.exceptions import NetworkError
+from comic_search_lib.models import Comic, SearchResult, ComicListing
 from comic_search_lib.resilience import CircuitBreaker
 
 logger = logging.getLogger(__name__)
@@ -276,7 +276,7 @@ class GCDScraper:
             if not table:
                 table = parser.css_first("table")
 
-            print(f"   [GCD Parser] Looking for results table...")
+            print("   [GCD Parser] Looking for results table...")
             print(f"   [GCD Parser] Found listing_table: {table is not None}")
             print(f"   [GCD Parser] Found any table: {table is not None}")
 

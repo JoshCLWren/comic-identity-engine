@@ -2,7 +2,6 @@
 """Test script to verify URLs are actually stored in database."""
 
 import asyncio
-import uuid
 
 from comic_identity_engine.database.connection import AsyncSessionLocal
 from comic_identity_engine.database.repositories import (
@@ -68,16 +67,16 @@ async def test_url_storage():
 
         # Step 5: Verify URLs match
         if retrieved.source_url != test_url:
-            print(f"   ✗ FAILED: URL mismatch!")
+            print("   ✗ FAILED: URL mismatch!")
             print(f"      Expected: {test_url}")
             print(f"      Got: {retrieved.source_url}")
             return False
 
-        print(f"   ✓ source_url MATCHES expected value")
+        print("   ✓ source_url MATCHES expected value")
 
         # Step 6: Check via raw SQL
         print("\n5. Verifying with raw SQL query...")
-        from sqlalchemy import select, text
+        from sqlalchemy import text
 
         result = await session.execute(
             text(
@@ -89,10 +88,10 @@ async def test_url_storage():
 
         print(f"   Database row: {row}")
         if row[2] != test_url:
-            print(f"   ✗ FAILED: Raw SQL shows different value!")
+            print("   ✗ FAILED: Raw SQL shows different value!")
             return False
 
-        print(f"   ✓ Raw SQL confirms source_url is stored")
+        print("   ✓ Raw SQL confirms source_url is stored")
 
         # Cleanup
         print("\n6. Cleaning up test data...")
@@ -100,7 +99,7 @@ async def test_url_storage():
         await session.delete(issue)
         await session.delete(series)
         await session.commit()
-        print(f"   ✓ Test data cleaned up")
+        print("   ✓ Test data cleaned up")
 
     return True
 

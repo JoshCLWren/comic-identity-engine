@@ -2,8 +2,13 @@
 
 import importlib
 
-from comic_identity_engine.parsing import ParseResult, parse_issue_candidate
-from comic_identity_engine.models import IssueCandidate, SeriesCandidate
+from longbox_commons import ParseResult, parse_issue_candidate
+from longbox_commons.models import (
+    ComicIdentity,
+    IssueCandidate,
+    SeriesCandidate,
+    SeriesInfo,
+)
 from comic_identity_engine.adapters import (
     AdapterError,
     GCDAdapter,
@@ -20,6 +25,8 @@ __all__ = [
     # Models
     "IssueCandidate",
     "SeriesCandidate",
+    "SeriesInfo",
+    "ComicIdentity",
     # Adapter base
     "SourceAdapter",
     "AdapterError",

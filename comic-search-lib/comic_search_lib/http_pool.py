@@ -27,7 +27,7 @@ import logging
 import ssl
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
 
 import aiohttp
 

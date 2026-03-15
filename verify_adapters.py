@@ -47,7 +47,7 @@ async def test_adapter(platform: str, issue_id: str, description: str) -> dict:
         # Fetch the issue
         candidate = await adapter.fetch_issue(issue_id)
 
-        print(f"✅ SUCCESS")
+        print("✅ SUCCESS")
         print(f"   Series: {candidate.series_title}")
         print(f"   Issue #: {candidate.issue_number}")
         print(f"   Publisher: {candidate.publisher}")

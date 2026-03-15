@@ -642,7 +642,7 @@ class TestCLZAdapterEdgeCases:
         with patch(
             "comic_identity_engine.adapters.clz.parse_issue_candidate"
         ) as mock_parse:
-            from comic_identity_engine.parsing import ParseResult
+            from longbox_commons import ParseResult
 
             mock_parse.return_value = ParseResult(
                 success=True, raw="#1", canonical_issue_number=None, variant_suffix=None

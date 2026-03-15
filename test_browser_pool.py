@@ -5,7 +5,6 @@ import asyncio
 
 from comic_search_lib.scrapers.locg import LoCGScraper
 from comic_search_lib.scrapers.cpg import CPGScraper
-from comic_search_lib.models.comic import Comic
 
 
 async def main():

@@ -91,7 +91,7 @@ async def test_hip_scraper_finds_results():
     print(f"Prices found: {len(result.prices)}")
 
     if result.listings:
-        print(f"\nFirst listing:")
+        print("\nFirst listing:")
         print(f"  Store: {result.listings[0].store}")
         print(f"  Title: {result.listings[0].title}")
         print(f"  Price: {result.listings[0].price}")

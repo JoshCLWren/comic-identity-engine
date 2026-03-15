@@ -20,7 +20,7 @@ async def main():
         publisher="Marvel",
     )
 
-    print(f"\n=== RESULTS ===")
+    print("\n=== RESULTS ===")
     print(f"Has results: {result.has_results}")
     print(f"URL: {result.url}")
     print(f"Source issue ID: {result.source_issue_id}")

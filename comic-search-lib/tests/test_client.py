@@ -44,7 +44,7 @@ async def test_search_all_platforms():
     assert "hip" in results
     assert "ccl" in results
 
-    print(f"\n=== Search Results Summary ===")
+    print("\n=== Search Results Summary ===")
     for platform, result in results.items():
         print(f"\n{platform.upper()}:")
         print(f"  Listings: {len(result.listings)}")
@@ -78,7 +78,7 @@ async def test_get_summary():
     assert "total_prices" in summary
     assert "platforms" in summary
 
-    print(f"\n=== Summary ===")
+    print("\n=== Summary ===")
     print(f"Platforms searched: {summary['platforms_searched']}")
     print(f"Platforms with results: {summary['platforms_with_results']}")
     print(f"Total listings: {summary['total_listings']}")
@@ -112,7 +112,7 @@ async def test_search_individual_platforms():
     assert ccl_result is not None
     assert ccl_result.comic.title == "Amazing Spider-Man"
 
-    print(f"\n=== Individual Platform Results ===")
+    print("\n=== Individual Platform Results ===")
     print(f"AA: {len(aa_result.listings)} listings")
     print(f"HIP: {len(hip_result.listings)} listings")
     print(f"CCL: {len(ccl_result.listings)} listings")

@@ -1,4 +1,4 @@
-from comic_identity_engine.parsing import parse_issue_candidate, ParseResult
+from longbox_commons import parse_issue_candidate, ParseResult
 
 
 class TestValidIssueNumbers:

@@ -20,7 +20,7 @@ from playwright.async_api import async_playwright, BrowserContext
 
 from comic_identity_engine.adapters.hip import HIPAdapter
 from comic_identity_engine.core.http_client import HttpClient
-from comic_identity_engine.models import IssueCandidate, SeriesCandidate
+from longbox_commons.models import IssueCandidate, SeriesCandidate
 
 
 logger = logging.getLogger(__name__)

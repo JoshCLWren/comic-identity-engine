@@ -1000,7 +1000,6 @@ class TestLoCGAdapterEdgeCases:
 
     def test_issue_number_validates_to_none(self):
         """Test issue number parsing that succeeds but returns None canonical."""
-        from unittest.mock import patch
 
         html = """
         <!DOCTYPE html>

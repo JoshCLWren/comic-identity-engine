@@ -6,7 +6,7 @@ Analyzes mapping corrections to identify patterns and improve matching algorithm
 import structlog
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any, Optional
 from uuid import UUID
 
@@ -18,7 +18,6 @@ from comic_identity_engine.database.models import (
     ExternalMapping,
     Issue,
     MappingCorrection,
-    SeriesRun,
 )
 
 logger = structlog.get_logger(__name__)

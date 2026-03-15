@@ -41,9 +41,7 @@ from comic_identity_engine.adapters import (
     GCDAdapter,
     HIPAdapter,
     LoCGAdapter,
-    NotFoundError,
     SourceAdapter,
-    SourceError,
     ValidationError as AdapterValidationError,
 )
 from comic_identity_engine.core.http_client import HttpClient
@@ -57,9 +55,6 @@ from comic_identity_engine.database.repositories import (
 )
 from comic_identity_engine.errors import (
     DuplicateEntityError,
-    NetworkError,
-    ParseError,
-    ResolutionError,
     ValidationError,
 )
 from comic_identity_engine.jobs.error_handling import handle_task_error
@@ -145,7 +140,7 @@ async def _handle_existing_mapping(
                             platform=platform,
                             source_issue_id=parsed_found.source_issue_id,
                         )
-                    except Exception as e:
+                    except Exception:
                         logger.warning(
                             "Failed to create external mapping for platform",
                             operation_id=operation_id,
@@ -303,7 +298,7 @@ async def _fetch_and_resolve_issue(
                             platform=platform,
                             source_issue_id=parsed_found.source_issue_id,
                         )
-                    except Exception as e:
+                    except Exception:
                         logger.warning(
                             "Failed to create external mapping for platform",
                             operation_id=operation_id,
@@ -1111,7 +1106,7 @@ async def _record_clz_row_result(
                 pending_row_count=updated_result["pending_row_count"],
                 failed_row_count=updated_result["failed_row_count"],
             )
-    except Exception as e:
+    except Exception:
         logger.warning(
             "Failed to record CLZ row progress",
             operation_id=str(operation_id),
@@ -1177,7 +1172,7 @@ async def _mark_clz_row_active(
                 active_row_count=updated_result["active_row_count"],
                 pending_row_count=updated_result["pending_row_count"],
             )
-    except Exception as e:
+    except Exception:
         logger.warning(
             "Failed to mark CLZ row active",
             operation_id=str(operation_id),
@@ -1701,7 +1696,7 @@ def _issues_match(
     if not candidate_issue_number or not clz_issue_number:
         return False
 
-    from comic_identity_engine.parsing import parse_issue_candidate
+    from longbox_commons import parse_issue_candidate
 
     candidate_parsed = parse_issue_candidate(candidate_issue_number)
     clz_parsed = parse_issue_candidate(clz_issue_number)
@@ -1880,7 +1875,7 @@ async def _process_single_clz_row(
                             platform=platform,
                             source_issue_id=parsed_found.source_issue_id,
                         )
-                    except Exception as e:
+                    except Exception:
                         logger.warning(
                             "Failed to create external mapping for platform (refresh)",
                             operation_id=operation_id,
@@ -1988,7 +1983,7 @@ async def _process_single_clz_row(
                             platform=platform,
                             source_issue_id=parsed_found.source_issue_id,
                         )
-                    except Exception as e:
+                    except Exception:
                         logger.error(
                             "Failed to create external mapping for platform",
                             operation_id=operation_id,
@@ -2146,7 +2141,7 @@ async def _process_single_clz_row(
                             platform=platform,
                             source_issue_id=parsed_found.source_issue_id,
                         )
-                    except Exception as e:
+                    except Exception:
                         logger.warning(
                             "Failed to create external mapping for platform",
                             operation_id=operation_id,
@@ -2154,7 +2149,7 @@ async def _process_single_clz_row(
                             platform=platform,
                             url=found_url,
                         )
-        except Exception as e:
+        except Exception:
             logger.warning(
                 "Cross-platform search failed",
                 operation_id=operation_id,
@@ -2409,7 +2404,7 @@ async def resolve_clz_row_task(
                                     platform=platform,
                                     source_issue_id=parsed_found.source_issue_id,
                                 )
-                            except Exception as e:
+                            except Exception:
                                 logger.warning(
                                     "Failed to create external mapping for platform (refresh)",
                                     operation_id=operation_id,
@@ -2758,7 +2753,7 @@ async def resolve_clz_row_task(
                                     platform=platform,
                                     source_issue_id=parsed_found.source_issue_id,
                                 )
-                            except Exception as e:
+                            except Exception:
                                 logger.warning(
                                     "Failed to create external mapping for platform",
                                     operation_id=operation_id,
@@ -2766,7 +2761,7 @@ async def resolve_clz_row_task(
                                     platform=platform,
                                     url=found_url,
                                 )
-                except Exception as e:
+                except Exception:
                     logger.warning(
                         "Cross-platform search failed",
                         operation_id=operation_id,
@@ -3588,7 +3583,7 @@ async def _mark_failed_safe(
             result=result,
             error_message=error_message,
         )
-    except Exception as e:
+    except Exception:
         logger.error(
             "Failed to mark operation as failed",
             operation_id=str(operation_id),

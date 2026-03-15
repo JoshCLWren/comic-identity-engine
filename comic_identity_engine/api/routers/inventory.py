@@ -3,7 +3,7 @@
 Provides endpoints for viewing current database state - issues, mappings, and coverage statistics. This is the dynamic frontend data source.
 """
 
-from typing import Annotated, Optional
+from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query

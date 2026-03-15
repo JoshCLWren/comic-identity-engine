@@ -567,7 +567,6 @@ class TestCPGAdapterFetchMethods:
     @pytest.mark.asyncio
     async def test_fetch_series_successful_request(self, mock_http_client):
         """fetch_series makes HTTP request and parses response."""
-        from unittest.mock import AsyncMock, Mock
 
         mock_response = Mock()
         mock_response.json = Mock(
@@ -591,7 +590,6 @@ class TestCPGAdapterFetchMethods:
     @pytest.mark.asyncio
     async def test_fetch_issue_successful_request(self, mock_http_client):
         """fetch_issue makes HTTP request and parses response."""
-        from unittest.mock import AsyncMock, Mock
 
         mock_response = Mock()
         mock_response.json = Mock(
@@ -617,8 +615,6 @@ class TestCPGAdapterFetchMethods:
     @pytest.mark.asyncio
     async def test_fetch_series_not_found(self, mock_http_client):
         """fetch_series raises NotFoundError on 404."""
-        from unittest.mock import AsyncMock, Mock
-        import httpx
 
         mock_response = Mock()
         mock_response.status_code = 404
@@ -638,8 +634,6 @@ class TestCPGAdapterFetchMethods:
     @pytest.mark.asyncio
     async def test_fetch_issue_not_found(self, mock_http_client):
         """fetch_issue raises NotFoundError on 404."""
-        from unittest.mock import AsyncMock, Mock
-        import httpx
 
         mock_response = Mock()
         mock_response.status_code = 404
@@ -659,8 +653,6 @@ class TestCPGAdapterFetchMethods:
     @pytest.mark.asyncio
     async def test_fetch_series_network_error(self, mock_http_client):
         """fetch_series raises SourceError on network error."""
-        from unittest.mock import AsyncMock
-        import httpx
 
         mock_http_client.get = AsyncMock(
             side_effect=httpx.RequestError("Network error")
@@ -673,8 +665,6 @@ class TestCPGAdapterFetchMethods:
     @pytest.mark.asyncio
     async def test_fetch_issue_network_error(self, mock_http_client):
         """fetch_issue raises SourceError on network error."""
-        from unittest.mock import AsyncMock
-        import httpx
 
         mock_http_client.get = AsyncMock(
             side_effect=httpx.RequestError("Network error")
@@ -687,8 +677,6 @@ class TestCPGAdapterFetchMethods:
     @pytest.mark.asyncio
     async def test_fetch_series_http_error(self, mock_http_client):
         """fetch_series raises SourceError on HTTP error."""
-        from unittest.mock import AsyncMock, Mock
-        import httpx
 
         mock_response = Mock()
         mock_response.status_code = 500
@@ -708,8 +696,6 @@ class TestCPGAdapterFetchMethods:
     @pytest.mark.asyncio
     async def test_fetch_issue_http_error(self, mock_http_client):
         """fetch_issue raises SourceError on HTTP error."""
-        from unittest.mock import AsyncMock, Mock
-        import httpx
 
         mock_response = Mock()
         mock_response.status_code = 500
@@ -976,7 +962,6 @@ class TestCPGAdapterEdgeCases:
 
     def test_issue_mapping_with_canonical_none(self):
         """Issue mapping when canonical_issue_number is None (edge case)."""
-        from unittest.mock import patch
 
         payload = {
             "number": "1",

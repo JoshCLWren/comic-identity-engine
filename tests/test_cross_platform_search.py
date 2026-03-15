@@ -5,7 +5,7 @@ correctly searches other platforms after resolving a primary URL.
 """
 
 import uuid
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 

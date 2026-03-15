@@ -30,18 +30,16 @@ USAGE:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import re
 from dataclasses import dataclass
-from typing import Any
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
 import structlog
 
 from comic_identity_engine.core.http_client import HttpClient
-from comic_identity_engine.errors import NetworkError, ParseError
+from comic_identity_engine.errors import ParseError
 
 
 logger = structlog.get_logger(__name__)

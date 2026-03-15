@@ -36,7 +36,6 @@ from uuid import UUID
 
 import structlog
 
-from comic_identity_engine.config import get_adapter_settings
 from comic_identity_engine.core.async_http import AsyncHttpExecutor
 from comic_identity_engine.database.connection import AsyncSessionLocal
 from comic_identity_engine.services.operations import OperationsManager

@@ -4,9 +4,8 @@ Unified comic search client.
 This module provides a unified interface to search across multiple comic marketplaces.
 """
 
-import asyncio
 import logging
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, Union
 
 from comic_search_lib.exceptions import SearchError
 from comic_search_lib.models.comic import Comic, SearchResult

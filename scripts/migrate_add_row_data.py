@@ -73,8 +73,8 @@ async def migrate_operation_with_row_data(csv_path: str, operation_id: str):
         op.result = updated_result
         await session.commit()
 
-        print(f"✓ Saved updated operation")
-        print(f"\nOperation now has:")
+        print("✓ Saved updated operation")
+        print("\nOperation now has:")
         errors = updated_result.get("errors", [])
         print(f"  - {len(errors)} errors")
         print(f"  - {sum(1 for e in errors if e.get('row_data'))} errors with row_data")
@@ -85,7 +85,7 @@ async def migrate_operation_with_row_data(csv_path: str, operation_id: str):
 if __name__ == "__main__":
     if len(sys.argv) != 3:
         print(f"Usage: {sys.argv[0]} <csv_path> <operation_id>")
-        print(f"\nExample:")
+        print("\nExample:")
         print(
             f"  {sys.argv[0]} /mnt/extra/josh/code/clz_export_all_columns.csv 19cb376e-e0d5-4aac-8305-edf96a3a8f38"
         )
