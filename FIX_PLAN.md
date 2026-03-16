@@ -1,17 +1,22 @@
 # Fix Plan: Comic Identity Engine
 
-**Date**: 2026-03-14
-**Verified By**: Three independent sub-agent audits + independent external audit
-**Test Baseline**: 1,331 tests collected; 41 failed, 21 errors, 1,267 passed, 2 skipped
-**Last Updated**: 2026-03-14 (post-consolidation plan review)
+**Date**: 2026-03-16
+**Test Baseline**: 1,331 tests; 41 failed, 21 errors, 1,267 passed, 2 skipped
+**Last Updated**: 2026-03-16 (corrected - consolidation incomplete)
 
-> **⚠️ CONSOLIDATION PLAN IN PROGRESS** — See `../CONSOLIDATION_PLAN.md`
+> **⚠️ CONSOLIDATION STATUS** — See `../CONSOLIDATION_PLAN.md`
 >
-> A cross-project consolidation will extract most CIE modules into shared packages
+> Cross-project consolidation has COMPLETED shared packages:
 > (`longbox-commons`, `scrapekit`, `longbox-scrapers`, `longbox-matcher`, `dbkit`).
-> This plan is now scoped to: (1) fixes that unblock current usage, (2) fixes that
-> stay with CIE after extraction, and (3) hygiene fixes worth doing before extraction.
-> Fixes that will be thrown away during consolidation are marked **SKIP**.
+>
+> **However**, CIE did NOT finish migrating to these packages:
+> - CIE still has 588 lines of duplicate HTTP client code (should use `scrapekit`)
+> - CIE still has generic matching algorithms locked in `identity_resolver` (should use `longbox-matcher`)
+> - Other projects (comic-web-scrapers, comic_pricer, comics_backend) USE the packages
+> - CIE is the OUTLIER that hasn't finished the migration
+>
+> This plan includes: (1) fixes that unblock current usage, (2) fixes for code that stays in CIE,
+> and (3) **COMPLETING THE CONSOLIDATION MIGRATION** that CIE skipped.
 
 ---
 
@@ -33,13 +38,6 @@
 - **Problem**: `hip_cookies.json` (default `COOKIE_FILE` in `hip_auth.py:41`) contains session tokens but is not gitignored. `.env` is properly ignored, but cookie files are not.
 - **Fix**: Add `hip_cookies.json` to `.gitignore`
 - **Effort**: 1 minute
-
-**Fix 16: Bare `except:` clauses in `hip_auth.py`**
-- **Severity**: 🟡 MEDIUM
-- **File**: `comic_identity_engine/adapters/hip_auth.py:147-150, 193-194`
-- **Problem**: Two bare `except:` clauses (lines 147 and 149) in `_close_promo_iframe()`, and one at line 193 in `_login_with_playwright()`. These silently swallow all exceptions including `KeyboardInterrupt` and `SystemExit`. This violates the project's own style guide in AGENTS.md ("Never catch bare `Exception`").
-- **Fix**: Change to `except Exception:` at minimum, or more specific types like `except (TimeoutError, Exception):` with logging.
-- **Effort**: 5 minutes
 
 **Fix 17: `HIP_AUTH_IMPLEMENTATION.md` should be archived**
 - **Severity**: 🟢 LOW
@@ -68,9 +66,7 @@
 
 ## Overview
 
-All 59 test failures/errors fall into **9 root causes**. Most are tests that fell behind code refactors — the production code is more correct than the tests in nearly every case. The one real production bug is the state machine's terminal `failed` state, but it's already worked around by `create_or_resume_import_operation` bypassing the validator.
-
-The log file `output_3_14.loG` reveals a separate runtime issue: `import_clz_task` crashes with `"Invalid status transition: running -> running"` when it calls `update_operation()` without a `result` dict. This is different from the state machine's `failed → pending` limitation.
+All 62 test failures/errors fall into **11 root causes**. Most are tests that fell behind code refactors — the production code is more correct than the tests in nearly every case. There are 2 real production bugs (Fixes 10, 21) and 1 major architecture issue (Fix 23 - duplicate code from incomplete migration).
 
 ---
 
@@ -139,45 +135,7 @@ Also check:
 
 ---
 
-## Fix 4: Worker function list and shutdown hook
-
-**Effort**: 20 minutes
-**Files**: `tests/test_jobs/test_worker.py`
-**Root cause**: `_process_series_bulk_task` was added to `WorkerSettings.functions` (now 8, was 7). `on_shutdown=_on_worker_shutdown` was added to `create_worker()`. A second log line for HTTP pool init was added to `_on_worker_startup`.
-
-**Fixes**:
-- `test_worker_settings_class_attributes` (~line 139): Change `== 7` to `== 8`
-- `test_worker_settings_functions_list` (~line 162): Add `_process_series_bulk_task` at correct position (index 3)
-- `test_create_worker_uses_class_settings` (~line 177): Add `on_shutdown=_on_worker_shutdown` to expected `create_worker()` call kwargs
-- `test_worker_startup_logs_success` (~line 193): Expect 2 info log calls (worker started + HTTP pool initialized) instead of 1
-
-**Tests fixed**: 4
-
----
-
-## Fix 5: `resolve_identity_task` mock structure stale
-
-**Effort**: 1-2 hours
-**Files**: `tests/test_jobs/test_tasks.py`
-**Root cause**: The task internals were refactored. Mocks return objects the task can't use — e.g., trying to access `.issue_id` on an unawaited coroutine.
-
-**Fix**: Read the current `resolve_identity_task` implementation carefully and rebuild mock return values to match its internal flow. Key areas:
-- What does `IdentityResolver.resolve_issue()` return now?
-- What attributes does the task access on the result?
-- Build a proper mock result object (possibly a dataclass or dict) that satisfies all attribute accesses.
-
-Affected tests (~line numbers in `test_tasks.py`):
-- `test_resolve_identity_task_success` (~81)
-- `test_resolve_identity_task_resolution_error` (~220)
-- `test_resolve_identity_task_no_best_match` (~340)
-- `test_resolve_identity_task_existing_mapping_uses_series_start_year_for_search` (~580)
-- `test_resolve_task_status_transition_pending_to_running_to_completed` (~1402)
-
-**Tests fixed**: 5
-
----
-
-## Fix 6: `import_clz_task` refactored to orchestrator pattern
+## Fix 6: `resolve_identity_task` refactored to orchestrator pattern
 
 **Effort**: 1-2 hours
 **Files**: `tests/test_jobs/test_tasks.py`, `tests/test_integration/test_clz_import.py`, `tests/test_performance/test_queue_performance.py`
@@ -216,23 +174,6 @@ Affected tests:
 - `test_reconcile_task_with_existing_mapping` (~2128)
 
 **Tests fixed**: 2
-
----
-
-## Fix 8: `AsyncHttpExecutor` internal flow changed
-
-**Effort**: 45 minutes
-**Files**: `tests/test_integration/test_async_http_executor.py`
-**Root cause**: The executor's `get()`/`post()` methods were refactored. Tests construct `AsyncHttpExecutor(mock_queue, mock_operations_manager)` and patch `AsyncSessionLocal`, but the internal flow no longer matches.
-
-**Fix**: Read the current `AsyncHttpExecutor` implementation, understand the new call flow, and update all 4 tests.
-
-- `test_get_request_success` (~47)
-- `test_get_request_with_timeout` (~82)
-- `test_get_request_handles_error_response` (~113)
-- `test_post_request_with_json_data` (~140)
-
-**Tests fixed**: 4
 
 ---
 
@@ -277,28 +218,7 @@ is_progress_update = (
 )
 ```
 
-This is the only actual production code bug. Everything else is stale tests.
-
----
-
-## Fix 11: Documentation cleanup
-
-**Effort**: 1 hour
-**Not blocking, but important for maintainability**
-
-### Files to keep (5):
-- `README.md` — main entry point
-- `AGENTS.md` — agent instructions
-- `CRITICAL_BUGS_PLAN.md` — active bug tracking
-- `SERIES_PAGE_STRATEGY.md` — referenced by AGENTS.md as mandatory reading
-- `CROSS_PLATFORM_SEARCH.md` — referenced by AGENTS.md as mandatory reading
-
-### Files to archive (move to `docs/archive/`):
-All other `.md` files in root (~30 files, 12,000+ lines). These are historical phase summaries, implementation plans, analysis docs, and progress trackers that have been superseded.
-
-### Also fix:
-- Remove duplicate "MANDATORY: Fix Broken Code" preamble from all files except `AGENTS.md` and `README.md`
-- Remove leftover `print()` debug statements in `platform_searcher.py` (lines 1010-1046) — replace with `logger.debug()` or delete
+This is one of two actual production code bugs.
 
 ---
 
@@ -345,76 +265,404 @@ All other `.md` files in root (~30 files, 12,000+ lines). These are historical p
 
 ---
 
-## Execution Order (Consolidation-Aware)
+## Fix 20: Debug print statements in platform_searcher.py
 
-Given `../CONSOLIDATION_PLAN.md`, most adapter/parser/matcher code and tests will
-be extracted into shared packages. This reorders fixes by: what unblocks usage NOW,
-what stays in CIE long-term, and what's wasted effort.
+**Effort**: 5 minutes
+**File**: `comic_identity_engine/services/platform_searcher.py`
+**Problem**: 22 `print()` debug statements (lines 676-1046) that should use `logger.debug()` or be deleted.
+
+**Fix**: Replace all `print()` calls with `logger.debug()` or delete if redundant.
+
+**Tests fixed**: 0 (hygiene fix)
+
+---
+
+## Fix 21: Production bug — `http_request_task` success logic
+
+**Effort**: 15 minutes
+**File**: `comic_identity_engine/jobs/tasks.py:530`
+**Root cause**: `http_request_task` sets `success: True` for ALL HTTP responses, including 404s, 500s, etc. The test correctly expects 404 to be a failure.
+
+**Current code**:
+```python
+result_dict = {
+    "success": True,  # ← BUG: Always True, even for 404/500
+    "status_code": response.status_code,
+    "content": response.text,
+    ...
+}
+```
+
+**Fix**: Change line 530 to check status code:
+```python
+success = 200 <= response.status_code < 300
+result_dict = {
+    "success": success,
+    "status_code": response.status_code,
+    "content": response.text,
+    ...
+}
+```
+
+This is the second actual production code bug.
+
+**Tests fixed**: 1
+
+---
+
+## Fix 22: `platform_searcher` API change after consolidation
+
+**Effort**: 15 minutes
+**Files**: `tests/test_cross_platform_search.py`
+**Root cause**: After consolidation, `platform_searcher.py` now creates a `Comic` object (from `longbox-scrapers`) and passes it to `scraper.search_comic(comic)`, but the test expects the old API with individual parameters.
+
+**Actual call**: `search_comic(Comic(id='aa:X-Men:1', title='X-Men', issue='1', ...))`
+**Expected by test**: `search_comic(title='X-Men', issue='1', year=1963, publisher='Marvel')`
+
+**Fix**: Update test to expect `Comic` object parameter.
+
+**Tests fixed**: 1
+
+---
+
+## Fix 23: INCOMPLETE MIGRATION — Replace duplicate HTTP client with scrapekit
+
+**Effort**: 1 hour
+**Priority**: 🟠 HIGH — Eliminates 588 lines of duplicate code
+**Files**: `comic_identity_engine/core/http_client.py`, `pyproject.toml`, all adapters
+
+**Root cause**: CIE has 588 lines of duplicate HTTP client code that should use `scrapekit`. The consolidation plan designated CIE's `http_client.py` as the "best version" to be moved to `scrapekit`, **but the migration never happened**.
+
+**Evidence of duplication:**
+- CIE's `http_client.py`: 588 lines using httpx + tenacity
+- `scrapekit/http.py`: 588 lines using httpx + tenacity
+- Only difference: parameter name (`platform` vs `name`)
+- Both provide: connection pooling, exponential backoff, rate limiting, request logging
+
+**Migration steps:**
+1. Add `scrapekit` to CIE's `pyproject.toml` dependencies:
+   ```toml
+   dependencies = [
+       "scrapekit @ git+https://github.com/JoshCLWren/scrapekit.git",
+       ...
+   ]
+   ```
+
+2. Update imports in 9 files:
+   ```bash
+   # adapters/
+   comic_identity_engine/adapters/aa.py
+   comic_identity_engine/adapters/ccl.py
+   comic_identity_engine/adapters/cpg.py
+   comic_identity_engine/adapters/gcd.py
+   comic_identity_engine/adapters/hip.py
+   comic_identity_engine/adapters/locg.py
+   comic_identity_engine/adapters/clz.py
+   # other files
+   comic_identity_engine/jobs/tasks.py
+   comic_identity_engine/services/series_page_extractor.py
+   ```
+
+   Change:
+   ```python
+   from comic_identity_engine.core.http_client import HttpClient
+   ```
+
+   To:
+   ```python
+   from scrapekit import HttpClient
+   ```
+
+3. Update constructor calls (parameter name change):
+   ```python
+   # Old
+   HttpClient(platform="gcd", timeout=30.0)
+
+   # New
+   HttpClient(name="gcd", timeout=30.0)
+   ```
+
+4. Delete duplicate file:
+   ```bash
+   rm comic_identity_engine/core/http_client.py
+   ```
+
+5. Update tests that import `http_client`:
+   - Check if any tests mock `HttpClient` and update imports
+
+6. Verify:
+   ```bash
+   uv sync
+   uv run pytest tests/ -v
+   ```
+
+**Tests fixed**: 0 (code duplication fix, no test changes expected)
+
+**Impact**:
+- Removes 588 lines of duplicate code
+- Aligns CIE with other projects (comic_pricer, comics_backend use scrapekit)
+- Eliminates maintenance burden of duplicate HTTP client
+
+---
+
+## Fix 24: INCOMPLETE MIGRATION — Refactor identity_resolver to use longbox-matcher
+
+**Effort**: 2-3 hours
+**Priority**: 🟡 MEDIUM — Extracts generic matching algorithms to package
+**Files**: `comic_identity_engine/services/identity_resolver.py`, `longbox-matcher`, tests
+
+**Root cause**: CIE's `identity_resolver.py` (1,064 lines) contains generic matching algorithms that should be in `longbox-matcher`. The consolidation plan said "N/A: Application service (requires database/repos)", which is **partially correct** — the database-dependent parts should stay in CIE, but the pure matching algorithms should be extracted.
+
+**What should stay in CIE (application-specific):**
+- Database access via `AsyncSession` and repositories
+- CIE's tiered matching strategy (UPC → series+issue → fuzzy → create)
+- Entity creation/merging logic (Issues, Variants, ExternalMappings)
+- `ResolutionResult` with CIE-specific UUIDs
+
+**What should move to `longbox-matcher` (generic):**
+- UPC matching algorithm: `match_upc(upc: str, candidates: List[Comic]) -> Optional[MatchResult]`
+- Series/issue/year matching: `match_series_issue_year(series, issue, year, candidates) -> Optional[MatchResult]`
+- Fuzzy title matching: `match_fuzzy_title(title, issue, candidates) -> List[MatchResult]`
+- Similarity scoring logic (Jaro-Winkler, Jaccard, etc.)
+
+**Migration steps:**
+
+1. **Add generic matching methods to `longbox-matcher`:**
+
+   Create or extend `longbox_matcher/comic.py`:
+   ```python
+   from typing import List, Optional
+   from longbox_matcher import MatchResult
+
+   class ComicMatcher:
+       """Pure matching algorithms - no database dependencies."""
+
+       def match_upc(self, upc: str, candidates: List[IssueCandidate]) -> Optional[MatchResult]:
+           """Exact UPC matching."""
+           for candidate in candidates:
+               if candidate.upc == upc:
+                   return MatchResult(
+                       candidate=candidate,
+                       confidence=1.0,
+                       explanation="Exact UPC match"
+                   )
+           return None
+
+       def match_series_issue_year(
+           self,
+           series: str,
+           issue: str,
+           year: int,
+           candidates: List[IssueCandidate]
+       ) -> Optional[MatchResult]:
+           """Deterministic series + issue + year matching."""
+           # Implementation from CIE's _match_by_series_issue_year
+           ...
+
+       def match_fuzzy_title(
+           self,
+           title: str,
+           issue: str,
+           candidates: List[IssueCandidate]
+       ) -> List[MatchResult]:
+           """Fuzzy title matching with Jaro-Winkler similarity."""
+           # Implementation from CIE's _match_by_fuzzy_title
+           ...
+   ```
+
+2. **Refactor CIE's `IdentityResolver` to use `ComicMatcher`:**
+
+   ```python
+   from longbox_matcher import ComicMatcher
+   from comic_identity_engine.database.repositories import ...
+
+   class IdentityResolver:
+       def __init__(self, session: AsyncSession) -> None:
+           self.session = session
+           self.matcher = ComicMatcher()  # Generic matcher from package
+           self.issue_repo = IssueRepository(session)
+           self.series_repo = SeriesRunRepository(session)
+           self.mapping_repo = ExternalMappingRepository(session)
+           self.variant_repo = VariantRepository(session)
+
+       async def _match_by_upc(self, upc: str) -> Optional[MatchCandidate]:
+           # Use generic matcher from package
+           candidates = await self.issue_repo.find_by_upc(upc)
+           match = self.matcher.match_upc(upc, candidates)
+           if match:
+               return self._to_candidate(match)
+           return None
+
+       async def _match_by_series_issue_year(
+           self,
+           series: str,
+           issue: str,
+           year: int
+       ) -> Optional[MatchCandidate]:
+           # Use generic matcher from package
+           candidates = await self.issue_repo.find_by_series_and_year(series, year)
+           match = self.matcher.match_series_issue_year(series, issue, year, candidates)
+           if match:
+               return self._to_candidate(match)
+           return None
+
+       # ... similar for fuzzy matching
+   ```
+
+3. **Add `longbox-matcher` to CIE dependencies:**
+
+   ```toml
+   dependencies = [
+       "longbox-matcher @ git+https://github.com/JoshCLWren/longbox-matcher.git",
+       ...
+   ]
+   ```
+
+4. **Update `longbox-matcher` to export `ComicMatcher`:**
+
+   ```python
+   # longbox-matcher/longbox_matcher/__init__.py
+   from .comic import ComicMatcher
+   from .matcher import ComicMatcher as FullMatcher
+
+   __all__ = ["ComicMatcher", "FullMatcher", "find_fuzzy_matches", ...]
+   ```
+
+5. **Fix failing tests** (9 tests in `test_tasks.py`):
+   - Tests that mock `IdentityResolver` now need to account for the injected `ComicMatcher`
+   - Update mock structure to match refactored code
+
+6. **Verify:**
+   ```bash
+   cd ../longbox-matcher
+   uv run pytest
+
+   cd ../comic-identity-engine
+   uv sync
+   uv run pytest tests/test_jobs/test_tasks.py::TestResolveIdentityTask -v
+   ```
+
+**Tests fixed**: 9 (currently failing)
+
+**Impact**:
+- Generic matching algorithms available to other projects
+- CIE's `IdentityResolver` becomes thinner (orchestration + persistence only)
+- Reduces code duplication across projects
+- Aligns with consolidation goals
+
+---
+
+## Fix 25: AsyncHttpExecutor mock structure
+
+**Effort**: 45 minutes
+**Files**: `tests/test_integration/test_async_http_executor.py`
+**Root cause**: The executor's `get()`/`post()` methods were refactored. Tests construct `AsyncHttpExecutor(mock_queue, mock_operations_manager)` and patch `AsyncSessionLocal`, but the internal flow no longer matches.
+
+**Fix**: Read the current `AsyncHttpExecutor` implementation, understand the new call flow, and update all 4 tests.
+
+- `test_get_request_success` (~47)
+- `test_get_request_with_timeout` (~82)
+- `test_get_request_handles_error_response` (~113)
+- `test_post_request_with_json_data` (~140)
+
+**Tests fixed**: 4
+
+**Note**: `AsyncHttpExecutor` is legitimately CIE-specific (task queue based), not a candidate for package extraction.
+
+---
+
+## Fix 26: Documentation cleanup
+
+**Effort**: 1 hour
+**Not blocking, but important for maintainability**
+
+### Files to keep (6):
+- `README.md` — main entry point
+- `AGENTS.md` — agent instructions
+- `CRITICAL_BUGS_PLAN.md` — active bug tracking
+- `SERIES_PAGE_STRATEGY.md` — referenced by AGENTS.md as mandatory reading
+- `CROSS_PLATFORM_SEARCH.md` — referenced by AGENTS.md as mandatory reading
+- `FIX_PLAN.md` — this file
+
+### Files to archive (move to `docs/archive/`):
+All other `.md` files in root (~31 files, 12,000+ lines). These are historical phase summaries, implementation plans, analysis docs, and progress trackers that have been superseded.
+
+### Also fix:
+- Remove duplicate "MANDATORY: Fix Broken Code" preamble from all files except `AGENTS.md` and `README.md`
+
+---
+
+## Execution Order
+
+Given the incomplete consolidation migration, this plan prioritizes: (1) fixes that unblock current usage, (2) finishing the consolidation migration, and (3) remaining test fixes.
 
 ### Phase 0: Security/hygiene — DO NOW (5 minutes)
-These fixes apply regardless of consolidation.
 
 1. Fix 15 — Add `hip_cookies.json` to `.gitignore` (**security**)
-2. Fix 16 — Replace bare `except:` with `except Exception:` in `hip_auth.py`
+2. Fix 17 — Archive `HIP_AUTH_IMPLEMENTATION.md`
 3. Fix 18 — Move `import time` to top-level in `hip_auth.py`
 4. Fix 19 — Switch `hip_auth.py` from `logging` to `structlog`
-5. Fix 20 — Remove 22 `print()` debug statements in `platform_searcher.py` (lines 676-1046)
+5. Fix 20 — Remove 22 `print()` debug statements in `platform_searcher.py`
 
-### Phase 1: Production bug — DO NOW (30 minutes)
-The import pipeline must work. This stays in CIE post-consolidation.
+### Phase 1: Production bugs — DO NOW (45 minutes)
 
-6. Fix 10 — `running → running` status crash in `operations.py`
+The import pipeline and HTTP task must work correctly.
 
-### Phase 2: CIE-resident test fixes — DO NOW (1 hour, fixes 9+ tests)
-These tests cover code that **stays in CIE** after consolidation (API, jobs, config, CLI).
+6. Fix 10 — `running → running` status crash in `operations.py` (30 min)
+7. Fix 21 — `http_request_task` success logic bug (15 min)
 
-7. Fix 1 — config defaults (2 tests) — **stays in CIE**
-8. Fix 2 — `get_job_queue` generator→coroutine (3 tests) — **stays in CIE**
-9. Fix 4 — worker function list (4 tests) — **stays in CIE**
+### Phase 2: Complete consolidation migration — DO NOW (3-4 hours)
 
-### Phase 3: CIE-resident mock fixes — DO NOW (2-3 hours, fixes ~22 tests)
+These fixes align CIE with the shared packages and eliminate code duplication.
+
+8. Fix 23 — Replace duplicate HTTP client with `scrapekit` (1 hour)
+9. Fix 24 — Refactor `identity_resolver` to use `longbox-matcher` (2-3 hours)
+
+### Phase 3: CIE-resident test fixes — DO NOW (1 hour, fixes 9 tests)
+
+These tests cover code that stays in CIE after consolidation (API, jobs, config, CLI).
+
+10. Fix 1 — config defaults (2 tests)
+11. Fix 2 — `get_job_queue` generator→coroutine (3 tests)
+12. Fix 4 — worker function list (4 tests) — *already passing, skip*
+
+### Phase 4: CIE-resident mock fixes — DO NOW (2-3 hours, fixes ~29 tests)
+
 These test the job/operations layer which stays in CIE.
 
-10. Fix 3 — `_code_version` in operation mocks (4 tests) — **stays in CIE**
-11. Fix 6 — `import_clz_task` orchestrator mocks (11 tests) — **stays in CIE**
-12. Fix 7 — `reconcile_task` mock chain (2 tests) — **stays in CIE**
-13. Fix 12 — CLI test mocks (2 tests) — **stays in CIE**
-14. Fix 13 — Queue depth mocks (2 tests) — **stays in CIE**
-15. Fix 14 — Schema test (1 test) — **stays in CIE**
+13. Fix 3 — `_code_version` in operation mocks (4 tests)
+14. Fix 6 — `import_clz_task` orchestrator mocks (11 tests)
+15. Fix 7 — `reconcile_task` mock chain (2 tests)
+16. Fix 12 — CLI test mocks (2 tests)
+17. Fix 13 — Queue depth mocks (2 tests)
+18. Fix 14 — Schema test (1 test)
+19. Fix 22 — `platform_searcher` API change (1 test)
+20. Fix 25 — `AsyncHttpExecutor` mocks (4 tests)
 
-### Phase 4: DB integration tests — DO NOW (30 minutes, fixes 21 errors)
-16. Fix 9 — DB integration test skip/config (21 errors) — **stays in CIE**
+### Phase 5: DB integration tests — DO NOW (30 minutes, fixes 21 errors)
 
-### Phase 5: SKIP until consolidation
-These fix tests for code that will be **extracted** into shared packages.
-Doing these now wastes effort — the tests will be rewritten during extraction.
-
-17. ~~Fix 5~~ — `resolve_identity_task` mocks (5 tests) — **SKIP** (resolver → `longbox-matcher`)
-18. ~~Fix 8~~ — `AsyncHttpExecutor` mocks (4 tests) — **SKIP** (http client → `scrapekit`)
+21. Fix 9 — DB integration test skip/config (21 errors)
 
 ### Phase 6: Documentation — DO BEFORE CONSOLIDATION (1 hour)
-Clean docs make the consolidation migration easier.
 
-19. Fix 11 — Archive ~31 root `.md` files to `docs/archive/`
-20. Fix 17 — Delete or archive `HIP_AUTH_IMPLEMENTATION.md`
-21. Keep: `README.md`, `AGENTS.md`, `CRITICAL_BUGS_PLAN.md`, `SERIES_PAGE_STRATEGY.md`, `CROSS_PLATFORM_SEARCH.md`, `FIX_PLAN.md`
+22. Fix 26 — Archive ~31 root `.md` files to `docs/archive/`
 
 ---
 
 ## Expected Outcome
 
-### After Phases 0-4 (fixes that matter NOW):
+### After Phases 0-5 (fixes that matter NOW):
 
 | Metric | Before | After |
 |--------|--------|-------|
-| Tests passing | 1,267 / 1,331 | ~1,319 / 1,331 |
+| Tests passing | 1,267 / 1,331 | ~1,329 / 1,331 |
 | Errors | 21 | 0 |
-| Tests still failing | 41 | ~9 (deferred to consolidation) |
-| CLZ import | Crashes after ~5 min | Completes (or gracefully degrades) |
-| Debug prints in prod | 22 `print()` calls | 0 |
-| Bare `except:` clauses | 3 in hip_auth.py | 0 |
-| Cookie file gitignored | No | Yes |
-| Logging consistency | Mixed logging/structlog | All structlog |
+| Tests still failing | 41 | ~2 |
+| HTTP error handling | Broken (404=success) | Fixed ✅ |
+| Status transition crash | `running → running` fails | Fixed ✅ |
+| Duplicate HTTP client | 588 lines | 0 lines ✅ |
+| Code alignment | CIE outlier | Uses shared packages ✅ |
+| Generic matching | Locked in CIE | In `longbox-matcher` ✅ |
 
 ### After Phase 6 (docs cleanup):
 
@@ -423,10 +671,16 @@ Clean docs make the consolidation migration easier.
 | Root docs | 37 files | 6 files |
 | Archived docs | 0 | ~31 in `docs/archive/` |
 
-### Deferred to consolidation (~9 tests):
-- 5 `resolve_identity_task` tests → rewritten when resolver moves to `longbox-matcher`
-- 4 `AsyncHttpExecutor` tests → rewritten when http client moves to `scrapekit`
+### Remaining failures (~2 tests):
+- Any edge cases not covered by the fixes above
+- Will be addressed individually as they surface
 
-**Total estimated effort (Phases 0-4)**: ~4-5 hours
+**Total estimated effort (Phases 0-5)**: ~7-9 hours
 **Total estimated effort (Phase 6)**: ~1 hour
-**Skipped effort saved**: ~2-3 hours (would be thrown away during consolidation)
+
+**Key improvements:**
+1. ✅ Eliminates 588 lines of duplicate HTTP client code
+2. ✅ Extracts generic matching algorithms to shared package
+3. ✅ Fixes 2 production bugs (status crash, HTTP success logic)
+4. ✅ Aligns CIE with consolidation architecture
+5. ✅ Reduces test failures from 62 to ~2
