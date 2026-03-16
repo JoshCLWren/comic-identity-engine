@@ -1,23 +1,52 @@
-# AGENTS.md - Agent Guidelines for Comic Identity Engine
+# AGENTS.md
 
-## ⚠️ MANDATORY: Fix Broken Code
+Guidelines for AI agents working in this codebase.
 
-**ALL AI AGENTS MUST READ THIS:**
+## Agent Ownership Policy
 
-When you encounter broken code, tests, or functionality in this codebase, **you are REQUIRED to fix it**. Do NOT ignore broken code. Do NOT work around it. Do NOT leave it for "later".
+All AI agents working in this codebase are **high-ownership agents**.
 
-**If you find it, you fix it.**
+**Key Principle**: If you find a bug (pre-existing or new), it is your responsibility to fix it. You are not a lazy AI that ignores problems and pushes them to human reviewers.
 
-This includes but is not limited to:
-- Failing tests
-- Syntax errors
-- Import errors
-- Type errors
-- Logic bugs
-- LSP warnings that indicate real problems
-- Inconsistent behavior
+## CORE PRINCIPLE: NEVER SKIP TESTS
 
-**No exceptions. No excuses.**
+**⚠️ TESTS MUST NEVER BE SKIPPED - EVER.**
+
+If a test is failing:
+- ✅ FIX THE TEST
+- ✅ FIX THE CODE THAT BREAKS THE TEST
+- ✅ INVESTIGATE ROOT CAUSE
+- ❌ **NEVER SKIP THE TEST**
+
+**This applies to:**
+- All automated tests (unit, integration)
+- All developers (human and AI)
+- All situations (no exceptions)
+
+**Rationale:**
+- Skipped tests hide broken functionality
+- They create technical debt immediately
+- They undermine confidence in the test suite
+- They are lazy and unacceptable
+
+**If you're tempted to skip a test, DON'T. Fix it instead.**
+
+**Requirements:**
+- **Never use `--no-verify` or bypass hooks** to avoid fixing issues
+- **Never say "this is pre-existing" and walk away** - fix it anyway
+- **Fix all test failures** before committing, even if the failure appears to be pre-existing
+- **Write regression tests** for bugs you find and fix
+- **Update documentation** when you find gaps or outdated information
+
+**If a test fails**:
+1. Investigate why it fails
+2. Fix the root cause (even if "pre-existing")
+3. Verify the fix works
+4. Add a regression test if applicable
+
+**If you find documentation gaps**:
+1. Update the relevant documentation
+2. Add examples if helpful
 
 ---
 
@@ -36,10 +65,10 @@ This includes but is not limited to:
    - For edge cases and testing
    - NOT for bulk imports!
 
-3. **CRITICAL_BUGS_PLAN.md** - Known issues that need fixing
-   - Missing commit() after creating mappings
-   - LoCG URL parser bugs
-   - GCD scraper needs JSON API rewrite
+3. **FIX_PLAN.md** - Active fix plan for known issues
+   - Current test failures and how to fix them
+   - Incomplete consolidation migration work
+   - Production bugs that need fixing
 
 **If you don't read these, you will implement the wrong thing and frustrate the user.**
 
@@ -47,19 +76,21 @@ This includes but is not limited to:
 
 ## Project Overview
 
-Comic Identity Engine is a domain-specific entity resolution system for comic books. Currently in initial design phase.
+Comic Identity Engine is a domain-specific entity resolution system for comic books supporting 7 platforms (GCD, LoCG, CCL, AA, HipComic, CPG, CLZ).
 
-## Build & Test Commands
+**Tech Stack:**
+- **Backend**: Python 3.13, FastAPI, SQLAlchemy, PostgreSQL, Redis
+- **Worker**: arq job queue with Playwright browser automation
+- **Package managers**: `uv` (Python), Docker (infrastructure)
+- **Shared packages**: `longbox-commons`, `scrapekit`, `longbox-scrapers`, `longbox-matcher`
 
-### Current Status
-Test suite functional with pytest.
+---
+
+## Build/Lint/Test Commands
 
 ### Environment Setup
-
-This project uses **uv** for dependency management and **direnv** for automatic environment loading.
-
 ```bash
-# Initial setup (one-time)
+# Initial setup
 uv sync
 
 # After cd-ing into the project, direnv automatically loads .envrc
@@ -67,10 +98,151 @@ uv sync
 source .venv/bin/activate
 ```
 
-### Local Development (Recommended)
+### Linting
+```bash
+make lint                    # Run all linters
+bash scripts/lint.sh         # Same as above
+bash scripts/lint.sh --staged # Check only staged files
+ruff check .                 # Python linting only
+ruff format .                # Format code
+```
 
-Use local `uv` processes for normal development, scraper debugging, and dogfooding. Browser-backed scrapers can behave differently in Docker because anti-bot systems fingerprint the containerized browser differently.
+### Testing
+```bash
+uv run pytest                           # All tests
+uv run pytest tests/test_adapters/ -v   # Specific directory
+uv run pytest tests/test_adapters/test_gcd.py::test_gcd_issue_parser -v  # Single test
+uv run pytest -k "resolve_identity" -v  # Pattern matching
+uv run pytest --cov=comic_identity_engine  # With coverage
+```
 
+### Docker/Infrastructure
+```bash
+# Start infrastructure only (recommended for development)
+docker compose up -d postgres-app redis
+
+# Run the app locally
+uv run cie-api
+uv run cie-worker
+
+# Run everything in Docker (CI mode)
+docker compose build ci
+docker compose run --rm ci
+```
+
+---
+
+## Common Patterns
+
+### Async/Await: Avoid MissingGreenlet Errors
+
+**❌ WRONG - Causes MissingGreenlet:**
+```python
+# Accessing data after session commit
+await db.commit()
+return IssueResponse(title=issue.title)  # Session expired!
+```
+
+**✅ CORRECT - Extract before commit:**
+```python
+# Extract all data BEFORE committing
+issue_title = issue.title
+issue_number = issue.issue_number
+series_id = issue.series_id
+
+await db.commit()
+
+return IssueResponse(
+    title=issue_title,
+    number=issue_number,
+    series_id=series_id
+)
+```
+
+**Why this matters:**
+- SQLAlchemy async sessions expire after commit
+- Accessing attributes post-commit raises `MissingGreenlet` errors
+- Always extract data before committing
+
+### Database Sessions in Tests
+
+**❌ WRONG - Synchronous engine:**
+```python
+from sqlalchemy import create_engine  # Sync!
+engine = create_engine(database_url)
+```
+
+**✅ CORRECT - Async engine:**
+```python
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from comic_identity_engine.database.connection import get_async_session
+
+engine = create_async_engine(database_url)
+async with engine.begin() as conn:
+    await conn.run_sync(Base.metadata.create_all)
+```
+
+### Error Handling
+
+**❌ WRONG - Bare except:**
+```python
+try:
+    await risky_operation()
+except:
+    pass  # Silent failure - terrible!
+```
+
+**✅ CORRECT - Specific exceptions:**
+```python
+from structlog import get_logger
+
+logger = get_logger(__name__)
+
+try:
+    await risky_operation()
+except TimeoutError as e:
+    logger.error("Timeout", operation="risky", error=str(e))
+    raise
+except Exception as e:
+    logger.error("Unexpected error", operation="risky", error=str(e))
+    raise
+```
+
+### HTTP Clients
+
+**❌ WRONG - Direct httpx (no retry):**
+```python
+import httpx
+
+async def fetch():
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url)  # No retry, no rate limiting
+        return response.json()
+```
+
+**✅ CORRECT - Use scrapekit:**
+```python
+from scrapekit import HttpClient
+
+http = HttpClient(name="gcd", timeout=30.0)
+
+async def fetch():
+    response = await http.get(url)  # With retry, rate limiting, caching
+    return response.json()
+```
+
+---
+
+## Platform-Specific Patterns
+
+### Browser Automation (Playwright)
+
+**Important Notes:**
+- Browser-backed scrapers behave differently in Docker
+- Anti-bot systems fingerprint containerized browsers
+- **Test locally before Docker deployment**
+
+**✅ CORRECT - Local development:**
 ```bash
 # Start only infrastructure in Docker
 docker compose up -d postgres-app redis
@@ -78,65 +250,108 @@ docker compose up -d postgres-app redis
 # Run the app locally
 uv run cie-api
 uv run cie-worker
-
-# Exercise the CLI
-uv run cie-find "https://www.comics.org/issue/125295/" --verbose --force
 ```
 
-### Docker-Based CI / Full Stack
-
-The project includes a Docker-based CI environment that works identically locally and in GitHub Actions.
-
+**⚠️ Docker testing only:**
 ```bash
-# Build and run all tests locally using Docker
+# Use this for CI/verification, not primary development
 docker compose build ci
 docker compose run --rm ci
-
-# Run individual commands in Docker
-docker compose run --rm ci bash scripts/test.sh
-docker compose run --rm ci bash scripts/lint.sh
 ```
 
-### Running Python and Tests
+### CLZ CSV Import
 
-**IMPORTANT**: Always use `uv run` to execute Python and pytest. This ensures dependencies are properly managed.
+**CLZ imports require special handling:**
+- Series page extraction is 10-100x faster than individual issue lookups
+- See `SERIES_PAGE_STRATEGY.md` for platform-specific URL patterns
+- Use `platform_searcher.search_series_page()` for bulk imports
+- Fall back to individual lookups only for edge cases
 
-```bash
-# Run all tests
-uv run pytest
+### Cross-Platform Search
 
-# Run specific test file
-uv run pytest tests/test_parsing.py -v
+**For individual issue lookups:**
+```python
+from comic_identity_engine.services.platform_searcher import PlatformSearcher
 
-# Run with coverage
-uv run pytest --cov=comic_identity_engine
-
-# Run a Python script
-uv run python script.py
-
-# Start a Python REPL with project dependencies available
-uv run python
+searcher = PlatformSearcher()
+results = await searcher.search_comic(
+    title="X-Men",
+    issue="1",
+    year=1963,
+    publisher="Marvel"
+)
 ```
 
-**For AI Agents:**
-- Use `uv run pytest` instead of `python -m pytest`
-- Use `uv run python` instead of `python`
-- The virtual environment is automatically managed by uv
-- Do not manually activate `.venv/bin/activate` - direnv handles this
+**For bulk imports (CSV):**
+```python
+# Use series page extraction (much faster)
+results = await searcher.search_series_page(url)
+```
 
-### When Added
-Future commands to configure:
-- `make test` / `pytest` - Run all tests
-- `make lint` / `ruff check .` - Linting
-- `make typecheck` / `mypy src/` - Type checking
-- `make format` / `black src/ tests/` - Format code
+---
+
+## Troubleshooting
+
+### MissingGreenlet Errors
+
+**Symptom:**
+```
+greenlet.GreenletExit: Greenlet exit
+sqlalchemy.exc.PendingRollbackError: This Session's transaction has been rolled back
+```
+
+**Root Cause:** Accessing SQLAlchemy object attributes after `await db.commit()`
+
+**Fix:** Extract all needed data before committing (see "Async/Await" pattern above)
+
+### Tests Failing with "duplicate key value violates unique constraint"
+
+**Symptom:**
+```
+sqlalchemy.exc.IntegrityError: duplicate key value violates unique constraint "uq_series_runs_title_start_year"
+```
+
+**Root Cause:** Tests not cleaning up database between runs
+
+**Fix:**
+- Use proper pytest fixtures with cleanup
+- Use unique test data per test
+- Check `tests/conftest.py` for examples
+
+### Playwright "Executable doesn't exist" in CI
+
+**Symptom:**
+```
+Executable doesn't exist at /github/home/.cache/ms-playwright/...
+```
+
+**Fix:** Add to CI workflow:
+```yaml
+- name: Install Playwright browsers
+  run: playwright install --with-deps chromium
+```
+
+### Import Errors After Consolidation
+
+**Symptom:**
+```
+ModuleNotFoundError: No module named 'comic_search_lib'
+```
+
+**Root Cause:** Consolidation moved scrapers to `longbox-scrapers`
+
+**Fix:** Update imports:
+```python
+# Old
+from comic_search_lib.scrapers.gcd import GCDScraper
+
+# New
+from longbox_scrapers import GCDAdapter
+```
+
+---
 
 ## Code Style Guidelines
-
-### Language
-Primary language: **Python 3.13+** with type hints throughout.
-
-### General Principles
 
 1. **Explicit over Implicit**
    - Always use explicit imports
@@ -153,7 +368,7 @@ Primary language: **Python 3.13+** with type hints throughout.
    - Use specific exception types
    - Never catch bare `Exception`
    - Always include context in error messages
-   - Log errors at appropriate levels
+   - Log errors at appropriate levels with structlog
 
 4. **Documentation**
    - Docstrings for all public functions and classes
@@ -166,7 +381,9 @@ Primary language: **Python 3.13+** with type hints throughout.
    - Tests must be deterministic (no randomness without seeded RNG)
    - Use descriptive test names: `test_xmen_negative_one_matches_canonical_issue()`
 
-### Domain-Specific Conventions
+---
+
+## Domain-Specific Conventions
 
 1. **Issue Numbers**
    - Store as VARCHAR/string to support `-1`, `1/2`, `0`, `600.1`
@@ -182,6 +399,8 @@ Primary language: **Python 3.13+** with type hints throughout.
    - Store external IDs, never infer repeatedly
    - Version platform adapters independently
    - Log all reconciliation attempts with confidence scores
+
+---
 
 ## Architecture Patterns
 
@@ -206,52 +425,77 @@ SeriesRun
    - issue_confidence, variant_confidence, overall_confidence
    - Explanation field for all matches
 
-## Project Structure
+### Service Layer
 
+- **`identity_resolver`**: Database-backed entity resolution (stays in CIE)
+- **`platform_searcher`**: Cross-platform search (uses `longbox-scrapers`)
+- **`url_parser`**: URL parsing for all platforms
+- **`operations`**: Import operation management
+
+### Adapters
+
+All adapters inherit from `SourceAdapter` (in `longbox-scrapers`):
+- `AAAdapter` (Atomic Avenue)
+- `CCLAdapter` (Comic Collector Live)
+- `CPGAdapter` (Comics Price Guide)
+- `GCDAdapter` (Grand Comics Database)
+- `HIPAdapter` (HipComic)
+- `LoCGAdapter` (League of Comic Geeks)
+- `CLZAdapter` (Collectorz - CSV import only)
+
+---
+
+## Pre-commit Hooks
+
+The pre-commit hook automatically blocks commits containing:
+- Type ignores (`# type: ignore`)
+- Linter ignores (`# noqa`, `# ruff: ignore`, `# pylint: ignore`)
+- `Any` types (ruff ANN401 rule)
+- Linting errors
+- Type checking errors
+
+**To test manually:**
+```bash
+bash scripts/lint.sh --staged
 ```
-comic-identity-engine/
-├── comic_identity_engine/  # Main source code
-├── tests/                  # Test files
-├── examples/               # Usage examples
-├── docs/                   # Documentation
-└── AGENTS.md              # This file
+
+**To bypass (NOT RECOMMENDED):**
+```bash
+git commit --no-verify  # Only if absolutely necessary
 ```
 
-## Development Workflow
+---
 
-1. Design before coding - this is identity infrastructure
-2. Tests must pass before commit
-3. Update documentation for public API changes
-4. Current milestone: Source adapter implementation (GCD complete, other platforms pending)
+## CI/CD
 
-## External Platform Adapters
+**Tests run in GitHub Actions:**
+- All tests must pass before merge
+- Coverage threshold enforced (98%)
+- Linting errors block commits
+- Type checking errors block commits
 
-When adding new platform support:
+**Local testing before pushing:**
+```bash
+# Run full test suite
+uv run pytest
 
-1. Create adapter in `src/adapters/{platform}/`
-2. Implement mapping to canonical model
-3. Add reconciliation scoring rules
-4. Include test cases with real data samples
-5. Document edge cases and limitations
+# Run with coverage
+uv run pytest --cov=comic_identity_engine
 
-## Matching Strategy Implementation
+# Run linting
+bash scripts/lint.sh
+```
 
-1. **Candidate Generation**
-   - Trigram similarity for series names
-   - Tokenized search
-   - Numeric filters on issue number/year
-
-2. **Scoring** (deterministic)
-   - Exact issue number match required
-   - Series alias similarity
-   - Publisher match boosting
-   - Year proximity boosting
-
-3. **Confidence Output**
-   - Three confidence levels
-   - Human-readable explanation
-   - Audit trail for debugging
+---
 
 ## Questions?
 
 This project prioritizes correct identity over convenience. When in doubt, be explicit and deterministic.
+
+**Documentation Files:**
+- `README.md` - Project overview
+- `CONTRIBUTING.md` - Development workflow
+- `FIX_PLAN.md` - Active bug tracking and fixes
+- `SERIES_PAGE_STRATEGY.md` - Bulk import strategy (CRITICAL for CSV imports)
+- `CROSS_PLATFORM_SEARCH.md` - Individual issue search
+- `AGENTS.md` - This file

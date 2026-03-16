@@ -1,10 +1,36 @@
-.PHONY: help stop start-api start-worker restart-api restart-worker clean queue-clear queue-status queue-flush fresh
+.PHONY: help stop start-api start-worker restart-api restart-worker clean queue-clear queue-status queue-flush fresh test lint format githook install-hooks
 
 help: ## Show this help message
-	@echo 'Usage: make [target]'
-	@echo ''
-	@echo 'Available targets:'
-	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+
+test: ## Run tests with coverage
+	@echo "Running tests..."
+	@uv run pytest --cov=comic_identity_engine --cov-report=term-missing
+
+test-verbose: ## Run tests with verbose output
+	@echo "Running tests (verbose)..."
+	@uv run pytest -v
+
+test-unit: ## Run unit tests only
+	@echo "Running unit tests..."
+	@uv run pytest tests/test_adapters tests/test_services tests/test_core
+
+lint: ## Run linting
+	@echo "Running linting..."
+	@bash scripts/lint.sh
+
+format: ## Format code
+	@echo "Formatting code..."
+	@uv run ruff check --fix .
+	@uv run ruff format .
+
+githook: ## Run pre-commit hook checks manually
+	@echo "Running pre-commit checks..."
+	@bash scripts/lint.sh --staged
+
+install-hooks: ## Install git pre-commit hooks
+	@echo "Installing git hooks..."
+	@bash scripts/install-git-hooks.sh
 
 stop: ## Stop all services (API and worker)
 	@echo "Stopping Comic Identity Engine services..."
