@@ -379,7 +379,7 @@ class SeriesPageExtractor:
                 source="gcd",
             )
 
-        href = series_link["href"]
+        href = str(series_link["href"])
 
         if href.startswith("/"):
             parsed = urlparse(issue_url)
@@ -451,6 +451,7 @@ class SeriesPageExtractor:
         for link in issue_links:
             href = link.get("href")
             if href:
+                href = str(href)
                 if href.startswith("/"):
                     parsed = urlparse(series_url)
                     href = f"{parsed.scheme}://{parsed.netloc}{href}"
@@ -490,7 +491,7 @@ class SeriesPageExtractor:
                 source="aa",
             )
 
-        href = series_link["href"]
+        href = str(series_link["href"])
 
         if href.startswith("/"):
             parsed = urlparse(issue_url)
@@ -636,6 +637,7 @@ class SeriesPageExtractor:
         for link in issue_links:
             href = link.get("href")
             if href:
+                href = str(href)
                 if href.startswith("/"):
                     parsed = urlparse(series_url)
                     href = f"{parsed.scheme}://{parsed.netloc}{href}"
@@ -777,7 +779,7 @@ class SeriesPageExtractor:
                 source="locg",
             )
 
-        href = series_link["href"]
+        href = str(series_link["href"])
 
         if href.startswith("/"):
             parsed = urlparse(issue_url)
@@ -809,6 +811,7 @@ class SeriesPageExtractor:
         for link in issue_links:
             href = link.get("href")
             if href:
+                href = str(href)
                 if href.startswith("/"):
                     parsed = urlparse(series_url)
                     href = f"{parsed.scheme}://{parsed.netloc}{href}"

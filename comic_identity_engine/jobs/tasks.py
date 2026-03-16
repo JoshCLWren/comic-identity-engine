@@ -1285,7 +1285,7 @@ async def _process_series_bulk_task(
             adapter = CLZAdapter()
             first_issue_candidate = adapter.fetch_issue_from_csv_row(first_row)
 
-            mapping_repo = ExternalMappingRepository(session)
+            ExternalMappingRepository(session)
             operations_manager = OperationsManager(session)
 
             row_results: dict[str, dict[str, Any]] = {}

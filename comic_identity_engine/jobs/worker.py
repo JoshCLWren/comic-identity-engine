@@ -74,31 +74,6 @@ def cap_worker_max_jobs(configured_max_jobs: int, db_pool_capacity: int) -> int:
 
 async def _on_worker_startup(ctx: dict[str, Any]) -> None:
     """Initialize worker resources and log when ready for jobs."""
-    # Ensure comic_search_lib is in path
-    import sys
-    from pathlib import Path
-
-    workspace_lib = Path(__file__).resolve().parents[2] / "comic-search-lib"
-    workspace_lib_str = str(workspace_lib)
-    if workspace_lib_str not in sys.path:
-        sys.path.insert(0, workspace_lib_str)
-
-    # Initialize HTTP connection pool for all HTTP-based scrapers
-    try:
-        from comic_search_lib.http_pool import get_http_pool
-
-        http_pool = await get_http_pool()
-        logger.info(
-            "HTTP connection pool initialized",
-            domains=len(http_pool._sessions),
-        )
-    except Exception as e:
-        logger.error("Failed to initialize HTTP connection pool", error=str(e))
-        raise
-
-    # Initialize browser pool for Playwright scrapers
-    # Note: Browser pool initializes lazily on first use to avoid
-    # startup overhead if no Playwright scrapers are needed
     logger.info(
         "Worker started successfully",
         queue_name=WorkerSettings.queue_name,
@@ -113,37 +88,7 @@ async def _on_worker_startup(ctx: dict[str, Any]) -> None:
 
 async def _on_worker_shutdown(ctx: dict[str, Any]) -> None:
     """Clean up worker resources before shutdown."""
-    logger.info("Worker shutting down, cleaning up resources...")
-
-    # Ensure comic_search_lib is in path
-    import sys
-    from pathlib import Path
-
-    workspace_lib = Path(__file__).resolve().parents[2] / "comic-search-lib"
-    workspace_lib_str = str(workspace_lib)
-    if workspace_lib_str not in sys.path:
-        sys.path.insert(0, workspace_lib_str)
-
-    # Cleanup HTTP connection pool
-    try:
-        from comic_search_lib.http_pool import get_http_pool
-
-        http_pool = await get_http_pool()
-        await http_pool.cleanup()
-        logger.info("HTTP connection pool cleaned up")
-    except Exception as e:
-        logger.warning("Error cleaning up HTTP connection pool", error=str(e))
-
-    # Cleanup browser pool
-    try:
-        from comic_search_lib.browser_pool import get_global_pool
-
-        browser_pool = await get_global_pool()
-        await browser_pool.cleanup()
-        logger.info("Browser pool cleaned up")
-    except Exception as e:
-        logger.warning("Error cleaning up browser pool", error=str(e))
-
+    logger.info("Worker shutting down...")
     logger.info("Worker shutdown complete")
 
 

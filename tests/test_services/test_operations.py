@@ -13,6 +13,12 @@ from comic_identity_engine.services.operations import (
 
 
 @pytest.fixture
+def current_code_version():
+    """Get current code version for consistent testing."""
+    return OperationsManager._get_code_version()
+
+
+@pytest.fixture
 def mock_session():
     """Create mock database session."""
     return AsyncMock()
@@ -58,7 +64,7 @@ def sample_running_operation():
 
 
 @pytest.fixture
-def sample_failed_import_operation():
+def sample_failed_import_operation(current_code_version):
     """Create sample failed import operation with resumable state."""
     operation = MagicMock()
     operation.id = uuid.uuid4()
@@ -101,13 +107,14 @@ def sample_failed_import_operation():
         "pending_row_count": 1,
         "failed_row_count": 0,
         "summary": "Processed 1/2 CLZ rows: 1 resolved, 0 failed. 0 errors so far.",
+        "_code_version": current_code_version,
     }
     operation.error_message = "worker crashed"
     return operation
 
 
 @pytest.fixture
-def sample_completed_import_with_failed_rows():
+def sample_completed_import_with_failed_rows(current_code_version):
     """Create a completed import with one failed row to retry."""
     operation = MagicMock()
     operation.id = uuid.uuid4()
@@ -164,6 +171,7 @@ def sample_completed_import_with_failed_rows():
         "pending_row_count": 0,
         "failed_row_count": 1,
         "summary": "Processed 2 CLZ rows: 1 resolved, 1 failed. 1 errors.",
+        "_code_version": current_code_version,
     }
     operation.error_message = None
     return operation
@@ -281,7 +289,7 @@ class TestOperationsManager:
 
     @patch("comic_identity_engine.services.operations.OperationRepository")
     async def test_create_or_resume_import_operation_reuses_running_operation(
-        self, mock_repo_cls, mock_session
+        self, mock_repo_cls, mock_session, current_code_version
     ):
         """Test same-file import returns the current running operation."""
         existing_operation = MagicMock()
@@ -312,6 +320,7 @@ class TestOperationsManager:
             "active_row_count": 0,
             "pending_row_count": 1,
             "failed_row_count": 0,
+            "_code_version": current_code_version,
         }
 
         mock_repo = MagicMock()
@@ -348,6 +357,8 @@ class TestOperationsManager:
             "pending_row_count": 1,
             "failed_row_count": 0,
             "summary": "Resuming CLZ import with 1 rows remaining out of 2.",
+            "error_summary": [],
+            "error_categories": [],
         }
         resumed_operation.input_hash = sample_failed_import_operation.input_hash
         resumed_operation.error_message = None
@@ -410,6 +421,8 @@ class TestOperationsManager:
             "summary": (
                 "Retrying 1 failed CLZ rows while preserving 1 resolved rows out of 2."
             ),
+            "error_summary": [],
+            "error_categories": [],
         }
         retried_operation.input_hash = (
             sample_completed_import_with_failed_rows.input_hash

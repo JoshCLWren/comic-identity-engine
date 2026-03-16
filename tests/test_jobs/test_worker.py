@@ -13,6 +13,7 @@ os.environ.setdefault("DATABASE_URL", "postgresql://user:pass@localhost/test_db"
 from comic_identity_engine.jobs.worker import (  # noqa: E402
     WorkerSettings,
     _configure_logging,
+    _on_worker_shutdown,
     _on_worker_startup,
     cap_worker_max_jobs,
     create_redis_pool,
@@ -136,11 +137,12 @@ class TestWorkerSettings:
         assert isinstance(WorkerSettings.job_timeout, int)
         assert isinstance(WorkerSettings.keep_result, int)
         assert isinstance(WorkerSettings.functions, list)
-        assert len(WorkerSettings.functions) == 7
+        assert len(WorkerSettings.functions) == 8
 
     def test_worker_settings_functions_list(self):
         """Test WorkerSettings has correct task functions."""
         from comic_identity_engine.jobs.tasks import (
+            _process_series_bulk_task,
             bulk_resolve_task,
             export_task,
             http_request_task,
@@ -154,6 +156,7 @@ class TestWorkerSettings:
             resolve_identity_task,
             bulk_resolve_task,
             import_clz_task,
+            _process_series_bulk_task,
             resolve_clz_row_task,
             export_task,
             reconcile_task,
@@ -182,6 +185,7 @@ class TestCreateWorker:
                 keep_result=WorkerSettings.keep_result,
                 functions=WorkerSettings.functions,
                 on_startup=_on_worker_startup,
+                on_shutdown=_on_worker_shutdown,
             )
 
     @pytest.mark.asyncio

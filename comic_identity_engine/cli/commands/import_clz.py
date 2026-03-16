@@ -299,14 +299,13 @@ def _poll_import_operation(
             total=None,  # Will be set when we know total_rows
         )
 
-        last_metadata = {}
 
         while True:
             response = client.get(f"{api_url}/api/v1/import/clz/{operation_id}")
             response.raise_for_status()
             data = response.json()
 
-            last_metadata = data.get("metadata", {}) or {}
+            data.get("metadata", {}) or {}
 
             response_obj = data.get("response") or {}
 
@@ -340,9 +339,9 @@ def _poll_import_operation(
 
                 # Calculate ETA
                 if rows_per_sec > 0 and remaining_rows > 0:
-                    eta_seconds = remaining_rows / rows_per_sec
+                    remaining_rows / rows_per_sec
                 else:
-                    eta_seconds = None
+                    pass
 
                 # Update task with new total if not set
                 if (
@@ -777,7 +776,7 @@ def _generate_html_report(operation_id: str, result: dict) -> Path:
             # Build platform mappings HTML
             platform_html = ""
             all_platforms = ["gcd", "locg", "ccl", "aa", "cpg", "hip"]
-            platforms_found = {pm["platform"] for pm in platform_mappings}
+            {pm["platform"] for pm in platform_mappings}
 
             for plat in all_platforms:
                 plat_data = next(

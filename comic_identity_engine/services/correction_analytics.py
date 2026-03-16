@@ -107,7 +107,7 @@ class CorrectionAnalyticsService:
                 func.count(MappingCorrection.id),
             ).group_by(MappingCorrection.source)
         )
-        by_platform = dict(by_platform_result.all())
+        by_platform: dict[str, int] = {str(k): int(v) for k, v in by_platform_result.all()}
 
         by_type_result = await self.session.execute(
             select(
@@ -115,7 +115,7 @@ class CorrectionAnalyticsService:
                 func.count(MappingCorrection.id),
             ).group_by(MappingCorrection.correction_type)
         )
-        by_type = dict(by_type_result.all())
+        by_type: dict[str, int] = {str(k): int(v) for k, v in by_type_result.all()}
 
         by_status_result = await self.session.execute(
             select(
@@ -123,7 +123,7 @@ class CorrectionAnalyticsService:
                 func.count(MappingCorrection.id),
             ).group_by(MappingCorrection.review_status)
         )
-        by_status = dict(by_status_result.all())
+        by_status: dict[str, int] = {str(k): int(v) for k, v in by_status_result.all()}
 
         return CorrectionStats(
             total_corrections=total,
@@ -159,7 +159,7 @@ class CorrectionAnalyticsService:
                 select(func.count(ExternalMapping.id)).where(
                     and_(
                         ExternalMapping.source == plat,
-                        ExternalMapping.is_accurate == True,
+                        ExternalMapping.is_accurate.is_(True),
                     )
                 )
             )
@@ -169,7 +169,7 @@ class CorrectionAnalyticsService:
                 select(func.count(ExternalMapping.id)).where(
                     and_(
                         ExternalMapping.source == plat,
-                        ExternalMapping.is_accurate == False,
+                        ExternalMapping.is_accurate.is_(False),
                     )
                 )
             )

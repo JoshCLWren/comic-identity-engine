@@ -83,7 +83,7 @@ class SeriesRunRepository:
         Returns:
             SeriesRun entity or None if not found
         """
-        stmt: Select[SeriesRun] = select(SeriesRun).where(SeriesRun.id == series_run_id)
+        stmt: Select[tuple[SeriesRun]] = select(SeriesRun).where(SeriesRun.id == series_run_id)
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -101,7 +101,7 @@ class SeriesRunRepository:
         Returns:
             SeriesRun entity or None if not found
         """
-        stmt: Select[SeriesRun] = select(SeriesRun).where(SeriesRun.title == title)
+        stmt: Select[tuple[SeriesRun]] = select(SeriesRun).where(SeriesRun.title == title)
         if start_year is not None:
             stmt = stmt.where(SeriesRun.start_year == start_year)
             result = await self.session.execute(stmt)
@@ -247,7 +247,7 @@ class IssueRepository:
         Returns:
             Issue entity or None if not found
         """
-        stmt: Select[Issue] = select(Issue).where(Issue.id == issue_id)
+        stmt: Select[tuple[Issue]] = select(Issue).where(Issue.id == issue_id)
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -265,7 +265,7 @@ class IssueRepository:
         Returns:
             Issue entity or None if not found
         """
-        stmt: Select[Issue] = select(Issue).where(
+        stmt: Select[tuple[Issue]] = select(Issue).where(
             Issue.series_run_id == series_run_id,
             Issue.issue_number == issue_number,
         )
@@ -284,7 +284,7 @@ class IssueRepository:
         Returns:
             Issue entity or None if not found
         """
-        stmt: Select[Issue] = select(Issue).where(Issue.upc == upc)
+        stmt: Select[tuple[Issue]] = select(Issue).where(Issue.upc == upc)
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -460,7 +460,7 @@ class IssueRepository:
         Returns:
             Issue entity with variants or None if not found
         """
-        stmt: Select[Issue] = (
+        stmt: Select[tuple[Issue]] = (
             select(Issue)
             .options(selectinload(Issue.variants))
             .where(Issue.id == issue_id)
@@ -492,7 +492,7 @@ class VariantRepository:
         Returns:
             Variant entity or None if not found
         """
-        stmt: Select[Variant] = select(Variant).where(Variant.id == variant_id)
+        stmt: Select[tuple[Variant]] = select(Variant).where(Variant.id == variant_id)
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -510,7 +510,7 @@ class VariantRepository:
         Returns:
             Variant entity or None if not found
         """
-        stmt: Select[Variant] = select(Variant).where(
+        stmt: Select[tuple[Variant]] = select(Variant).where(
             Variant.issue_id == issue_id,
             Variant.variant_suffix == variant_suffix,
         )
@@ -593,7 +593,7 @@ class ExternalMappingRepository:
         Returns:
             ExternalMapping entity or None if not found
         """
-        stmt: Select[ExternalMapping] = select(ExternalMapping).where(
+        stmt: Select[tuple[ExternalMapping]] = select(ExternalMapping).where(
             ExternalMapping.source == source,
             ExternalMapping.source_issue_id == source_issue_id,
         )
@@ -614,7 +614,7 @@ class ExternalMappingRepository:
         Returns:
             List of ExternalMapping entities
         """
-        stmt: Select[ExternalMapping] = (
+        stmt: Select[tuple[ExternalMapping]] = (
             select(ExternalMapping).where(ExternalMapping.source == source).limit(limit)
         )
         result = await self.session.execute(stmt)
@@ -641,7 +641,7 @@ class ExternalMappingRepository:
         if not source_issue_ids:
             return []
 
-        stmt: Select[ExternalMapping] = select(ExternalMapping).where(
+        stmt: Select[tuple[ExternalMapping]] = select(ExternalMapping).where(
             ExternalMapping.source == source,
             or_(*(ExternalMapping.source_issue_id == sid for sid in source_issue_ids)),
         )
@@ -717,7 +717,7 @@ class ExternalMappingRepository:
         Returns:
             List of ExternalMapping entities
         """
-        stmt: Select[ExternalMapping] = select(ExternalMapping).where(
+        stmt: Select[tuple[ExternalMapping]] = select(ExternalMapping).where(
             ExternalMapping.issue_id == issue_id
         )
         result = await self.session.execute(stmt)
@@ -739,7 +739,7 @@ class ExternalMappingRepository:
             ExternalMapping.source_issue_id == source_issue_id
         )
         result = await self.session.execute(stmt)
-        return result.rowcount
+        return result.rowcount  # type: ignore[union-attr]
 
 
 class OperationRepository:
@@ -846,7 +846,7 @@ class OperationRepository:
         Returns:
             Operation entity or None if not found
         """
-        stmt: Select[Operation] = select(Operation).where(Operation.id == operation_id)
+        stmt: Select[tuple[Operation]] = select(Operation).where(Operation.id == operation_id)
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -864,7 +864,7 @@ class OperationRepository:
         Returns:
             List of Operation entities
         """
-        stmt: Select[Operation] = (
+        stmt: Select[tuple[Operation]] = (
             select(Operation)
             .where(Operation.status == status)
             .order_by(Operation.created_at.desc())
@@ -885,7 +885,7 @@ class OperationRepository:
         Returns:
             Operation entity or None if not found
         """
-        stmt: Select[Operation] = (
+        stmt: Select[tuple[Operation]] = (
             select(Operation)
             .where(Operation.input_hash == input_hash)
             .order_by(Operation.created_at.desc(), Operation.id.desc())

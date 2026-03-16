@@ -280,7 +280,7 @@ class Settings(BaseSettings):
 @lru_cache
 def get_database_settings() -> DatabaseSettings:
     """Get cached database settings instance."""
-    return DatabaseSettings()
+    return DatabaseSettings()  # type: ignore[call-arg]
 
 
 @lru_cache

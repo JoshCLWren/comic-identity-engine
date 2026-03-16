@@ -54,7 +54,7 @@ class CLZAdapter(SourceAdapter):
         """Initialize CLZ adapter."""
         pass
 
-    def fetch_series(self, source_series_id: str) -> SeriesCandidate:
+    async def fetch_series(self, source_series_id: str) -> SeriesCandidate:
         """Fetch series from CLZ CSV data.
 
         Args:
@@ -71,7 +71,7 @@ class CLZAdapter(SourceAdapter):
             "does not fetch data from remote sources"
         )
 
-    def fetch_issue(self, source_issue_id: str) -> IssueCandidate:
+    async def fetch_issue(self, source_issue_id: str, full_url: str | None = None) -> IssueCandidate:
         """Fetch issue from CLZ CSV data.
 
         Args:
@@ -247,6 +247,7 @@ class CLZAdapter(SourceAdapter):
 
         # Handle format codes (TP, HC, GN, etc.) that CLZ uses as issue numbers
         # for collected editions — default to issue "1" with the format as variant.
+        parse_result = None
         format_result = self._parse_format_issue(issue_number_raw.strip())
         if format_result:
             canonical_issue_number, variant_suffix_override = format_result
@@ -279,7 +280,7 @@ class CLZAdapter(SourceAdapter):
         if variant_suffix_override:
             variant_suffix = variant_suffix_override
         else:
-            variant_suffix = parse_result.variant_suffix
+            variant_suffix = parse_result.variant_suffix if parse_result else None
 
         variant_name = (row.get("Variant Description") or "").strip() or None
 

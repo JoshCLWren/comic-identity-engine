@@ -573,19 +573,19 @@ class TestCLZAdapterEdgeCases:
         finally:
             os.unlink(temp_file)
 
-    def test_fetch_series_raises_not_implemented(self):
+    async def test_fetch_series_raises_not_implemented(self):
         """fetch_series raises NotImplementedError."""
         adapter = CLZAdapter()
 
         with pytest.raises(NotImplementedError, match="Use fetch_series_from_csv"):
-            adapter.fetch_series("test-id")
+            await adapter.fetch_series("test-id")
 
-    def test_fetch_issue_raises_not_implemented(self):
+    async def test_fetch_issue_raises_not_implemented(self):
         """fetch_issue raises NotImplementedError."""
         adapter = CLZAdapter()
 
         with pytest.raises(NotImplementedError, match="Use fetch_issue_from_csv"):
-            adapter.fetch_issue("test-id")
+            await adapter.fetch_issue("test-id")
 
     def test_parse_date_empty_after_strip(self):
         """Date string with only whitespace returns None."""

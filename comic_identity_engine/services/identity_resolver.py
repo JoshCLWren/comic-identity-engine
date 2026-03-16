@@ -21,7 +21,7 @@ ALGORITHM PRIORITY:
 import re
 import uuid
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
 import jellyfish
@@ -595,7 +595,9 @@ class IdentityResolver:
             issue = await self.issue_repo.create(
                 series_run_id=series.id,
                 issue_number=issue_number,
-                cover_date=cover_date,
+                cover_date=datetime(cover_date.year, cover_date.month, cover_date.day)
+                if cover_date
+                else None,
                 upc=upc,
             )
         except DuplicateEntityError as e:
@@ -862,24 +864,16 @@ class IdentityResolver:
                 logger.debug("No scraper available", platform=platform)
                 return None
 
-            # Different scrapers have different APIs
-            if platform in ("aa", "cpg"):
-                # AtomicAvenueScraper and CPGScraper use positional arguments
-                search_result = await scraper.search_comic(
-                    title=series_title,
-                    issue=issue_number,
-                    year=year,
-                    publisher=publisher,
-                )
-            else:
-                # CCL and Hip use a comic dict
-                comic_dict = {
-                    "title": series_title,
-                    "issue": issue_number,
-                    "year": year,
-                    "publisher": publisher,
-                }
-                search_result = await scraper.search_comic(comic_dict)
+            from longbox_scrapers.models import Comic
+
+            comic = Comic(
+                id=f"{platform}:{series_title}:{issue_number}",
+                title=series_title,
+                issue=issue_number,
+                year=year,
+                publisher=publisher,
+            )
+            search_result = await scraper.search_comic(comic)
 
             if not search_result or not search_result.has_results:
                 logger.debug(
@@ -943,7 +937,7 @@ class IdentityResolver:
             # Clean up scraper if it has a close method
             if scraper and hasattr(scraper, "close"):
                 try:
-                    await scraper.close()
+                    await scraper.close()  # type: ignore[union-attr]
                 except Exception:
                     pass
 
@@ -958,27 +952,27 @@ class IdentityResolver:
         """
         try:
             if platform == "aa":
-                from comic_search_lib.scrapers.atomic_avenue import AtomicAvenueScraper
+                from longbox_scrapers.adapters.atomic_avenue import AtomicAvenueScraper
 
                 return AtomicAvenueScraper(timeout=30)
             elif platform == "ccl":
-                from comic_search_lib.scrapers.ccl import CCLScraper
+                from longbox_scrapers.adapters.ccl import CCLScraper
 
                 return CCLScraper(timeout=30)
             elif platform == "hip":
-                from comic_search_lib.scrapers.hip import HipScraper
+                from longbox_scrapers.adapters.hip import HIPScraper
 
-                return HipScraper(timeout=30)
+                return HIPScraper(timeout=30)
             elif platform == "cpg":
-                from comic_search_lib.scrapers.cpg import CPGScraper
+                from longbox_scrapers.adapters.cpg import CPGScraper
 
                 return CPGScraper(timeout=30)
             elif platform == "gcd":
-                from comic_search_lib.scrapers.gcd import GCDScraper
+                from longbox_scrapers.adapters.gcd import GCDScraper
 
                 return GCDScraper(timeout=30)
             elif platform == "locg":
-                from comic_search_lib.scrapers.locg import LoCGScraper
+                from longbox_scrapers.adapters.locg import LoCGScraper
 
                 return LoCGScraper(timeout=30)
             else:

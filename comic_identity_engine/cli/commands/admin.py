@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import uuid
-from typing import Sequence
+from typing import Any, Sequence
 
 import click
 
@@ -26,7 +26,7 @@ def _parse_uuid_values(values: Sequence[str], option_name: str) -> list[uuid.UUI
     return parsed
 
 
-def _print_summary(report: dict[str, object]) -> None:
+def _print_summary(report: dict[str, Any]) -> None:
     summary = dict(report.get("summary", {}) or {})
     click.echo(f"Series duplicate groups: {summary.get('series_duplicate_groups', 0)}")
     click.echo(f"Issue duplicate groups: {summary.get('issue_duplicate_groups', 0)}")
@@ -36,7 +36,7 @@ async def _run_audit(
     *,
     series_ids: list[uuid.UUID],
     issue_ids: list[uuid.UUID],
-) -> dict[str, object]:
+) -> dict[str, Any]:
     async with AsyncSessionLocal() as session:
         service = CanonicalRepairService(session)
         return await service.audit_duplicates(
@@ -50,7 +50,7 @@ async def _run_repair(
     series_ids: list[uuid.UUID],
     issue_ids: list[uuid.UUID],
     apply: bool,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     async with AsyncSessionLocal() as session:
         service = CanonicalRepairService(session)
         return await service.repair_duplicates(

@@ -255,6 +255,7 @@ class OperationsManager:
         merged_result = self._merge_import_result(existing.result, initial_result)
         operation = existing
         should_enqueue = False
+        skip_result_update = False
 
         if retry_failed_only and existing.status in {"completed", "failed"}:
             retried_result = self._build_retry_failed_result(merged_result)
@@ -292,30 +293,40 @@ class OperationsManager:
                     status=operation.status,
                 )
 
-            # Mark as pending to trigger re-enqueue
-            if existing.status == "running":
-                operation = await self.operation_repo.update_status(
-                    existing,
-                    status="pending",
-                    result=resumed_result,
-                )
-                logger.info(
-                    "Resumed interrupted checksum-addressed import",
-                    operation_id=str(operation.id),
-                    operation_type=operation.operation_type,
-                    status=operation.status,
-                )
-                return operation, True
+                # Mark as pending to trigger re-enqueue
+                if existing.status == "running":
+                    operation = await self.operation_repo.update_status(
+                        existing,
+                        status="pending",
+                        result=resumed_result,
+                    )
+                    logger.info(
+                        "Resumed interrupted checksum-addressed import",
+                        operation_id=str(operation.id),
+                        operation_type=operation.operation_type,
+                        status=operation.status,
+                    )
+                    return operation, True
 
-            # Already pending, will re-enqueue remaining rows
-            should_enqueue = True
+            # For pending operations, re-enqueue remaining rows
+            # For running operations without stale rows, don't re-enqueue or update
+            if existing.status == "pending":
+                should_enqueue = True
+            elif existing.status == "running":
+                skip_result_update = True
 
-        if merged_result != (existing.result or {}):
+        if (
+            not skip_result_update
+            and merged_result != (existing.result or {})
+            and existing.status != "failed"
+        ):
             operation = await self.operation_repo.update_status(
                 existing,
                 status=existing.status,
                 result=merged_result,
             )
+        else:
+            operation = existing
 
         if existing.status == "failed":
             resumed_result = dict(operation.result or {})

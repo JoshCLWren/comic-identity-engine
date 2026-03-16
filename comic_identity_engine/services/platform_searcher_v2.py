@@ -28,9 +28,7 @@ from __future__ import annotations
 
 import asyncio
 import re
-import sys
 import time
-from pathlib import Path
 from typing import Any, Optional
 from uuid import UUID
 
@@ -41,18 +39,6 @@ from comic_identity_engine.database.connection import AsyncSessionLocal
 from comic_identity_engine.services.operations import OperationsManager
 
 logger = structlog.get_logger(__name__)
-
-
-def _prefer_workspace_comic_search_lib() -> None:
-    """Prefer the vendored comic-search-lib checkout over site-packages."""
-    workspace_lib = Path(__file__).resolve().parents[2] / "comic-search-lib"
-    if not workspace_lib.exists():
-        return
-
-    workspace_lib_str = str(workspace_lib)
-    if workspace_lib_str in sys.path:
-        sys.path.remove(workspace_lib_str)
-    sys.path.insert(0, workspace_lib_str)
 
 
 # Platform-specific search configurations
@@ -153,13 +139,12 @@ class PlatformSearcher:
         self._progress_lock = asyncio.Lock()
 
         # Import scrapers here to avoid circular imports
-        _prefer_workspace_comic_search_lib()
-        from comic_search_lib.scrapers.atomic_avenue import AtomicAvenueScraper
-        from comic_search_lib.scrapers.ccl import CCLScraper
-        from comic_search_lib.scrapers.cpg import CPGScraper
-        from comic_search_lib.scrapers.gcd import GCDScraper
-        from comic_search_lib.scrapers.hip import HipScraper
-        from comic_search_lib.scrapers.locg import LoCGScraper
+        from longbox_scrapers.adapters.atomic_avenue import AtomicAvenueScraper
+        from longbox_scrapers.adapters.ccl import CCLScraper
+        from longbox_scrapers.adapters.cpg import CPGScraper
+        from longbox_scrapers.adapters.gcd import GCDScraper
+        from longbox_scrapers.adapters.hip import HIPScraper
+        from longbox_scrapers.adapters.locg import LoCGScraper
 
         self.scrapers = {
             "gcd": GCDScraper(
@@ -177,7 +162,7 @@ class PlatformSearcher:
             "cpg": CPGScraper(
                 timeout=PLATFORM_SEARCH_CONFIG["cpg"]["request_timeout_sec"]
             ),
-            "hip": HipScraper(
+            "hip": HIPScraper(
                 timeout=PLATFORM_SEARCH_CONFIG["hip"]["request_timeout_sec"]
             ),
         }
@@ -363,7 +348,7 @@ class PlatformSearcher:
         events = []
 
         for platform, result in zip(platforms, results):
-            if isinstance(result, Exception):
+            if isinstance(result, BaseException):
                 platform_status[platform] = {
                     "status": "failed",
                     "reason": "task_crashed",

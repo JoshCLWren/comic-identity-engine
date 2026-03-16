@@ -505,7 +505,7 @@ class JobQueue:
             else:
                 aclose = getattr(self._redis_pool, "aclose", None)
                 if callable(aclose):
-                    await aclose()
+                    await aclose()  # type: ignore[operator]
             self._redis_pool = None
             logger.debug("Closed Redis connection pool")
 

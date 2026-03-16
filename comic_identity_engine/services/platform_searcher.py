@@ -28,9 +28,7 @@ from __future__ import annotations
 
 import asyncio
 import re
-import sys
 import time
-from pathlib import Path
 from typing import Any, Optional
 from uuid import UUID
 
@@ -43,18 +41,6 @@ from comic_identity_engine.errors import NetworkError
 from comic_identity_engine.services.operations import OperationsManager
 
 logger = structlog.get_logger(__name__)
-
-
-def _prefer_workspace_comic_search_lib() -> None:
-    """Prefer the vendored comic-search-lib checkout over site-packages."""
-    workspace_lib = Path(__file__).resolve().parents[2] / "comic-search-lib"
-    if not workspace_lib.exists():
-        return
-
-    workspace_lib_str = str(workspace_lib)
-    if workspace_lib_str in sys.path:
-        sys.path.remove(workspace_lib_str)
-    sys.path.insert(0, workspace_lib_str)
 
 
 # Platform-specific search configurations
@@ -150,13 +136,12 @@ class PlatformSearcher:
         self._progress_lock = asyncio.Lock()
 
         # Import scrapers here to avoid circular imports
-        _prefer_workspace_comic_search_lib()
-        from comic_search_lib.scrapers.atomic_avenue import AtomicAvenueScraper
-        from comic_search_lib.scrapers.ccl import CCLScraper
-        from comic_search_lib.scrapers.cpg import CPGScraper
-        from comic_search_lib.scrapers.gcd import GCDScraper
-        from comic_search_lib.scrapers.hip import HipScraper
-        from comic_search_lib.scrapers.locg import LoCGScraper
+        from longbox_scrapers.adapters.atomic_avenue import AtomicAvenueScraper
+        from longbox_scrapers.adapters.ccl import CCLScraper
+        from longbox_scrapers.adapters.cpg import CPGScraper
+        from longbox_scrapers.adapters.gcd import GCDScraper
+        from longbox_scrapers.adapters.hip import HIPScraper
+        from longbox_scrapers.adapters.locg import LoCGScraper
 
         self.scrapers = {
             "gcd": GCDScraper(
@@ -174,7 +159,7 @@ class PlatformSearcher:
             "cpg": CPGScraper(
                 timeout=PLATFORM_SEARCH_CONFIG["cpg"]["request_timeout_sec"]
             ),
-            "hip": HipScraper(
+            "hip": HIPScraper(
                 timeout=PLATFORM_SEARCH_CONFIG["hip"]["request_timeout_sec"]
             ),
         }
@@ -188,7 +173,7 @@ class PlatformSearcher:
         publisher: Optional[str],
         operation_id: UUID,
         source_platform: str,
-        operations_manager: OperationsManager,
+        operations_manager: OperationsManager | None,
     ) -> dict[str, Any]:
         """Search all platforms in parallel with multiple strategies.
 
@@ -723,7 +708,7 @@ class PlatformSearcher:
             return None
 
         # Find best match using Jaro-Winkler
-        from comic_search_lib.models import Comic, SearchResult
+        from longbox_scrapers.models import Comic, SearchResult
 
         normalized_issue = self._normalize_issue(issue)
         best_match = None
@@ -994,34 +979,21 @@ class PlatformSearcher:
         Returns:
             SearchResult if found, None otherwise
         """
-        # Determine scraper type by class name
+        from longbox_scrapers.models import Comic
+
         scraper_class = scraper.__class__.__name__
         platform = scraper_class.replace("Scraper", "").lower()
 
-        # Scrapers that accept Comic object or dict
-        if scraper_class in ("LoCGScraper", "CCLScraper", "HipScraper"):
-            comic_dict = {
-                "title": title,
-                "issue": issue,
-                "year": year,
-                "publisher": publisher,
-            }
-            print(f"🔗 DEBUG: Calling {scraper_class}.search_comic() with dict:")
-            print(f"   {comic_dict}")
-            result = await scraper.search_comic(comic_dict)
-        else:
-            # Scrapers that accept individual parameters
-            # GCDScraper, CPGScraper, AtomicAvenueScraper
-            print(f"🔗 DEBUG: Calling {scraper_class}.search_comic() with args:")
-            print(
-                f"   title={title!r}, issue={issue!r}, year={year}, publisher={publisher!r}"
-            )
-            result = await scraper.search_comic(
-                title=title,
-                issue=issue,
-                year=year,
-                publisher=publisher,
-            )
+        comic = Comic(
+            id=f"{platform}:{title}:{issue}",
+            title=title,
+            issue=issue,
+            year=year,
+            publisher=publisher,
+        )
+        print(f"🔗 DEBUG: Calling {scraper_class}.search_comic() with Comic object:")
+        print(f"   {comic}")
+        result = await scraper.search_comic(comic)
 
         # DEBUG: Print result after search completes
         print(f"\n📊 DEBUG: [{platform.upper()}] Search completed:")

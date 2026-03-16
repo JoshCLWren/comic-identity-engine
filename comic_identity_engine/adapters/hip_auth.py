@@ -144,9 +144,9 @@ class AuthenticatedHIPAdapter(HIPAdapter):
                     if await close_btn.count() > 0:
                         await close_btn.click()
                         await asyncio.sleep(0.5)
-                except:
+                except Exception:
                     pass
-        except:
+        except Exception:
             pass
 
     async def _login_with_playwright(self) -> list[dict[str, Any]]:
@@ -189,8 +189,8 @@ class AuthenticatedHIPAdapter(HIPAdapter):
                     if await my_account.is_visible(timeout=2000):
                         logger.info("Already logged in")
                         cookies = await context.cookies()
-                        return cookies
-                except:
+                        return cookies  # type: ignore[return-value]
+                except Exception:
                     pass
 
                 # Click Sign In button
@@ -198,7 +198,7 @@ class AuthenticatedHIPAdapter(HIPAdapter):
                 if not await sign_in_btn.is_visible(timeout=5000):
                     logger.info("No login required")
                     cookies = await context.cookies()
-                    return cookies
+                    return cookies  # type: ignore[return-value]
 
                 await sign_in_btn.click()
                 await asyncio.sleep(1)
@@ -233,7 +233,7 @@ class AuthenticatedHIPAdapter(HIPAdapter):
                 if await my_account.is_visible(timeout=5000):
                     logger.info("Login successful")
                     cookies = await context.cookies()
-                    return cookies
+                    return cookies  # type: ignore[return-value]
                 else:
                     raise Exception("Login verification failed")
 

@@ -120,7 +120,7 @@ class AsyncHttpExecutor:
             while time.time() - start_time < timeout:
                 result_op = await operations_manager.get_operation(operation.id)
 
-                if result_op.status in ("completed", "failed"):
+                if result_op is not None and result_op.status in ("completed", "failed"):
                     if result_op.result:
                         return result_op.result
                     elif result_op.error_message:
@@ -170,7 +170,7 @@ class AsyncHttpExecutor:
                 url=url,
             )
 
-            job = await self.queue.enqueue_http_request(
+            await self.queue.enqueue_http_request(
                 url=url,
                 method="POST",
                 operation_id=operation.id,
@@ -187,7 +187,7 @@ class AsyncHttpExecutor:
             while time.time() - start_time < timeout:
                 result_op = await operations_manager.get_operation(operation.id)
 
-                if result_op.status in ("completed", "failed"):
+                if result_op is not None and result_op.status in ("completed", "failed"):
                     if result_op.result:
                         return result_op.result
                     elif result_op.error_message:
