@@ -494,8 +494,10 @@ This project prioritizes correct identity over convenience. When in doubt, be ex
 
 **Documentation Files:**
 - `README.md` - Project overview
-- `CONTRIBUTING.md` - Development workflow
 - `FIX_PLAN.md` - Active bug tracking and fixes
 - `SERIES_PAGE_STRATEGY.md` - Bulk import strategy (CRITICAL for CSV imports)
 - `CROSS_PLATFORM_SEARCH.md` - Individual issue search
 - `AGENTS.md` - This file
+
+**Archived Documentation:**
+- `docs/archive/CONTRIBUTING.md` - Development workflow (archived)

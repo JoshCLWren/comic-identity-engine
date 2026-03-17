@@ -300,6 +300,6 @@ If issues occur after Phase 6 deployment:
 
 ## References
 
-- [MASTIMPLEMENTATION_PLAN.md](../MASTIMPLEMENTATION_PLAN.md) - Full implementation plan
+- [MASTIMPLEMENTATION_PLAN.md](docs/archive/MASTIMPLEMENTATION_PLAN.md) - Full implementation plan
 - [config.py](../comic_identity_engine/config.py) - Configuration settings
 - [.env.example](../.env.example) - Environment variable template

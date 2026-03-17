@@ -1040,7 +1040,7 @@ class PlatformSearcher:
     def _normalize_series_name(self, name: str) -> str:
         """Normalize series name for fuzzy matching.
 
-        From IMPLEMENTATION_PLAN.md lines 576-594
+        From docs/archive/IMPLEMENTATION_PLAN.md lines 576-594
 
         Args:
             name: Raw series name

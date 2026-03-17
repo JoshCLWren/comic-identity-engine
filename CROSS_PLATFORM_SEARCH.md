@@ -386,7 +386,7 @@ async def _execute_strategy(self, scraper, strategy, title, issue, year, publish
 
 ## HELPER FUNCTIONS TO REUSE
 
-### From IMPLEMENTATION_PLAN.md (lines 576-594)
+### From docs/archive/IMPLEMENTATION_PLAN.md (lines 576-594)
 
 ```python
 def _normalize_series_name(self, name: str) -> str:
@@ -676,7 +676,7 @@ Before marking as done, verify:
 ## REFERENCES (READ THESE)
 
 **Must Read:**
-1. `IMPLEMENTATION_PLAN.md` lines 363-595 - Identity resolution algorithm
+1. `docs/archive/IMPLEMENTATION_PLAN.md` lines 363-595 - Identity resolution algorithm
 2. `examples/research/issue-suffix-research.md` - Issue number complexity
 3. `examples/COMPARISON.md` - Cross-platform differences
 4. `/mnt/extra/josh/code/comics_backend/app/routers/library/search_utils.py` - Fuzzy matching utilities

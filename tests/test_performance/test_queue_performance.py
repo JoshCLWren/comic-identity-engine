@@ -330,7 +330,7 @@ def test_performance_summary():
     print("\n" + "=" * 60)
     print("PERFORMANCE TEST SUMMARY")
     print("=" * 60)
-    print("\nTarget Performance (from MASTIMPLEMENTATION_PLAN.md):")
+    print("\nTarget Performance (from docs/archive/MASTIMPLEMENTATION_PLAN.md):")
     print("- Queue handles: 100k+ tasks")
     print("- Worker utilization: 90-100%")
     print("- Import time (5,200 rows): 15-30 minutes")

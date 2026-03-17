@@ -128,7 +128,7 @@ Updated with optimal queue configuration settings documented for production use.
 
 ## Performance Metrics
 
-### Target Performance (from MASTIMPLEMENTATION_PLAN.md)
+### Target Performance (from docs/archive/MASTIMPLEMENTATION_PLAN.md)
 
 | Metric | Before | After (Target) | Improvement |
 |--------|--------|----------------|-------------|

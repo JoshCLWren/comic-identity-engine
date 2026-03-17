@@ -232,7 +232,7 @@ source /path/to/comic-identity-engine/.zshrc.local
 source /path/to/comic-identity-engine/.bashrc.local
 ```
 
-See [SHELL.md](SHELL.md) for details.
+See [docs/archive/SHELL.md](docs/archive/SHELL.md) for details.
 
 ## Usage
 
