@@ -3511,6 +3511,7 @@ async def reconcile_task(
             }
 
             await operations_manager.mark_completed(operation_uuid, result_dict)
+            await session.commit()
 
             logger.info(
                 "Reconciliation task completed",

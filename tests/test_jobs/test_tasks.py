@@ -28,13 +28,24 @@ TEST_SERIES_ID = uuid.UUID("550e8400-e29b-41d4-a716-446655440002")
 @pytest.fixture
 def mock_session():
     """Mock database session."""
-    session = Mock()
+    session = Mock(spec=["commit", "rollback", "flush", "refresh", "close", "execute"])
     session.commit = AsyncMock()
     session.rollback = AsyncMock()
-    session.execute = AsyncMock()
     session.flush = AsyncMock()
     session.refresh = AsyncMock()
     session.close = AsyncMock()
+
+    # Mock execute to return an awaitable that returns a proper result-like object
+    async def mock_execute_return(*args, **kwargs):
+        mock_result = Mock()
+        mock_result.scalar_one_or_none = Mock(return_value=None)
+        mock_scalars = Mock()
+        mock_scalars.all = Mock(return_value=[])
+        mock_result.scalars = Mock(return_value=mock_scalars)
+        return mock_result
+
+    session.execute = AsyncMock(side_effect=mock_execute_return)
+
     return session
 
 
@@ -98,7 +109,7 @@ class TestResolveIdentityTask:
                 )
 
                 with patch(
-                    "comic_identity_engine.database.repositories.ExternalMappingRepository"
+                    "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
                 ) as mock_mapping_repo_class:
                     mock_mapping_repo = Mock()
                     mock_mapping_repo.find_by_source = AsyncMock(return_value=None)
@@ -196,7 +207,7 @@ class TestResolveIdentityTask:
                 )
 
                 with patch(
-                    "comic_identity_engine.database.repositories.ExternalMappingRepository"
+                    "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
                 ) as mock_mapping_repo_class:
                     mock_mapping_repo = Mock()
                     mock_mapping_repo.find_by_source = AsyncMock(return_value=None)
@@ -317,7 +328,7 @@ class TestResolveIdentityTask:
                 )
 
                 with patch(
-                    "comic_identity_engine.database.repositories.ExternalMappingRepository"
+                    "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
                 ) as mock_mapping_repo_class:
                     mock_mapping_repo = Mock()
                     mock_mapping_repo.find_by_source = AsyncMock(return_value=None)
@@ -381,7 +392,7 @@ class TestResolveIdentityTask:
                 )
 
                 with patch(
-                    "comic_identity_engine.database.repositories.ExternalMappingRepository"
+                    "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
                 ) as mock_mapping_repo_class:
                     mock_mapping_repo = Mock()
                     mock_mapping_repo.create_mapping = AsyncMock()
@@ -463,7 +474,7 @@ class TestResolveIdentityTask:
                 )
 
                 with patch(
-                    "comic_identity_engine.database.repositories.ExternalMappingRepository"
+                    "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
                 ) as mock_mapping_repo_class:
                     mock_mapping_repo = Mock()
                     mock_mapping_repo_class.return_value = mock_mapping_repo
@@ -550,7 +561,7 @@ class TestResolveIdentityTask:
                 )
 
                 with patch(
-                    "comic_identity_engine.database.repositories.ExternalMappingRepository"
+                    "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
                 ) as mock_mapping_repo_class:
                     mock_mapping_repo = Mock()
                     mock_mapping_repo.find_by_source = AsyncMock(
@@ -1174,43 +1185,52 @@ class TestReconcileTask:
     async def test_reconcile_task_success(self, mock_async_session_local, mock_session):
         """Test successful reconciliation."""
         with patch(
-            "comic_identity_engine.jobs.tasks.OperationsManager"
-        ) as mock_ops_manager_class:
-            mock_ops_manager = Mock()
-            mock_ops_manager.mark_running = AsyncMock()
-            mock_ops_manager.mark_completed = AsyncMock()
-            mock_ops_manager_class.return_value = mock_ops_manager
+            "comic_identity_engine.services.operations.OperationRepository"
+        ) as mock_operation_repo_class:
+            mock_operation_repo = Mock()
+            mock_operation_repo.get_operation = AsyncMock(return_value=None)
+            mock_operation_repo.update_status = AsyncMock()
+            mock_operation_repo_class.return_value = mock_operation_repo
 
             with patch(
-                "comic_identity_engine.jobs.tasks.IssueRepository"
-            ) as mock_issue_repo_class:
-                mock_issue_repo = Mock()
-                mock_issue = Mock()
-                mock_issue.id = TEST_ISSUE_ID
-                mock_issue_repo.find_by_id = AsyncMock(return_value=mock_issue)
-                mock_issue_repo_class.return_value = mock_issue_repo
+                "comic_identity_engine.jobs.tasks.OperationsManager"
+            ) as mock_ops_manager_class:
+                mock_ops_manager = Mock()
+                mock_ops_manager.mark_running = AsyncMock()
+                mock_ops_manager.mark_completed = AsyncMock()
+                mock_ops_manager.update_operation = AsyncMock()
+                mock_ops_manager_class.return_value = mock_ops_manager
 
                 with patch(
-                    "comic_identity_engine.database.repositories.ExternalMappingRepository"
-                ) as mock_mapping_repo_class:
-                    mock_mapping_repo = Mock()
-                    mock_mapping_repo.find_by_issue = AsyncMock(return_value=[])
-                    mock_mapping_repo_class.return_value = mock_mapping_repo
+                    "comic_identity_engine.jobs.tasks.IssueRepository"
+                ) as mock_issue_repo_class:
+                    mock_issue_repo = Mock()
+                    mock_issue = Mock()
+                    mock_issue.id = TEST_ISSUE_ID
+                    mock_issue_repo.find_by_id = AsyncMock(return_value=mock_issue)
+                    mock_issue_repo_class.return_value = mock_issue_repo
 
-                    result = await reconcile_task(
-                        {},
-                        str(TEST_ISSUE_ID),
-                        str(TEST_OPERATION_ID),
-                    )
+                    with patch(
+                        "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
+                    ) as mock_mapping_repo_class:
+                        mock_mapping_repo = Mock()
+                        mock_mapping_repo.find_by_issue = AsyncMock(return_value=[])
+                        mock_mapping_repo_class.return_value = mock_mapping_repo
 
-        assert result["issue_id"] == str(TEST_ISSUE_ID)
-        assert "platforms_checked" in result
-        assert len(result["platforms_checked"]) == 6  # All platforms
-        assert result["mappings_created"] == 0
-        assert result["mappings_updated"] == 0
-        assert len(result["errors"]) == 0
-        mock_ops_manager.mark_running.assert_called_once()
-        mock_ops_manager.mark_completed.assert_called_once()
+                        result = await reconcile_task(
+                            {},
+                            str(TEST_ISSUE_ID),
+                            str(TEST_OPERATION_ID),
+                        )
+
+                assert result["issue_id"] == str(TEST_ISSUE_ID)
+                assert "platforms_checked" in result
+                assert len(result["platforms_checked"]) == 6  # All platforms
+                assert result["mappings_created"] == 0
+                assert result["mappings_updated"] == 0
+                assert len(result["errors"]) == 0
+                mock_ops_manager.mark_running.assert_called_once()
+                mock_ops_manager.mark_completed.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_reconcile_task_issue_not_found(
@@ -1354,7 +1374,7 @@ class TestOperationStatusTransitions:
                 )
 
                 with patch(
-                    "comic_identity_engine.database.repositories.ExternalMappingRepository"
+                    "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
                 ) as mock_mapping_repo_class:
                     mock_mapping_repo = Mock()
                     mock_mapping_repo.find_by_source = AsyncMock(return_value=None)
@@ -1909,44 +1929,53 @@ class TestReconcileTaskEdgeCases:
     ):
         """Test reconcile task updates existing mappings."""
         with patch(
-            "comic_identity_engine.jobs.tasks.OperationsManager"
-        ) as mock_ops_manager_class:
-            mock_ops_manager = Mock()
-            mock_ops_manager.mark_running = AsyncMock()
-            mock_ops_manager.mark_completed = AsyncMock()
-            mock_ops_manager_class.return_value = mock_ops_manager
+            "comic_identity_engine.services.operations.OperationRepository"
+        ) as mock_operation_repo_class:
+            mock_operation_repo = Mock()
+            mock_operation_repo.get_operation = AsyncMock(return_value=None)
+            mock_operation_repo.update_status = AsyncMock()
+            mock_operation_repo_class.return_value = mock_operation_repo
 
             with patch(
-                "comic_identity_engine.jobs.tasks.IssueRepository"
-            ) as mock_issue_repo_class:
-                mock_issue_repo = Mock()
-                mock_issue = Mock()
-                mock_issue.id = TEST_ISSUE_ID
-                mock_issue_repo.find_by_id = AsyncMock(return_value=mock_issue)
-                mock_issue_repo_class.return_value = mock_issue_repo
+                "comic_identity_engine.jobs.tasks.OperationsManager"
+            ) as mock_ops_manager_class:
+                mock_ops_manager = Mock()
+                mock_ops_manager.mark_running = AsyncMock()
+                mock_ops_manager.mark_completed = AsyncMock()
+                mock_ops_manager.update_operation = AsyncMock()
+                mock_ops_manager_class.return_value = mock_ops_manager
 
                 with patch(
-                    "comic_identity_engine.database.repositories.ExternalMappingRepository"
-                ) as mock_mapping_repo_class:
-                    mock_mapping_repo = Mock()
-                    # Create existing mappings for some platforms
-                    mock_mapping1 = Mock()
-                    mock_mapping1.source = "gcd"
-                    mock_mapping2 = Mock()
-                    mock_mapping2.source = "locg"
-                    mock_mapping_repo.find_by_issue = AsyncMock(
-                        return_value=[mock_mapping1, mock_mapping2]
-                    )
-                    mock_mapping_repo_class.return_value = mock_mapping_repo
+                    "comic_identity_engine.jobs.tasks.IssueRepository"
+                ) as mock_issue_repo_class:
+                    mock_issue_repo = Mock()
+                    mock_issue = Mock()
+                    mock_issue.id = TEST_ISSUE_ID
+                    mock_issue_repo.find_by_id = AsyncMock(return_value=mock_issue)
+                    mock_issue_repo_class.return_value = mock_issue_repo
 
-                    result = await reconcile_task(
-                        {},
-                        str(TEST_ISSUE_ID),
-                        str(TEST_OPERATION_ID),
-                    )
+                    with patch(
+                        "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
+                    ) as mock_mapping_repo_class:
+                        mock_mapping_repo = Mock()
+                        # Create existing mappings for some platforms
+                        mock_mapping1 = Mock()
+                        mock_mapping1.source = "gcd"
+                        mock_mapping2 = Mock()
+                        mock_mapping2.source = "locg"
+                        mock_mapping_repo.find_by_issue = AsyncMock(
+                            return_value=[mock_mapping1, mock_mapping2]
+                        )
+                        mock_mapping_repo_class.return_value = mock_mapping_repo
 
-            assert result["mappings_updated"] == 2
-            assert result["mappings_created"] == 0
+                        result = await reconcile_task(
+                            {},
+                            str(TEST_ISSUE_ID),
+                            str(TEST_OPERATION_ID),
+                        )
+
+                assert result["mappings_updated"] == 2
+                assert result["mappings_created"] == 0
 
     @pytest.mark.asyncio
     async def test_reconcile_task_platform_error(
@@ -1954,40 +1983,49 @@ class TestReconcileTaskEdgeCases:
     ):
         """Test reconcile task handles platform errors."""
         with patch(
-            "comic_identity_engine.jobs.tasks.OperationsManager"
-        ) as mock_ops_manager_class:
-            mock_ops_manager = Mock()
-            mock_ops_manager.mark_running = AsyncMock()
-            mock_ops_manager.mark_completed = AsyncMock()
-            mock_ops_manager_class.return_value = mock_ops_manager
+            "comic_identity_engine.services.operations.OperationRepository"
+        ) as mock_operation_repo_class:
+            mock_operation_repo = Mock()
+            mock_operation_repo.get_operation = AsyncMock(return_value=None)
+            mock_operation_repo.update_status = AsyncMock()
+            mock_operation_repo_class.return_value = mock_operation_repo
 
             with patch(
-                "comic_identity_engine.jobs.tasks.IssueRepository"
-            ) as mock_issue_repo_class:
-                mock_issue_repo = Mock()
-                mock_issue = Mock()
-                mock_issue.id = TEST_ISSUE_ID
-                mock_issue_repo.find_by_id = AsyncMock(return_value=mock_issue)
-                mock_issue_repo_class.return_value = mock_issue_repo
+                "comic_identity_engine.jobs.tasks.OperationsManager"
+            ) as mock_ops_manager_class:
+                mock_ops_manager = Mock()
+                mock_ops_manager.mark_running = AsyncMock()
+                mock_ops_manager.mark_completed = AsyncMock()
+                mock_ops_manager.update_operation = AsyncMock()
+                mock_ops_manager_class.return_value = mock_ops_manager
 
                 with patch(
-                    "comic_identity_engine.database.repositories.ExternalMappingRepository"
-                ) as mock_mapping_repo_class:
-                    mock_mapping_repo = Mock()
-                    # Simulate error during find_by_issue
-                    mock_mapping_repo.find_by_issue = AsyncMock(
-                        side_effect=Exception("Database error")
-                    )
-                    mock_mapping_repo_class.return_value = mock_mapping_repo
+                    "comic_identity_engine.jobs.tasks.IssueRepository"
+                ) as mock_issue_repo_class:
+                    mock_issue_repo = Mock()
+                    mock_issue = Mock()
+                    mock_issue.id = TEST_ISSUE_ID
+                    mock_issue_repo.find_by_id = AsyncMock(return_value=mock_issue)
+                    mock_issue_repo_class.return_value = mock_issue_repo
 
                     with patch(
-                        "comic_identity_engine.jobs.tasks._mark_failed_safe",
-                        new_callable=AsyncMock,
-                    ):
-                        result = await reconcile_task(
-                            {},
-                            str(TEST_ISSUE_ID),
-                            str(TEST_OPERATION_ID),
+                        "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
+                    ) as mock_mapping_repo_class:
+                        mock_mapping_repo = Mock()
+                        # Simulate error during find_by_issue
+                        mock_mapping_repo.find_by_issue = AsyncMock(
+                            side_effect=Exception("Database error")
                         )
+                        mock_mapping_repo_class.return_value = mock_mapping_repo
 
-            assert "error" in result
+                        with patch(
+                            "comic_identity_engine.jobs.tasks._mark_failed_safe",
+                            new_callable=AsyncMock,
+                        ):
+                            result = await reconcile_task(
+                                {},
+                                str(TEST_ISSUE_ID),
+                                str(TEST_OPERATION_ID),
+                            )
+
+                assert "error" in result
