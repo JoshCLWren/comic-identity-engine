@@ -242,8 +242,14 @@ async def test_get_seed_data(client: AsyncClient, setup_corrections):
 
     seed = data[0]
     assert seed["platform"] == "gcd"
-    assert seed["correct_platform_id"] == "10001"
-    assert seed["original_platform_id"] == "10000"
+    assert (
+        seed["correct_platform_id"]
+        == setup_corrections["correction1"].correct_source_issue_id
+    )
+    assert (
+        seed["original_platform_id"]
+        == setup_corrections["correction1"].original_source_issue_id
+    )
 
 
 @pytest.mark.asyncio

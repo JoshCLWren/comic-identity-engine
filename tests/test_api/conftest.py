@@ -1,6 +1,7 @@
 """Pytest configuration for API tests."""
 
 from collections.abc import AsyncGenerator
+from typing import AsyncGenerator as TypingAsyncGenerator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -8,12 +9,14 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from comic_identity_engine.api.dependencies import (
     get_job_queue,
     get_operations_manager,
 )
 from comic_identity_engine.api.main import create_app
+from comic_identity_engine.database.connection import get_db
 from comic_identity_engine.jobs.queue import JobQueue
 from comic_identity_engine.services.operations import OperationsManager
 
@@ -104,10 +107,23 @@ async def app_with_overrides(
 @pytest_asyncio.fixture
 async def client(
     app_with_overrides: FastAPI,
+    db_session: AsyncSession,
 ) -> AsyncGenerator[httpx.AsyncClient, None]:
-    """Fixture to provide httpx.AsyncClient for testing."""
+    """Fixture to provide httpx.AsyncClient for testing.
+
+    Overrides the get_db dependency to use the test's db_session fixture.
+    """
+
+    async def override_get_db() -> TypingAsyncGenerator[AsyncSession, None]:
+        """Override get_db to use the test db_session."""
+        yield db_session
+
+    app_with_overrides.dependency_overrides[get_db] = override_get_db
+
     transport = ASGITransport(app=app_with_overrides)
     async with httpx.AsyncClient(
         transport=transport, base_url="http://test"
     ) as _client:
         yield _client
+
+    app_with_overrides.dependency_overrides.pop(get_db, None)
