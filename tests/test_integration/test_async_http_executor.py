@@ -56,8 +56,6 @@ class TestAsyncHttpExecutor:
             "content": "<html>Success</html>",
             "elapsed_ms": 150,
         }
-        mock_operations_manager.create_operation.return_value = mock_operation
-        mock_operations_manager.get_operation.return_value = mock_operation
 
         mock_job = Mock()
         mock_job.job_id = "test-job-id"
@@ -71,13 +69,24 @@ class TestAsyncHttpExecutor:
             mock_session_local.return_value.__aenter__.return_value = mock_session
             mock_session_local.return_value.__aexit__.return_value = False
 
-            result = await executor.get("gcd", "https://www.comics.org/issue/125295/")
+            mock_ops_manager = AsyncMock()
+            mock_ops_manager.create_operation = AsyncMock(return_value=mock_operation)
+            mock_ops_manager.get_operation = AsyncMock(return_value=mock_operation)
+
+            with patch(
+                "comic_identity_engine.core.async_http.OperationsManager",
+                return_value=mock_ops_manager,
+            ):
+                result = await executor.get(
+                    "gcd", "https://www.comics.org/issue/125295/"
+                )
 
         assert result["status_code"] == 200
         assert result["content"] == "<html>Success</html>"
         assert result["elapsed_ms"] == 150
         mock_queue.enqueue_http_request.assert_called_once()
-        mock_operations_manager.create_operation.assert_called_once()
+        mock_ops_manager.create_operation.assert_called_once()
+        mock_ops_manager.get_operation.assert_called_once()
 
     async def test_get_request_with_timeout(
         self, mock_queue, mock_operations_manager, mock_session
@@ -86,8 +95,6 @@ class TestAsyncHttpExecutor:
         mock_operation = Mock()
         mock_operation.id = TEST_OPERATION_ID
         mock_operation.status = "running"
-        mock_operations_manager.create_operation.return_value = mock_operation
-        mock_operations_manager.get_operation.return_value = mock_operation
 
         mock_job = Mock()
         mock_job.job_id = "test-job-id"
@@ -101,14 +108,22 @@ class TestAsyncHttpExecutor:
             mock_session_local.return_value.__aenter__.return_value = mock_session
             mock_session_local.return_value.__aexit__.return_value = False
 
-            with patch("comic_identity_engine.core.async_http.time") as mock_time:
-                mock_time.time.return_value = 0
-                mock_time.sleep = AsyncMock()
+            mock_ops_manager = AsyncMock()
+            mock_ops_manager.create_operation = AsyncMock(return_value=mock_operation)
+            mock_ops_manager.get_operation = AsyncMock(return_value=mock_operation)
 
-                with pytest.raises(TimeoutError, match="HTTP request timeout"):
-                    await executor.get(
-                        "gcd", "https://www.comics.org/issue/125295/", timeout=1
-                    )
+            with patch(
+                "comic_identity_engine.core.async_http.OperationsManager",
+                return_value=mock_ops_manager,
+            ):
+                with patch("comic_identity_engine.core.async_http.time") as mock_time:
+                    mock_time.time.side_effect = [0, 0.5, 1.0, 1.5]
+                    mock_time.sleep = AsyncMock()
+
+                    with pytest.raises(TimeoutError, match="HTTP request timeout"):
+                        await executor.get(
+                            "gcd", "https://www.comics.org/issue/125295/", timeout=1
+                        )
 
     async def test_get_request_handles_error_response(
         self, mock_queue, mock_operations_manager, mock_session
@@ -119,8 +134,6 @@ class TestAsyncHttpExecutor:
         mock_operation.status = "completed"
         mock_operation.result = None
         mock_operation.error_message = "HTTP request failed: Connection refused"
-        mock_operations_manager.create_operation.return_value = mock_operation
-        mock_operations_manager.get_operation.return_value = mock_operation
 
         mock_job = Mock()
         mock_job.job_id = "test-job-id"
@@ -134,8 +147,16 @@ class TestAsyncHttpExecutor:
             mock_session_local.return_value.__aenter__.return_value = mock_session
             mock_session_local.return_value.__aexit__.return_value = False
 
-            with pytest.raises(Exception, match="Connection refused"):
-                await executor.get("gcd", "https://www.comics.org/issue/125295/")
+            mock_ops_manager = AsyncMock()
+            mock_ops_manager.create_operation = AsyncMock(return_value=mock_operation)
+            mock_ops_manager.get_operation = AsyncMock(return_value=mock_operation)
+
+            with patch(
+                "comic_identity_engine.core.async_http.OperationsManager",
+                return_value=mock_ops_manager,
+            ):
+                with pytest.raises(Exception, match="Connection refused"):
+                    await executor.get("gcd", "https://www.comics.org/issue/125295/")
 
     async def test_post_request_with_json_data(
         self, mock_queue, mock_operations_manager, mock_session
@@ -149,8 +170,6 @@ class TestAsyncHttpExecutor:
             "content": '{"created": true}',
             "elapsed_ms": 200,
         }
-        mock_operations_manager.create_operation.return_value = mock_operation
-        mock_operations_manager.get_operation.return_value = mock_operation
 
         mock_job = Mock()
         mock_job.job_id = "test-job-id"
@@ -164,9 +183,19 @@ class TestAsyncHttpExecutor:
             mock_session_local.return_value.__aenter__.return_value = mock_session
             mock_session_local.return_value.__aexit__.return_value = False
 
-            result = await executor.post(
-                "gcd", "https://api.example.com/comics", json={"title": "Test Comic"}
-            )
+            mock_ops_manager = AsyncMock()
+            mock_ops_manager.create_operation = AsyncMock(return_value=mock_operation)
+            mock_ops_manager.get_operation = AsyncMock(return_value=mock_operation)
+
+            with patch(
+                "comic_identity_engine.core.async_http.OperationsManager",
+                return_value=mock_ops_manager,
+            ):
+                result = await executor.post(
+                    "gcd",
+                    "https://api.example.com/comics",
+                    json_data={"title": "Test Comic"},
+                )
 
         assert result["status_code"] == 201
         assert result["content"] == '{"created": true}'

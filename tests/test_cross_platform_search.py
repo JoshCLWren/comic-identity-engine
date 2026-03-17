@@ -56,9 +56,16 @@ async def test_cross_platform_search_with_mock_scrapers():
     assert "aa" in urls
     assert urls["aa"] == "https://atomicavenue.com/atomic/item/12345/1/details"
     assert status["aa"] == "found"
-    mock_aa_scraper.search_comic.assert_called_once_with(
-        title=series_title, issue=issue_number, year=year, publisher=publisher
+    from longbox_scrapers.models import Comic
+
+    expected_comic = Comic(
+        id="aa:X-Men:1",
+        title=series_title,
+        issue=issue_number,
+        year=year,
+        publisher=publisher,
     )
+    mock_aa_scraper.search_comic.assert_called_once_with(expected_comic)
     mock_aa_scraper.close.assert_called_once()
 
 
