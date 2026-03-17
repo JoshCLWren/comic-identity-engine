@@ -272,7 +272,8 @@ def test_import_clz_attach_polls_existing_operation_without_posting():
         mock_client.get.return_value = poll_response
 
         result = runner.invoke(
-            cli_import_clz, ["--operation-id", "operations/test-operation-id"]
+            cli_import_clz,
+            ["--operation-id", "test-operation-id", "--no-retry-failed-only"],
         )
 
         assert result.exit_code == 0
@@ -334,6 +335,7 @@ def test_import_clz_retry_failed_only_posts_flag():
                     Path("tests/fixtures/clz/sample_clz_export.csv").absolute()
                 ),
                 "retry_failed_only": True,
+                "force": False,
             },
         )
 

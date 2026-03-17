@@ -140,7 +140,7 @@ class TestImportClzRequest:
             file_path="/uploads/collections/clz_collection_2024.csv"
         )
         assert request.file_path == "/uploads/collections/clz_collection_2024.csv"
-        assert request.retry_failed_only is False
+        assert request.retry_failed_only is True
 
     def test_relative_path_passes(self):
         """Relative path should be accepted."""

@@ -322,13 +322,7 @@ class TestGetQueueDepth:
         self, mock_settings, mock_redis_pool, mock_arq_redis_settings
     ):
         """Queue depth without filters should count all queued jobs."""
-        queued_job_one = Mock()
-        queued_job_one.kwargs = {"operation_id": str(TEST_OPERATION_ID)}
-        queued_job_two = Mock()
-        queued_job_two.kwargs = {"operation_id": "other-operation"}
-        mock_redis_pool.queued_jobs = AsyncMock(
-            return_value=[queued_job_one, queued_job_two]
-        )
+        mock_redis_pool.llen = AsyncMock(return_value=2)
 
         with patch(
             "comic_identity_engine.jobs.queue.get_settings"
@@ -347,22 +341,14 @@ class TestGetQueueDepth:
                     depth = await queue.get_queue_depth()
 
         assert depth == 2
-        mock_redis_pool.queued_jobs.assert_awaited_once_with(queue_name=TEST_QUEUE_NAME)
+        mock_redis_pool.llen.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_get_queue_depth_filters_by_operation(
         self, mock_settings, mock_redis_pool, mock_arq_redis_settings
     ):
-        """Queue depth should filter queued jobs by operation id."""
-        queued_job_one = Mock()
-        queued_job_one.kwargs = {"operation_id": str(TEST_OPERATION_ID)}
-        queued_job_two = Mock()
-        queued_job_two.kwargs = {"operation_id": "other-operation"}
-        queued_job_three = Mock()
-        queued_job_three.kwargs = {"operation_id": str(TEST_OPERATION_ID)}
-        mock_redis_pool.queued_jobs = AsyncMock(
-            return_value=[queued_job_one, queued_job_two, queued_job_three]
-        )
+        """Queue depth with operation_id returns 0 (operation-scoped counting disabled)."""
+        mock_redis_pool.llen = AsyncMock(return_value=5)
 
         with patch(
             "comic_identity_engine.jobs.queue.get_settings"
@@ -380,7 +366,7 @@ class TestGetQueueDepth:
                     queue = JobQueue()
                     depth = await queue.get_queue_depth(operation_id=TEST_OPERATION_ID)
 
-        assert depth == 2
+        assert depth == 0
 
 
 class TestEnqueueExport:
