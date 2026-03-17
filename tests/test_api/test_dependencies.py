@@ -7,7 +7,7 @@ This module tests all FastAPI dependency injection functions, ensuring:
 """
 
 from collections.abc import AsyncGenerator
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -49,27 +49,17 @@ class TestGetJobQueueDependency:
     """Tests for get_job_queue dependency."""
 
     @pytest.mark.asyncio
-    async def test_get_job_queue_yields_job_queue(self):
-        """Test that get_job_queue yields a JobQueue instance."""
-        gen = get_job_queue()
-        queue = await gen.asend(None)
+    async def test_get_job_queue_returns_job_queue(self):
+        """Test that get_job_queue returns a JobQueue instance."""
+        queue = await get_job_queue()
         assert isinstance(queue, JobQueue)
 
     @pytest.mark.asyncio
-    async def test_get_job_queue_closes_on_cleanup(self):
-        """Test that get_job_queue closes the queue when done."""
-        with patch.object(JobQueue, "close", new_callable=AsyncMock) as mock_close:
-            gen = get_job_queue()
-            queue = await gen.asend(None)
-            assert isinstance(queue, JobQueue)
-
-            # Clean up by closing the generator
-            try:
-                await gen.aclose()
-            except StopAsyncIteration:
-                pass
-
-            mock_close.assert_called_once()
+    async def test_get_job_queue_returns_singleton(self):
+        """Test that get_job_queue returns the same instance on subsequent calls."""
+        queue1 = await get_job_queue()
+        queue2 = await get_job_queue()
+        assert queue1 is queue2
 
 
 class TestGetOperationsManagerDependency:
@@ -119,10 +109,8 @@ class TestDependencyIntegration:
     @pytest.mark.asyncio
     async def test_job_queue_independent_of_session(self):
         """Test that JobQueue doesn't require a database session."""
-        gen = get_job_queue()
-        queue = await gen.asend(None)
+        queue = await get_job_queue()
         assert isinstance(queue, JobQueue)
-        await gen.aclose()
 
 
 class TestDependencyExports:
