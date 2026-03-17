@@ -113,10 +113,10 @@ class TestDatabaseSettings:
             os.environ, {"DATABASE_URL": "postgresql://localhost/db"}, clear=True
         ):
             settings = DatabaseSettings()
-            assert settings.pool_size == 10
-            assert settings.max_overflow == 20
+            assert settings.pool_size == 20
+            assert settings.max_overflow == 40
             assert settings.pool_timeout == 30
-            assert settings.pool_capacity == 30
+            assert settings.pool_capacity == 60
 
     def test_pool_settings_can_be_configured(self):
         """Test database pool settings are loaded from explicit env vars."""
@@ -210,7 +210,7 @@ class TestArqSettings:
             assert settings.arq_queue_url is None
             assert settings.arq_queue_name == "arq:queue"
             assert settings.arq_max_jobs == 100
-            assert settings.arq_job_timeout == 300
+            assert settings.arq_job_timeout == 3000
             assert settings.arq_keep_result == 3600
 
     def test_custom_values(self):
