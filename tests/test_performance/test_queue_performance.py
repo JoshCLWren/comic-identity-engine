@@ -164,7 +164,7 @@ async def test_worker_utilization_parallel():
 @pytest.mark.asyncio
 @pytest.mark.performance
 async def test_clz_import_performance_small():
-    """Test CLZ import performance with small CSV (10 rows)."""
+    """Test CLZ import orchestrator performance with small CSV (10 rows)."""
     metrics = PerformanceMetrics()
     metrics.total_tasks = 10
 
@@ -179,9 +179,9 @@ async def test_clz_import_performance_small():
             "comic_identity_engine.jobs.tasks.OperationsManager"
         ) as mock_ops_manager_class:
             mock_ops_manager = Mock()
+            mock_ops_manager.get_operation = AsyncMock(return_value=None)
             mock_ops_manager.mark_running = AsyncMock()
             mock_ops_manager.update_operation = AsyncMock()
-            mock_ops_manager.mark_completed = AsyncMock()
             mock_ops_manager_class.return_value = mock_ops_manager
 
             with patch(
@@ -198,90 +198,47 @@ async def test_clz_import_performance_small():
                     }
                     for i in range(1, 11)
                 ]
-
-                def make_candidate(issue_num):
-                    mock_candidate = Mock()
-                    mock_candidate.series_title = "X-Men"
-                    mock_candidate.series_start_year = 1991
-                    mock_candidate.publisher = "Marvel"
-                    mock_candidate.issue_number = str(issue_num)
-                    mock_candidate.variant_suffix = None
-                    mock_candidate.cover_date = None
-                    mock_candidate.upc = None
-                    mock_candidate.source_issue_id = f"clz-{issue_num:03d}"
-                    mock_candidate.source_series_id = "X-Men"
-                    return mock_candidate
-
-                mock_adapter.fetch_issue_from_csv_row.side_effect = [
-                    make_candidate(i) for i in range(1, 11)
-                ]
                 mock_adapter_class.return_value = mock_adapter
 
                 from comic_identity_engine.jobs.tasks import import_clz_task
 
                 with patch(
-                    "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
-                ) as mock_mapping_repo_class:
-                    mock_mapping_repo = Mock()
-                    mock_mapping_repo.find_by_source = AsyncMock(return_value=None)
-                    mock_mapping_repo.create_mapping = AsyncMock()
-                    mock_mapping_repo_class.return_value = mock_mapping_repo
+                    "comic_identity_engine.jobs.queue.JobQueue"
+                ) as mock_queue_class:
+                    mock_queue = Mock()
+                    mock_queue.enqueue_series_bulk = AsyncMock()
 
-                    with patch(
-                        "comic_identity_engine.jobs.tasks.IdentityResolver"
-                    ) as mock_resolver_class:
-                        mock_resolver = Mock()
+                    mock_job = Mock()
+                    mock_job.job_id = "test-job"
+                    mock_queue.enqueue_series_bulk.return_value = mock_job
 
-                        def make_resolution(issue_num):
-                            mock_result = Mock()
-                            mock_result.issue_id = uuid.uuid4()
-                            mock_result.explanation = (
-                                f"Match found for issue {issue_num}"
-                            )
-                            return mock_result
+                    mock_queue.close = Mock()
+                    mock_queue.close.return_value = None
 
-                        mock_resolver.resolve_issue = AsyncMock(
-                            side_effect=[make_resolution(i) for i in range(1, 11)]
-                        )
-                        mock_resolver_class.return_value = mock_resolver
+                    mock_queue_class.return_value = mock_queue
 
-                        with patch(
-                            "comic_identity_engine.jobs.tasks._ensure_source_mapping",
-                            new_callable=AsyncMock,
-                            return_value="created",
-                        ):
-                            with patch(
-                                "comic_identity_engine.services.platform_searcher.PlatformSearcher"
-                            ) as mock_searcher_class:
-                                mock_searcher = Mock()
-                                mock_searcher.search_all_platforms = AsyncMock(
-                                    return_value={
-                                        "urls": {},
-                                        "status": {},
-                                        "events": [],
-                                    }
-                                )
-                                mock_searcher_class.return_value = mock_searcher
+                    metrics.start_time = time.time()
 
-                                metrics.start_time = time.time()
+                    result = await import_clz_task(
+                        {},
+                        "test_small.csv",
+                        str(uuid.uuid4()),
+                    )
 
-                                result = await import_clz_task(
-                                    {},
-                                    "test_small.csv",
-                                    str(uuid.uuid4()),
-                                )
-
-                                metrics.end_time = time.time()
-                                metrics.completed_tasks = result["resolved"]
+                    metrics.end_time = time.time()
+                    # Orchestrator returns immediately after enqueueing
+                    metrics.completed_tasks = result["total_rows"]
 
     metrics_dict = metrics.to_dict()
 
     assert metrics_dict["total_tasks"] == 10
-    assert metrics_dict["completed_tasks"] == 10
+    # Orchestrator doesn't process rows, just enqueues them
+    assert result["total_rows"] == 10
+    assert result["processed"] == 0
 
     print("\n=== CLZ Import Performance Test (Small CSV) ===")
     print(f"Total rows: {metrics_dict['total_tasks']}")
-    print(f"Resolved: {metrics_dict['completed_tasks']}")
+    print(f"Enqueued: {result['total_rows']}")
     print(f"Elapsed time: {metrics_dict['elapsed_seconds']:.2f}s")
     print(f"Tasks per second: {metrics_dict['tasks_per_second']:.2f}")
 
@@ -289,7 +246,7 @@ async def test_clz_import_performance_small():
 @pytest.mark.asyncio
 @pytest.mark.performance
 async def test_clz_import_performance_medium():
-    """Test CLZ import performance with medium CSV (100 rows)."""
+    """Test CLZ import orchestrator performance with medium CSV (100 rows)."""
     metrics = PerformanceMetrics()
     metrics.total_tasks = 100
 
@@ -304,9 +261,9 @@ async def test_clz_import_performance_medium():
             "comic_identity_engine.jobs.tasks.OperationsManager"
         ) as mock_ops_manager_class:
             mock_ops_manager = Mock()
+            mock_ops_manager.get_operation = AsyncMock(return_value=None)
             mock_ops_manager.mark_running = AsyncMock()
             mock_ops_manager.update_operation = AsyncMock()
-            mock_ops_manager.mark_completed = AsyncMock()
             mock_ops_manager_class.return_value = mock_ops_manager
 
             with patch(
@@ -323,90 +280,47 @@ async def test_clz_import_performance_medium():
                     }
                     for i in range(1, 101)
                 ]
-
-                def make_candidate(issue_num):
-                    mock_candidate = Mock()
-                    mock_candidate.series_title = "X-Men"
-                    mock_candidate.series_start_year = 1991
-                    mock_candidate.publisher = "Marvel"
-                    mock_candidate.issue_number = str(issue_num)
-                    mock_candidate.variant_suffix = None
-                    mock_candidate.cover_date = None
-                    mock_candidate.upc = None
-                    mock_candidate.source_issue_id = f"clz-{issue_num:03d}"
-                    mock_candidate.source_series_id = "X-Men"
-                    return mock_candidate
-
-                mock_adapter.fetch_issue_from_csv_row.side_effect = [
-                    make_candidate(i) for i in range(1, 101)
-                ]
                 mock_adapter_class.return_value = mock_adapter
 
                 from comic_identity_engine.jobs.tasks import import_clz_task
 
                 with patch(
-                    "comic_identity_engine.jobs.tasks.ExternalMappingRepository"
-                ) as mock_mapping_repo_class:
-                    mock_mapping_repo = Mock()
-                    mock_mapping_repo.find_by_source = AsyncMock(return_value=None)
-                    mock_mapping_repo.create_mapping = AsyncMock()
-                    mock_mapping_repo_class.return_value = mock_mapping_repo
+                    "comic_identity_engine.jobs.queue.JobQueue"
+                ) as mock_queue_class:
+                    mock_queue = Mock()
+                    mock_queue.enqueue_series_bulk = AsyncMock()
 
-                    with patch(
-                        "comic_identity_engine.jobs.tasks.IdentityResolver"
-                    ) as mock_resolver_class:
-                        mock_resolver = Mock()
+                    mock_job = Mock()
+                    mock_job.job_id = "test-job"
+                    mock_queue.enqueue_series_bulk.return_value = mock_job
 
-                        def make_resolution(issue_num):
-                            mock_result = Mock()
-                            mock_result.issue_id = uuid.uuid4()
-                            mock_result.explanation = (
-                                f"Match found for issue {issue_num}"
-                            )
-                            return mock_result
+                    mock_queue.close = Mock()
+                    mock_queue.close.return_value = None
 
-                        mock_resolver.resolve_issue = AsyncMock(
-                            side_effect=[make_resolution(i) for i in range(1, 101)]
-                        )
-                        mock_resolver_class.return_value = mock_resolver
+                    mock_queue_class.return_value = mock_queue
 
-                        with patch(
-                            "comic_identity_engine.jobs.tasks._ensure_source_mapping",
-                            new_callable=AsyncMock,
-                            return_value="created",
-                        ):
-                            with patch(
-                                "comic_identity_engine.services.platform_searcher.PlatformSearcher"
-                            ) as mock_searcher_class:
-                                mock_searcher = Mock()
-                                mock_searcher.search_all_platforms = AsyncMock(
-                                    return_value={
-                                        "urls": {},
-                                        "status": {},
-                                        "events": [],
-                                    }
-                                )
-                                mock_searcher_class.return_value = mock_searcher
+                    metrics.start_time = time.time()
 
-                                metrics.start_time = time.time()
+                    result = await import_clz_task(
+                        {},
+                        "test_medium.csv",
+                        str(uuid.uuid4()),
+                    )
 
-                                result = await import_clz_task(
-                                    {},
-                                    "test_medium.csv",
-                                    str(uuid.uuid4()),
-                                )
-
-                                metrics.end_time = time.time()
-                                metrics.completed_tasks = result["resolved"]
+                    metrics.end_time = time.time()
+                    # Orchestrator returns immediately after enqueueing
+                    metrics.completed_tasks = result["total_rows"]
 
     metrics_dict = metrics.to_dict()
 
     assert metrics_dict["total_tasks"] == 100
-    assert metrics_dict["completed_tasks"] == 100
+    # Orchestrator doesn't process rows, just enqueues them
+    assert result["total_rows"] == 100
+    assert result["processed"] == 0
 
     print("\n=== CLZ Import Performance Test (Medium CSV) ===")
     print(f"Total rows: {metrics_dict['total_tasks']}")
-    print(f"Resolved: {metrics_dict['completed_tasks']}")
+    print(f"Enqueued: {result['total_rows']}")
     print(f"Elapsed time: {metrics_dict['elapsed_seconds']:.2f}s")
     print(f"Tasks per second: {metrics_dict['tasks_per_second']:.2f}")
 

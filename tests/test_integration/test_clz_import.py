@@ -32,7 +32,7 @@ class TestClzImportSmall:
     async def test_import_small_csv_enqueues_tasks(
         self, mock_async_session_local, tmp_path
     ):
-        """Test that import_clz_task enqueues one task per row."""
+        """Test that import_clz_task enqueues series bulk tasks."""
         csv_file = tmp_path / "test_small.csv"
         csv_content = """Series,Issue,Publisher,Year,Core ComicID,Cover Date,Barcode
 X-Men,1,Marvel,1991,clz-001,July 1991,123456789012
@@ -80,31 +80,29 @@ X-Men,10,Marvel,1992,clz-010,April 1992,012345678901"""
                     mock_queue = Mock()
                     mock_job = Mock()
                     mock_job.job_id = "test-job"
-                    mock_queue.enqueue_resolve_clz_row = AsyncMock(
-                        return_value=mock_job
-                    )
+                    mock_queue.enqueue_series_bulk = AsyncMock(return_value=mock_job)
+
+                    mock_queue.close = Mock()
+                    mock_queue.close.return_value = None
+
                     mock_queue_class.return_value = mock_queue
 
-                    with patch(
-                        "comic_identity_engine.database.repositories.ExternalMappingRepository"
-                    ) as mock_mapping_repo_class:
-                        mock_mapping_repo = Mock()
-                        mock_mapping_repo.bulk_find_by_source_issue_ids = AsyncMock(
-                            return_value=[]
-                        )
-                        mock_mapping_repo_class.return_value = mock_mapping_repo
-
-                        result = await import_clz_task(
-                            {},
-                            str(csv_file),
-                            str(TEST_OPERATION_ID),
-                        )
+                    result = await import_clz_task(
+                        {},
+                        str(csv_file),
+                        str(TEST_OPERATION_ID),
+                    )
 
         assert result["total_rows"] == 10
         assert result["processed"] == 0
         assert "summary" in result
-        assert "Enqueued 10 pending CLZ row tasks" in result["summary"]
-        assert mock_queue.enqueue_resolve_clz_row.call_count == 10
+        assert (
+            "Enqueued 10 CLZ rows across 2 series for bulk processing"
+            in result["summary"]
+        )
+        assert (
+            mock_queue.enqueue_series_bulk.call_count == 2
+        )  # 2 series groups (1991 and 1992)
         mock_ops_manager.update_operation.assert_called_once()
 
 
@@ -420,7 +418,7 @@ class TestClzImportMedium:
     async def test_import_medium_csv_enqueues_tasks(
         self, mock_async_session_local, tmp_path
     ):
-        """Test that medium CSV import enqueues correct number of tasks."""
+        """Test that medium CSV import enqueues series bulk tasks."""
         csv_file = tmp_path / "test_medium.csv"
 
         rows = ["Series,Issue,Publisher,Year,Core ComicID"]
@@ -460,30 +458,26 @@ class TestClzImportMedium:
                     mock_queue = Mock()
                     mock_job = Mock()
                     mock_job.job_id = "test-job"
-                    mock_queue.enqueue_resolve_clz_row = AsyncMock(
-                        return_value=mock_job
-                    )
+                    mock_queue.enqueue_series_bulk = AsyncMock(return_value=mock_job)
+
+                    mock_queue.close = Mock()
+                    mock_queue.close.return_value = None
+
                     mock_queue_class.return_value = mock_queue
 
-                    with patch(
-                        "comic_identity_engine.database.repositories.ExternalMappingRepository"
-                    ) as mock_mapping_repo_class:
-                        mock_mapping_repo = Mock()
-                        mock_mapping_repo.bulk_find_by_source_issue_ids = AsyncMock(
-                            return_value=[]
-                        )
-                        mock_mapping_repo_class.return_value = mock_mapping_repo
-
-                        result = await import_clz_task(
-                            {},
-                            str(csv_file),
-                            str(TEST_OPERATION_ID),
-                        )
+                    result = await import_clz_task(
+                        {},
+                        str(csv_file),
+                        str(TEST_OPERATION_ID),
+                    )
 
         assert result["total_rows"] == 100
         assert result["processed"] == 0
-        assert "Enqueued 100 pending CLZ row tasks" in result["summary"]
-        assert mock_queue.enqueue_resolve_clz_row.call_count == 100
+        assert (
+            "Enqueued 100 CLZ rows across 1 series for bulk processing"
+            in result["summary"]
+        )
+        assert mock_queue.enqueue_series_bulk.call_count == 1  # All rows same series
         mock_ops_manager.update_operation.assert_called_once()
 
     async def test_import_retry_failed_only_enqueues_only_missing_rows(
@@ -576,37 +570,31 @@ X-Men,3,Marvel,1991,clz-003"""
                     mock_queue = Mock()
                     mock_job = Mock()
                     mock_job.job_id = "test-job"
-                    mock_queue.enqueue_resolve_clz_row = AsyncMock(
-                        return_value=mock_job
-                    )
+                    mock_queue.enqueue_series_bulk = AsyncMock(return_value=mock_job)
+
+                    mock_queue.close = Mock()
+                    mock_queue.close.return_value = None
+
                     mock_queue_class.return_value = mock_queue
 
-                    with patch(
-                        "comic_identity_engine.database.repositories.ExternalMappingRepository"
-                    ) as mock_mapping_repo_class:
-                        mock_mapping_repo = Mock()
-                        mock_mapping_repo.bulk_find_by_source_issue_ids = AsyncMock(
-                            return_value=[]
-                        )
-                        mock_mapping_repo_class.return_value = mock_mapping_repo
+                    result = await import_clz_task(
+                        {},
+                        str(csv_file),
+                        str(TEST_OPERATION_ID),
+                    )
 
-                        result = await import_clz_task(
-                            {},
-                            str(csv_file),
-                            str(TEST_OPERATION_ID),
-                        )
-
+        # Row 1 is already processed, so only rows 2-3 should be enqueued
         assert result["processed"] == 1
         assert result["resolved"] == 1
         assert result["active_row_count"] == 0
         assert result["pending_row_count"] == 2
-        assert "Enqueued 2 pending CLZ row tasks" in result["summary"]
-        assert mock_queue.enqueue_resolve_clz_row.await_count == 2
-        enqueued_rows = [
-            call.kwargs["row_index"]
-            for call in mock_queue.enqueue_resolve_clz_row.await_args_list
-        ]
-        assert enqueued_rows == [2, 3]
+        assert (
+            "Enqueued 2 CLZ rows across 1 series for bulk processing"
+            in result["summary"]
+        )
+        assert (
+            mock_queue.enqueue_series_bulk.await_count == 1
+        )  # 1 series group for remaining rows
 
     async def test_import_resume_clears_stale_active_rows_and_requeues_remaining_rows(
         self, mock_async_session_local, tmp_path
@@ -703,32 +691,31 @@ X-Men,3,Marvel,1991,clz-003"""
                     mock_queue = Mock()
                     mock_job = Mock()
                     mock_job.job_id = "test-job"
-                    mock_queue.enqueue_resolve_clz_row = AsyncMock(
-                        return_value=mock_job
-                    )
+                    mock_queue.enqueue_series_bulk = AsyncMock(return_value=mock_job)
+
+                    mock_queue.close = Mock()
+                    mock_queue.close.return_value = None
+
                     mock_queue_class.return_value = mock_queue
 
-                    with patch(
-                        "comic_identity_engine.database.repositories.ExternalMappingRepository"
-                    ) as mock_mapping_repo_class:
-                        mock_mapping_repo = Mock()
-                        mock_mapping_repo.bulk_find_by_source_issue_ids = AsyncMock(
-                            return_value=[]
-                        )
-                        mock_mapping_repo_class.return_value = mock_mapping_repo
+                    result = await import_clz_task(
+                        {},
+                        str(csv_file),
+                        str(TEST_OPERATION_ID),
+                    )
 
-                        result = await import_clz_task(
-                            {},
-                            str(csv_file),
-                            str(TEST_OPERATION_ID),
-                        )
-
+        # Row 1 already processed, rows 2-3 need to be re-enqueued
         assert result["processed"] == 1
         assert result["resolved"] == 1
         assert result["active_row_count"] == 0
         assert result["pending_row_count"] == 2
-        assert "Enqueued 2 pending CLZ row tasks" in result["summary"]
-        assert mock_queue.enqueue_resolve_clz_row.await_count == 2
+        assert (
+            "Enqueued 2 CLZ rows across 1 series for bulk processing"
+            in result["summary"]
+        )
+        assert (
+            mock_queue.enqueue_series_bulk.await_count == 1
+        )  # 1 series group for remaining rows
 
         persisted_result = mock_ops_manager.update_operation.await_args.kwargs["result"]
         assert persisted_result["active_row_count"] == 0
