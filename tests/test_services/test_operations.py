@@ -326,6 +326,7 @@ class TestOperationsManager:
         mock_repo = MagicMock()
         mock_repo.find_by_input_hash = AsyncMock(return_value=existing_operation)
         mock_repo.update_status = AsyncMock(return_value=existing_operation)
+        mock_repo.create_operation = AsyncMock(return_value=existing_operation)
         mock_repo_cls.return_value = mock_repo
 
         manager = OperationsManager(mock_session)
@@ -368,6 +369,7 @@ class TestOperationsManager:
             return_value=sample_failed_import_operation
         )
         mock_repo.update_status = AsyncMock(return_value=resumed_operation)
+        mock_repo.create_operation = AsyncMock(return_value=resumed_operation)
         mock_repo_cls.return_value = mock_repo
 
         manager = OperationsManager(mock_session)
@@ -434,6 +436,7 @@ class TestOperationsManager:
             return_value=sample_completed_import_with_failed_rows
         )
         mock_repo.update_status = AsyncMock(return_value=retried_operation)
+        mock_repo.create_operation = AsyncMock(return_value=retried_operation)
         mock_repo_cls.return_value = mock_repo
 
         manager = OperationsManager(mock_session)
