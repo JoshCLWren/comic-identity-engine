@@ -44,6 +44,7 @@ venv.bak/
 .env
 .env.local
 .env.*.local
+hip_cookies.json
 
 # Testing
 .pytest_cache/
