@@ -1,14 +1,6 @@
 # SERIES PAGE STRATEGY - Bulk Cross-Platform Mapping
 
-## ⚠️ MANDATORY: Fix Broken Code
-
-**ALL AI AGENTS MUST READ THIS:**
-
-When you encounter broken code, tests, or functionality in this codebase, **you are REQUIRED to fix it**. Do NOT ignore broken code. Do NOT work around it. Do NOT leave it for "later".
-
-**If you find it, you fix it.**
-
-**No exceptions. No excuses.**
+> **Note:** See AGENTS.md for agent ownership policy and development guidelines.
 
 ---
 
