@@ -24,9 +24,9 @@ from comic_identity_engine.adapters import (
     SourceError,
     ValidationError,
 )
-from comic_identity_engine.core.http_client import HttpClient
 from longbox_commons import parse_issue_candidate
 from longbox_commons.models import IssueCandidate, SeriesCandidate
+from scrapekit import HttpClient
 
 
 class HIPAdapter(SourceAdapter):
@@ -405,7 +405,7 @@ class HIPAdapter(SourceAdapter):
 
         return result if result else None
 
-    def _extract_detail_attributes(self, parser: Any) -> dict[str, str]:
+    def _extract_detail_attributes(self, parser: object) -> dict[str, str]:
         """Extract key/value metadata from HipComic detail rows."""
         details: dict[str, str] = {}
 

@@ -600,7 +600,7 @@ class PlatformSearcher:
         issue_number: str,
         year: Optional[int],
         publisher: Optional[str],
-    ) -> Optional[Any]:
+    ) -> Optional[object]:
         """Execute a single search strategy.
 
         Args:
@@ -658,14 +658,14 @@ class PlatformSearcher:
 
         # DEBUG: Print search parameters BEFORE calling scraper
         platform = scraper.__class__.__name__.replace("Scraper", "").lower()
-        print(f"\n{'=' * 80}")
-        print(f"🔍 DEBUG: [{platform.upper()}] Executing strategy: {strategy}")
-        print("   Search parameters:")
-        print(f"     title:    '{search_title}'")
-        print(f"     issue:    '{search_issue}'")
-        print(f"     year:     {search_year}")
-        print(f"     publisher: '{search_publisher}'")
-        print(f"{'=' * 80}\n")
+        logger.debug(
+            f"Executing strategy: {strategy}",
+            platform=platform.upper(),
+            search_title=search_title,
+            search_issue=search_issue,
+            search_year=search_year,
+            search_publisher=search_publisher,
+        )
 
         return await self._call_scraper(
             scraper=scraper,
@@ -682,7 +682,7 @@ class PlatformSearcher:
         issue: str,
         year: Optional[int],
         publisher: Optional[str],
-    ) -> Optional[Any]:
+    ) -> Optional[object]:
         """Fuzzy search using Jaro-Winkler similarity.
 
         Args:
@@ -749,7 +749,7 @@ class PlatformSearcher:
     def _select_candidate_url(
         self,
         platform: str,
-        result: Optional[Any],
+        result: Optional[object],
         series_title: str,
         issue_number: str,
     ) -> tuple[Optional[str], Optional[str]]:
@@ -813,7 +813,7 @@ class PlatformSearcher:
     def _listing_matches_target(
         self,
         platform: str,
-        listing: Any,
+        listing: object,
         series_title: str,
         issue_number: str,
     ) -> bool:
@@ -966,7 +966,7 @@ class PlatformSearcher:
         issue: str,
         year: Optional[int],
         publisher: Optional[str],
-    ) -> Optional[Any]:
+    ) -> Optional[object]:
         """Call scraper with correct arguments based on its signature.
 
         Args:
@@ -991,31 +991,49 @@ class PlatformSearcher:
             year=year,
             publisher=publisher,
         )
-        print(f"🔗 DEBUG: Calling {scraper_class}.search_comic() with Comic object:")
-        print(f"   {comic}")
+        logger.debug(
+            f"Calling {scraper_class}.search_comic()",
+            platform=platform.upper(),
+            comic=comic,
+        )
         result = await scraper.search_comic(comic)
 
-        # DEBUG: Print result after search completes
-        print(f"\n📊 DEBUG: [{platform.upper()}] Search completed:")
         if result:
             result_url = getattr(result, "url", None)
-            print("   ✓ Result found!")
-            print(f"   Result URL: {result_url}")
             listings = getattr(result, "listings", None)
+            listings_data = []
             if listings:
-                print(f"   Listings count: {len(listings)}")
                 for i, listing in enumerate(listings[:5]):
                     listing_url = getattr(listing, "url", "N/A")
                     listing_title = getattr(listing, "title", "N/A")
-                    print(f"     Listing {i + 1}: {listing_url}")
-                    print(f"       Title: {listing_title}")
-                    if hasattr(listing, "metadata") and listing.metadata:
-                        print(f"       Metadata: {listing.metadata}")
-            else:
-                print("   ⚠️  No listings found in result")
+                    listing_metadata = (
+                        listing.metadata
+                        if hasattr(listing, "metadata") and listing.metadata
+                        else None
+                    )
+                    listings_data.append(
+                        {
+                            "index": i + 1,
+                            "url": listing_url,
+                            "title": listing_title,
+                            "metadata": listing_metadata,
+                        }
+                    )
+
+            logger.debug(
+                "Search completed",
+                platform=platform.upper(),
+                has_result=True,
+                result_url=result_url,
+                listings_count=len(listings) if listings else 0,
+                listings=listings_data,
+            )
         else:
-            print("   ✗ No result returned")
-        print(f"{'=' * 80}\n")
+            logger.debug(
+                "Search completed - no result",
+                platform=platform.upper(),
+                has_result=False,
+            )
 
         return result
 

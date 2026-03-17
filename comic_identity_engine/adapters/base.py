@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 from longbox_commons.models import IssueCandidate, SeriesCandidate
 
 if TYPE_CHECKING:
-    from comic_identity_engine.core.http_client import HttpClient
+    from scrapekit import HttpClient
 
 
 class SourceAdapter(ABC):

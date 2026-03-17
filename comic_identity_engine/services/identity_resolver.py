@@ -22,10 +22,10 @@ import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional, Protocol
 
-import jellyfish
 import structlog
+from longbox_matcher import jaro_winkler_similarity
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -45,6 +45,14 @@ from comic_identity_engine.errors import (
 if TYPE_CHECKING:
     from comic_identity_engine.database.models import Issue
     from comic_identity_engine.services.url_parser import ParsedUrl
+
+
+class ScraperProtocol(Protocol):
+    """Protocol for scrapers that can be closed."""
+
+    async def close(self) -> None:
+        """Close the scraper and release resources."""
+        ...
 
 
 logger = structlog.get_logger(__name__)
@@ -499,7 +507,7 @@ class IdentityResolver:
 
         matches = []
         for series in all_series:
-            similarity = jellyfish.jaro_winkler_similarity(
+            similarity = jaro_winkler_similarity(
                 series_title.lower(),
                 series.title.lower(),
             )
@@ -666,7 +674,7 @@ class IdentityResolver:
 
         return normalized_title, series_start_year, normalized_issue_number
 
-    def _normalize_optional_text(self, value: Any) -> Optional[str]:
+    def _normalize_optional_text(self, value: object) -> Optional[str]:
         """Normalize optional text inputs and ignore mock placeholders."""
         if not isinstance(value, str):
             return None
@@ -937,11 +945,11 @@ class IdentityResolver:
             # Clean up scraper if it has a close method
             if scraper and hasattr(scraper, "close"):
                 try:
-                    await scraper.close()  # type: ignore[union-attr]
+                    await scraper.close()
                 except Exception:
                     pass
 
-    def _get_scraper(self, platform: str):
+    def _get_scraper(self, platform: str) -> Optional[ScraperProtocol]:
         """Get scraper instance for platform.
 
         Args:
@@ -981,7 +989,9 @@ class IdentityResolver:
             logger.warning("Scraper package not installed", platform=platform)
             return None
 
-    def _select_best_listing(self, search_result, issue_number: str) -> Optional[Any]:
+    def _select_best_listing(
+        self, search_result, issue_number: str
+    ) -> Optional[object]:
         """Select the best listing from search results.
 
         Args:

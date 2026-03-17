@@ -11,19 +11,21 @@ Authentication provides:
 
 import asyncio
 import json
-import logging
 import os
+import time
 from pathlib import Path
 from typing import Any
+
+import structlog
 
 from playwright.async_api import async_playwright, BrowserContext
 
 from comic_identity_engine.adapters.hip import HIPAdapter
-from comic_identity_engine.core.http_client import HttpClient
 from longbox_commons.models import IssueCandidate, SeriesCandidate
+from scrapekit import HttpClient
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class AuthenticatedHIPAdapter(HIPAdapter):
@@ -94,8 +96,6 @@ class AuthenticatedHIPAdapter(HIPAdapter):
                 cookies = json.load(f)
 
             # Check if cookies are still valid (not expired)
-            import time
-
             current_time = int(time.time())
             valid_cookies = [
                 c for c in cookies if c.get("expires", current_time + 1) > current_time
@@ -149,7 +149,7 @@ class AuthenticatedHIPAdapter(HIPAdapter):
         except Exception:
             pass
 
-    async def _login_with_playwright(self) -> list[dict[str, Any]]:
+    async def _login_with_playwright(self) -> list[Any]:
         """Perform login using Playwright and return cookies.
 
         Returns:
@@ -189,7 +189,7 @@ class AuthenticatedHIPAdapter(HIPAdapter):
                     if await my_account.is_visible(timeout=2000):
                         logger.info("Already logged in")
                         cookies = await context.cookies()
-                        return cookies  # type: ignore[return-value]
+                        return cookies
                 except Exception:
                     pass
 
@@ -198,7 +198,7 @@ class AuthenticatedHIPAdapter(HIPAdapter):
                 if not await sign_in_btn.is_visible(timeout=5000):
                     logger.info("No login required")
                     cookies = await context.cookies()
-                    return cookies  # type: ignore[return-value]
+                    return cookies
 
                 await sign_in_btn.click()
                 await asyncio.sleep(1)
@@ -233,7 +233,7 @@ class AuthenticatedHIPAdapter(HIPAdapter):
                 if await my_account.is_visible(timeout=5000):
                     logger.info("Login successful")
                     cookies = await context.cookies()
-                    return cookies  # type: ignore[return-value]
+                    return cookies
                 else:
                     raise Exception("Login verification failed")
 

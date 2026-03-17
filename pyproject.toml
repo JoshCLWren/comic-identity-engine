@@ -43,6 +43,10 @@ dependencies = [
     "aiohttp>=3.13.3",
     # Comic domain utilities
     "longbox-commons @ git+https://github.com/JoshCLWren/longbox-commons.git",
+    # Comic entity matching and identity resolution
+    "longbox-matcher @ file:///mnt/extra/josh/code/longbox-matcher",
+    # HTTP client (replaces duplicate http_client.py)
+    "scrapekit @ git+https://github.com/JoshCLWren/scrapekit.git",
 ]
 
 [dependency-groups]

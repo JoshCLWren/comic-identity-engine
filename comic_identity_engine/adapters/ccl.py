@@ -21,8 +21,8 @@ from comic_identity_engine.adapters import (
     SourceError,
     ValidationError,
 )
-from comic_identity_engine.core.http_client import HttpClient
 from longbox_commons import parse_issue_candidate
+from scrapekit import HttpClient
 from longbox_commons.models import IssueCandidate, SeriesCandidate
 
 

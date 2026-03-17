@@ -27,11 +27,11 @@ import time
 import traceback
 import uuid
 from pathlib import Path
-from typing import Any
-
 import structlog
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Any
 
 from comic_identity_engine.adapters import (
     AAAdapter,
@@ -44,9 +44,9 @@ from comic_identity_engine.adapters import (
     SourceAdapter,
     ValidationError as AdapterValidationError,
 )
-from comic_identity_engine.core.http_client import HttpClient
 from comic_identity_engine.database.connection import AsyncSessionLocal
-from comic_identity_engine.database.models import Operation
+from scrapekit import HttpClient
+from comic_identity_engine.database.models import ExternalMapping, Operation
 from comic_identity_engine.database.repositories import (
     ExternalMappingRepository,
     IssueRepository,
@@ -64,6 +64,7 @@ from comic_identity_engine.services import (
     SeriesPageExtractor,
     parse_url,
 )
+from comic_identity_engine.services.url_parser import ParsedUrl
 from comic_identity_engine.services.imports import (
     apply_clz_import_visibility,
     build_clz_row_key,
@@ -74,12 +75,12 @@ logger = structlog.get_logger(__name__)
 
 
 async def _handle_existing_mapping(
-    existing: Any,
-    parsed_url: Any,
+    existing: ExternalMapping,
+    parsed_url: ParsedUrl,
     url: str,
     operation_uuid: uuid.UUID,
-    operations_manager: Any,
-    session: Any,
+    operations_manager: OperationsManager,
+    session: AsyncSession,
     operation_id: str,
 ) -> dict[str, Any]:
     """Handle case where an external mapping already exists.
@@ -187,11 +188,11 @@ async def _handle_existing_mapping(
 
 
 async def _fetch_and_resolve_issue(
-    parsed_url: Any,
+    parsed_url: ParsedUrl,
     url: str,
     operation_uuid: uuid.UUID,
-    operations_manager: Any,
-    session: Any,
+    operations_manager: OperationsManager,
+    session: AsyncSession,
     operation_id: str,
 ) -> dict[str, Any]:
     """Fetch issue from platform and resolve it.
@@ -403,7 +404,7 @@ def get_adapter(platform: str) -> SourceAdapter:
     Raises:
         ValueError: If platform is not supported
     """
-    from comic_identity_engine.core.http_client import HttpClient
+    from scrapekit import HttpClient
 
     # CCL has SSL certificate issues, so disable verification for now
     verify_ssl = platform != "ccl"
@@ -421,7 +422,7 @@ def get_adapter(platform: str) -> SourceAdapter:
         raise ValueError(f"Unsupported platform: {platform}")
 
     adapter_class, should_verify = adapters[platform]
-    http_client = HttpClient(platform=platform, verify_ssl=should_verify)
+    http_client = HttpClient(name=platform, verify_ssl=should_verify)
 
     return adapter_class(http_client=http_client)
 
@@ -504,7 +505,7 @@ async def http_request_task(
             if platform is None:
                 platform = "default"
 
-            async with HttpClient(platform=platform, verify_ssl=verify_ssl) as client:
+            async with HttpClient(name=platform, verify_ssl=verify_ssl) as client:
                 if method.upper() == "GET":
                     response = await client.get(url, params=params, headers=headers)
                 elif method.upper() == "POST":
@@ -527,7 +528,7 @@ async def http_request_task(
             elapsed_ms = (time.time() - start_time) * 1000
 
             result_dict = {
-                "success": True,
+                "success": 200 <= response.status_code < 400,
                 "status_code": response.status_code,
                 "content": response.text,
                 "elapsed_ms": round(elapsed_ms, 2),
@@ -1518,7 +1519,7 @@ async def _process_series_bulk_task(
 
 
 async def _create_bulk_mappings_for_scraped_issues(
-    session: Any,
+    session: AsyncSession,
     operation_uuid: uuid.UUID,
     series_rows: list[tuple[int, dict[str, str], str]],
     platform: str,
@@ -1724,7 +1725,7 @@ def _issues_match(
 
 
 async def _process_single_clz_row(
-    session: Any,
+    session: AsyncSession,
     row: dict[str, str],
     row_index: int,
     row_key: str,
@@ -3559,7 +3560,7 @@ async def reconcile_task(
 
 
 async def _mark_failed_safe(
-    session: Any,
+    session: AsyncSession,
     operation_id: uuid.UUID,
     error_message: str,
     result: dict[str, Any] | None = None,

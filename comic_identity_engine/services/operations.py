@@ -407,11 +407,7 @@ class OperationsManager:
         if not operation:
             raise ValueError(f"Operation not found: {operation_id}")
 
-        is_progress_update = (
-            operation.status == status
-            and status == "running"
-            and (result is not None or error_message is not None)
-        )
+        is_progress_update = operation.status == status and status == "running"
 
         if not is_progress_update:
             self._validate_status_transition(operation.status, status)

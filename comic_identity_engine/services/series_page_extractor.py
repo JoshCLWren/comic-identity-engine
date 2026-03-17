@@ -38,8 +38,8 @@ from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 import structlog
 
-from comic_identity_engine.core.http_client import HttpClient
 from comic_identity_engine.errors import ParseError
+from scrapekit import HttpClient
 
 
 logger = structlog.get_logger(__name__)
@@ -268,7 +268,7 @@ class SeriesPageExtractor:
             HttpClient instance
         """
         if self._http_client is None:
-            self._http_client = HttpClient(platform=platform, timeout=self.timeout)
+            self._http_client = HttpClient(name=platform, timeout=self.timeout)
             await self._http_client._ensure_initialized()
         return self._http_client
 

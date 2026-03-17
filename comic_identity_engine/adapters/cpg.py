@@ -24,9 +24,9 @@ from comic_identity_engine.adapters import (
     SourceError,
     ValidationError,
 )
-from comic_identity_engine.core.http_client import HttpClient
 from longbox_commons import parse_issue_candidate
 from longbox_commons.models import IssueCandidate, SeriesCandidate
+from scrapekit import HttpClient
 
 
 class CPGAdapter(SourceAdapter):
@@ -294,7 +294,7 @@ class CPGAdapter(SourceAdapter):
 
         return None
 
-    def _parse_date(self, date_str: Any) -> date | None:
+    def _parse_date(self, date_str: str | date | None) -> date | None:
         """Parse date from CPG payload.
 
         CPG dates may be in various formats:
@@ -359,7 +359,7 @@ class CPGAdapter(SourceAdapter):
 
         return None
 
-    def _parse_price(self, price_val: Any) -> float | None:
+    def _parse_price(self, price_val: int | float | str | None) -> float | None:
         """Parse price from CPG payload.
 
         CPG prices may be in various formats:
