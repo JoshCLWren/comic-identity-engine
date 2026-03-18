@@ -5,6 +5,7 @@ This package contains business logic services for:
 - Cross-platform identity resolution
 - URL building for all platforms
 - Operations management (AIP-151)
+- Catalog browsing for deterministic comic lookup
 """
 
 from comic_identity_engine.services.url_parser import (
@@ -29,6 +30,10 @@ from comic_identity_engine.services.series_page_extractor import (
     SeriesPageExtractor,
     SeriesExtractionResult,
 )
+from comic_identity_engine.services.catalog_browser import (
+    CatalogBrowser,
+    CatalogMatchResult,
+)
 
 __all__ = [
     "parse_url",
@@ -41,4 +46,6 @@ __all__ = [
     "CanonicalRepairService",
     "SeriesPageExtractor",
     "SeriesExtractionResult",
+    "CatalogBrowser",
+    "CatalogMatchResult",
 ]
