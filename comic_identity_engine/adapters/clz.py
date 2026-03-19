@@ -71,7 +71,9 @@ class CLZAdapter(SourceAdapter):
             "does not fetch data from remote sources"
         )
 
-    async def fetch_issue(self, source_issue_id: str, full_url: str | None = None) -> IssueCandidate:
+    async def fetch_issue(
+        self, source_issue_id: str, full_url: str | None = None
+    ) -> IssueCandidate:
         """Fetch issue from CLZ CSV data.
 
         Args:

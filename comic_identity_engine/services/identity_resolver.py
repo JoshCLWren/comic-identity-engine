@@ -45,13 +45,14 @@ from comic_identity_engine.errors import (
 if TYPE_CHECKING:
     from comic_identity_engine.database.models import Issue
     from comic_identity_engine.services.url_parser import ParsedUrl
+    from longbox_scrapers.models import Comic, ComicListing, SearchResult
 
 
 class ScraperProtocol(Protocol):
-    """Protocol for scrapers that can be closed."""
+    """Protocol for scrapers that can search comics."""
 
-    async def close(self) -> None:
-        """Close the scraper and release resources."""
+    async def search_comic(self, comic: Comic, /) -> SearchResult:
+        """Search for a comic and return results."""
         ...
 
 
@@ -898,7 +899,7 @@ class IdentityResolver:
                 return None
 
             source_issue_id, source_series_id = self._extract_ids_from_url(
-                platform, best_listing.url
+                platform, best_listing.url or ""
             )
 
             if source_issue_id:
@@ -941,13 +942,6 @@ class IdentityResolver:
                 error_type=type(e).__name__,
             )
             return None
-        finally:
-            # Clean up scraper if it has a close method
-            if scraper and hasattr(scraper, "close"):
-                try:
-                    await scraper.close()
-                except Exception:
-                    pass
 
     def _get_scraper(self, platform: str) -> Optional[ScraperProtocol]:
         """Get scraper instance for platform.
@@ -991,7 +985,7 @@ class IdentityResolver:
 
     def _select_best_listing(
         self, search_result, issue_number: str
-    ) -> Optional[object]:
+    ) -> ComicListing | None:
         """Select the best listing from search results.
 
         Args:

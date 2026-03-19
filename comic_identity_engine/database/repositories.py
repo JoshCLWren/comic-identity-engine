@@ -16,7 +16,7 @@ USED BY:
 import logging
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional, cast
 
 from sqlalchemy import Delete, Select, and_, delete, exc as sqlalchemy_exc, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -83,7 +83,9 @@ class SeriesRunRepository:
         Returns:
             SeriesRun entity or None if not found
         """
-        stmt: Select[tuple[SeriesRun]] = select(SeriesRun).where(SeriesRun.id == series_run_id)
+        stmt: Select[tuple[SeriesRun]] = select(SeriesRun).where(
+            SeriesRun.id == series_run_id
+        )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -101,7 +103,9 @@ class SeriesRunRepository:
         Returns:
             SeriesRun entity or None if not found
         """
-        stmt: Select[tuple[SeriesRun]] = select(SeriesRun).where(SeriesRun.title == title)
+        stmt: Select[tuple[SeriesRun]] = select(SeriesRun).where(
+            SeriesRun.title == title
+        )
         if start_year is not None:
             stmt = stmt.where(SeriesRun.start_year == start_year)
             result = await self.session.execute(stmt)
@@ -110,6 +114,27 @@ class SeriesRunRepository:
         stmt = stmt.order_by(SeriesRun.start_year).limit(1)
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def find_by_publisher_and_title(
+        self,
+        publisher: str,
+        title: str,
+    ) -> list[SeriesRun]:
+        """Find series runs matching publisher and title.
+
+        Args:
+            publisher: Publisher name
+            title: Series title (supports partial matching)
+
+        Returns:
+            List of matching series runs
+        """
+        stmt: Select[tuple[SeriesRun]] = select(SeriesRun).where(
+            SeriesRun.publisher == publisher,
+            SeriesRun.title.ilike(f"%{title}%"),
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
 
     async def create(
         self,
@@ -271,6 +296,28 @@ class IssueRepository:
         )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def find_by_series_run_id(
+        self,
+        series_run_id: uuid.UUID,
+    ) -> list[Issue]:
+        """Find all issues in a series run.
+
+        Args:
+            series_run_id: Series run UUID
+
+        Returns:
+            List of issues in the series, ordered by issue_number
+        """
+        stmt: Select[tuple[Issue]] = (
+            select(Issue)
+            .where(
+                Issue.series_run_id == series_run_id,
+            )
+            .order_by(Issue.issue_number)
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
 
     async def find_by_upc(
         self,
@@ -739,7 +786,10 @@ class ExternalMappingRepository:
             ExternalMapping.source_issue_id == source_issue_id
         )
         result = await self.session.execute(stmt)
-        return result.rowcount  # type: ignore[union-attr]
+        from sqlalchemy.engine import CursorResult
+
+        result = cast(CursorResult[Any], result)
+        return result.rowcount
 
 
 class OperationRepository:
@@ -846,7 +896,9 @@ class OperationRepository:
         Returns:
             Operation entity or None if not found
         """
-        stmt: Select[tuple[Operation]] = select(Operation).where(Operation.id == operation_id)
+        stmt: Select[tuple[Operation]] = select(Operation).where(
+            Operation.id == operation_id
+        )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 

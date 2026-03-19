@@ -1,8 +1,9 @@
 """Tests for database models and repositories."""
 
 import uuid
+from typing import cast
 from unittest.mock import AsyncMock, MagicMock
-from sqlalchemy import UniqueConstraint, exc as sqlalchemy_exc
+from sqlalchemy import Table, UniqueConstraint, exc as sqlalchemy_exc
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -241,7 +242,7 @@ class TestCanonicalUniquenessConstraints:
         """SeriesRun should enforce unique title/start year pairs."""
         constraints = {
             constraint.name: tuple(constraint.columns.keys())
-            for constraint in SeriesRun.__table__.constraints
+            for constraint in cast(Table, SeriesRun.__table__).constraints
             if isinstance(constraint, UniqueConstraint)
         }
 
@@ -254,7 +255,7 @@ class TestCanonicalUniquenessConstraints:
         """Issue should enforce unique issue numbers within a series."""
         constraints = {
             constraint.name: tuple(constraint.columns.keys())
-            for constraint in Issue.__table__.constraints
+            for constraint in cast(Table, Issue.__table__).constraints
             if isinstance(constraint, UniqueConstraint)
         }
 

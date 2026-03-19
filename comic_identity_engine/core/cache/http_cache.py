@@ -73,7 +73,7 @@ def http_cached(ttl: int = 300):
 
         if "url" not in params:
             raise RuntimeError(
-                f"Function '{func.__name__}' decorated with @http_cached "
+                f"Function '{getattr(func, '__name__', repr(func))}' decorated with @http_cached "
                 "must have a 'url' parameter"
             )
 
@@ -85,7 +85,7 @@ def http_cached(ttl: int = 300):
             url = bound_args.arguments.get("url")
             if url is None:
                 raise RuntimeError(
-                    f"Function '{func.__name__}' missing required 'url' parameter"
+                    f"Function '{getattr(func, '__name__', repr(func))}' missing required 'url' parameter"
                 )
 
             cache_key = url

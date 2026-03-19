@@ -762,7 +762,9 @@ class TestHIPAdapterFetchIssue:
     """Tests for HIP live fetch behavior."""
 
     @pytest.mark.asyncio
-    async def test_fetch_issue_uses_full_url_and_browser_headers(self, mock_http_client):
+    async def test_fetch_issue_uses_full_url_and_browser_headers(
+        self, mock_http_client
+    ):
         """HIP uses the price-guide URL with browser-like headers when available."""
         html = """
         <html>
@@ -811,7 +813,9 @@ class TestHIPAdapterFetchIssue:
             return response
 
         mock_http_client.get.side_effect = [
-            build_404("https://www.hipcomic.com/price-guide/us/marvel/comic/x-men-1991/1-1/"),
+            build_404(
+                "https://www.hipcomic.com/price-guide/us/marvel/comic/x-men-1991/1-1/"
+            ),
             build_404("https://www.hipcomic.com/listing/1-1"),
             build_404("https://www.hipcomic.com/new-comic-listings/1-1"),
         ]

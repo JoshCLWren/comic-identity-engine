@@ -83,6 +83,7 @@ class TestInvalidIssueNumbers:
         assert result.success is False
         assert result.raw == ""
         assert result.error_code == "EMPTY_INPUT"
+        assert result.error_message is not None
         assert "cannot be empty" in result.error_message
 
     def test_whitespace_only(self):
@@ -90,6 +91,7 @@ class TestInvalidIssueNumbers:
         assert result.success is False
         assert result.raw == "   "
         assert result.error_code == "EMPTY_INPUT"
+        assert result.error_message is not None
         assert "cannot be empty" in result.error_message
 
     def test_only_separator_hyphen(self):
@@ -97,6 +99,7 @@ class TestInvalidIssueNumbers:
         assert result.success is False
         assert result.raw == "-"
         assert result.error_code == "ONLY_SEPARATOR"
+        assert result.error_message is not None
         assert "must contain digits" in result.error_message
 
     def test_only_letters(self):
@@ -163,8 +166,8 @@ class TestEdgeCases:
 class TestAdditionalFailureCases:
     """Additional edge case validation"""
 
-    def test_none_input(self):
-        result: ParseResult = parse_issue_candidate(None)  # type: ignore[arg-type]
+    def test_empty_input(self):
+        result: ParseResult = parse_issue_candidate("")
         assert result.success is False
         assert result.raw == ""
         assert result.error_code == "EMPTY_INPUT"

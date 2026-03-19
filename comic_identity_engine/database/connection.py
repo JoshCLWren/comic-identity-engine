@@ -16,7 +16,7 @@ USED BY:
 """
 
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from typing import Any
 
 from sqlalchemy import text
@@ -71,7 +71,7 @@ class Base(DeclarativeBase):
     """
 
 
-async def get_db() -> AsyncIterator[AsyncSession]:
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Get async database session.
 
     This is the primary dependency injection function for FastAPI endpoints.

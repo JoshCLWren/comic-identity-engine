@@ -299,7 +299,6 @@ def _poll_import_operation(
             total=None,  # Will be set when we know total_rows
         )
 
-
         while True:
             response = client.get(f"{api_url}/api/v1/import/clz/{operation_id}")
             response.raise_for_status()

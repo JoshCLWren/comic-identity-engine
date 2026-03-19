@@ -13,7 +13,7 @@ The API follows AIP-151 and AIP-236 for long-running operations and custom metho
 
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import AsyncGenerator
+from typing import AsyncGenerator, cast
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -232,7 +232,7 @@ def create_app() -> FastAPI:
     _setup_exception_handlers(app)
 
     app.add_middleware(
-        CORSMiddleware,
+        cast(type, CORSMiddleware),
         allow_origins=settings.app.cors_origins_list,
         allow_credentials=True,
         allow_methods=["*"],

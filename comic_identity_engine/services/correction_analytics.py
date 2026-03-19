@@ -6,7 +6,7 @@ Analyzes mapping corrections to identify patterns and improve matching algorithm
 import structlog
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import UUID
 
@@ -107,7 +107,9 @@ class CorrectionAnalyticsService:
                 func.count(MappingCorrection.id),
             ).group_by(MappingCorrection.source)
         )
-        by_platform: dict[str, int] = {str(k): int(v) for k, v in by_platform_result.all()}
+        by_platform: dict[str, int] = {
+            str(k): int(v) for k, v in by_platform_result.all()
+        }
 
         by_type_result = await self.session.execute(
             select(
@@ -346,7 +348,7 @@ class CorrectionAnalyticsService:
 
         correction.review_status = status
         correction.reviewed_by = reviewed_by
-        correction.reviewed_at = datetime.utcnow()
+        correction.reviewed_at = datetime.now(timezone.utc)
         correction.review_notes = review_notes
 
         await self.session.commit()

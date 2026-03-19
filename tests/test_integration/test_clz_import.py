@@ -717,6 +717,7 @@ X-Men,3,Marvel,1991,clz-003"""
             mock_queue.enqueue_series_bulk.await_count == 1
         )  # 1 series group for remaining rows
 
+        assert mock_ops_manager.update_operation.await_args is not None
         persisted_result = mock_ops_manager.update_operation.await_args.kwargs["result"]
         assert persisted_result["active_row_count"] == 0
         assert persisted_result["pending_row_count"] == 2

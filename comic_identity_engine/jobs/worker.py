@@ -16,7 +16,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import signal
-from typing import Any
+from typing import Any, cast
 
 import structlog
 from arq import create_pool
@@ -184,7 +184,7 @@ def create_worker(settings_cls: type[WorkerSettings] = WorkerSettings) -> Worker
         max_jobs=settings_cls.max_jobs,
         job_timeout=settings_cls.job_timeout,
         keep_result=settings_cls.keep_result,
-        functions=settings_cls.functions,
+        functions=cast("list[Any]", settings_cls.functions),
         on_startup=_on_worker_startup,
         on_shutdown=_on_worker_shutdown,
     )

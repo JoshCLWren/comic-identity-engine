@@ -322,7 +322,10 @@ class TestPollOperation:
 
         assert "type=validation_error" in message
         assert "gcd=found" in message
-        assert "locg=searching (fuzzy_title, reason=retrying, waiting for next attempt)" in message
+        assert (
+            "locg=searching (fuzzy_title, reason=retrying, waiting for next attempt)"
+            in message
+        )
 
     def test_poll_operation_verbose_output(self, mock_client, console):
         """Test verbose output during polling."""
@@ -731,12 +734,28 @@ class TestDisplayPlatformTimeline:
                     "hip": "not_found",
                 },
                 "platform_events": [
-                    {"platform": "gcd", "status": "found", "timestamp": 100.0, "reason": "source_mapping"},
+                    {
+                        "platform": "gcd",
+                        "status": "found",
+                        "timestamp": 100.0,
+                        "reason": "source_mapping",
+                    },
                     {"platform": "locg", "status": "searching", "timestamp": 100.0},
                     {"platform": "aa", "status": "searching", "timestamp": 100.0},
-                    {"platform": "aa", "status": "found", "timestamp": 101.2, "reason": "match_found"},
-                    {"platform": "locg", "status": "not_found", "timestamp": 103.4, "reason": "timeout", "detail": "hit 12.0s platform timeout"},
-                ]
+                    {
+                        "platform": "aa",
+                        "status": "found",
+                        "timestamp": 101.2,
+                        "reason": "match_found",
+                    },
+                    {
+                        "platform": "locg",
+                        "status": "not_found",
+                        "timestamp": 103.4,
+                        "reason": "timeout",
+                        "detail": "hit 12.0s platform timeout",
+                    },
+                ],
             }
         }
 
@@ -771,12 +790,28 @@ class TestDisplayPlatformTimeline:
                     "hip": "not_found",
                 },
                 "platform_events": [
-                    {"platform": "gcd", "status": "found", "timestamp": 100.0, "reason": "source_mapping"},
+                    {
+                        "platform": "gcd",
+                        "status": "found",
+                        "timestamp": 100.0,
+                        "reason": "source_mapping",
+                    },
                     {"platform": "locg", "status": "searching", "timestamp": 100.0},
                     {"platform": "aa", "status": "searching", "timestamp": 100.0},
-                    {"platform": "aa", "status": "found", "timestamp": 101.2, "reason": "match_found"},
-                    {"platform": "locg", "status": "not_found", "timestamp": 103.4, "reason": "timeout", "detail": "hit 12.0s platform timeout"},
-                ]
+                    {
+                        "platform": "aa",
+                        "status": "found",
+                        "timestamp": 101.2,
+                        "reason": "match_found",
+                    },
+                    {
+                        "platform": "locg",
+                        "status": "not_found",
+                        "timestamp": 103.4,
+                        "reason": "timeout",
+                        "detail": "hit 12.0s platform timeout",
+                    },
+                ],
             }
         }
 

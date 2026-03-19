@@ -17,6 +17,7 @@ from datetime import date
 from typing import Any
 
 import httpx
+from selectolax.lexbor import LexborHTMLParser
 
 from comic_identity_engine.adapters import (
     NotFoundError,
@@ -405,7 +406,7 @@ class HIPAdapter(SourceAdapter):
 
         return result if result else None
 
-    def _extract_detail_attributes(self, parser: object) -> dict[str, str]:
+    def _extract_detail_attributes(self, parser: LexborHTMLParser) -> dict[str, str]:
         """Extract key/value metadata from HipComic detail rows."""
         details: dict[str, str] = {}
 
@@ -468,7 +469,7 @@ class HIPAdapter(SourceAdapter):
 
         return cleaned
 
-    def _extract_variant_suffix(self, variant_text: str) -> str | None:
+    def _extract_variant_suffix(self, variant_text: str | None) -> str | None:
         """Extract variant suffix from variant text.
 
         Args:
@@ -490,7 +491,7 @@ class HIPAdapter(SourceAdapter):
 
         return normalized.upper() if normalized else None
 
-    def _parse_date(self, date_str: str) -> date | None:
+    def _parse_date(self, date_str: str | None) -> date | None:
         """Parse date from HIP date string.
 
         Args:
@@ -572,7 +573,7 @@ class HIPAdapter(SourceAdapter):
                 pass
         return None
 
-    def _parse_page_count(self, page_str: str) -> int | None:
+    def _parse_page_count(self, page_str: str | None) -> int | None:
         """Parse page count from HIP page count string.
 
         Args:

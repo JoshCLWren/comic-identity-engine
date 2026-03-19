@@ -1,25 +1,11 @@
 """Tests for database connection and session management."""
 
-import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-
-@pytest.fixture(scope="module", autouse=True)
-def set_database_url():
-    """Set DATABASE_URL before importing database module."""
-    old_url = os.environ.get("DATABASE_URL")
-    os.environ["DATABASE_URL"] = "postgresql://user:pass@localhost/test_db"
-    yield
-    if old_url:
-        os.environ["DATABASE_URL"] = old_url
-    else:
-        os.environ.pop("DATABASE_URL", None)
-
-
-from comic_identity_engine.database.connection import (  # noqa: E402 - Import after env var set
+from comic_identity_engine.database.connection import (
     ASYNC_DATABASE_URL,
     DATABASE_URL,
     AsyncSessionLocal,

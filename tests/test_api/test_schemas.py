@@ -15,8 +15,10 @@ schemas_path = (
     Path(__file__).parent.parent.parent / "comic_identity_engine" / "api" / "schemas.py"
 )
 spec = importlib.util.spec_from_file_location("schemas", schemas_path)
+assert spec is not None
 schemas = importlib.util.module_from_spec(spec)
 sys.modules["schemas"] = schemas
+assert spec.loader is not None
 spec.loader.exec_module(schemas)
 
 BulkResolveRequest = schemas.BulkResolveRequest
