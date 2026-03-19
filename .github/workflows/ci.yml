@@ -16,7 +16,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build Docker image
-        run: docker compose build ci
+        run: docker compose build --build-arg DEPLOY_TOKEN="${DEPLOY_TOKEN}" ci
         env:
           DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
 
