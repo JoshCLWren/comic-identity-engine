@@ -1615,6 +1615,28 @@ async def _create_bulk_mappings_for_scraped_issues(
                             source_issue_id=clz_candidate.source_issue_id,
                             source_series_id=clz_candidate.source_series_id,
                         )
+
+                        row_gcd_issue_id = (
+                            row.get("gcd_issue_id") or ""
+                        ).strip() or None
+                        if row_gcd_issue_id:
+                            try:
+                                await _ensure_source_mapping(
+                                    mapping_repo=mapping_repo,
+                                    issue_id=result.issue_id,
+                                    source="gcd",
+                                    source_issue_id=row_gcd_issue_id,
+                                    source_series_id=None,
+                                    source_url=f"https://www.comics.org/issue/{row_gcd_issue_id}/",
+                                )
+                            except Exception:
+                                logger.warning(
+                                    "Failed to create GCD mapping from enriched CSV (bulk)",
+                                    operation_id=str(operation_uuid),
+                                    row_index=row_index,
+                                    gcd_issue_id=row_gcd_issue_id,
+                                )
+
                         await session.commit()
 
                         external_mappings = await mapping_repo.find_by_issue(
@@ -1835,6 +1857,32 @@ async def _process_single_clz_row(
 
         cross_platform_count = 0
         platform_mappings: list[dict[str, str]] = []
+
+        gcd_issue_id = (row.get("gcd_issue_id") or "").strip() or None
+        if gcd_issue_id:
+            try:
+                await _ensure_source_mapping(
+                    mapping_repo=mapping_repo,
+                    issue_id=issue_id,
+                    source="gcd",
+                    source_issue_id=gcd_issue_id,
+                    source_series_id=None,
+                    source_url=f"https://www.comics.org/issue/{gcd_issue_id}/",
+                )
+                logger.info(
+                    "Created GCD mapping from enriched CSV",
+                    operation_id=operation_id,
+                    row=row_index,
+                    issue_id=str(issue_id),
+                    gcd_issue_id=gcd_issue_id,
+                )
+            except Exception:
+                logger.warning(
+                    "Failed to create GCD mapping from enriched CSV",
+                    operation_id=operation_id,
+                    row=row_index,
+                    gcd_issue_id=gcd_issue_id,
+                )
 
         try:
             from comic_identity_engine.services.platform_searcher import (
