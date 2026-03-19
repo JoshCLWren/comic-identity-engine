@@ -18,6 +18,8 @@ ALGORITHM PRIORITY:
 5. No match → create new when source metadata is complete
 """
 
+from __future__ import annotations
+
 import re
 import uuid
 from dataclasses import dataclass, field
