@@ -12,28 +12,18 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Configure git for private repos
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        run: docker compose build ci
         env:
           DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
-        run: |
-          if [ -n "$DEPLOY_TOKEN" ]; then
-            git config --global url."https://${DEPLOY_TOKEN}@github.com/".insteadOf "https://github.com/"
-          fi
 
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v5
-
-      - name: Install Python 3.13
-        run: uv python install 3.13
-
-      - name: Install dependencies
-        run: uv sync --dev
-
-      - name: Run linting
-        run: bash scripts/lint.sh
-
-      - name: Run tests
-        run: uv run pytest --cov=comic_identity_engine --cov-report=xml
+      - name: Run CI in Docker
+        run: docker compose run --rm ci
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
