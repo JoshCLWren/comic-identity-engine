@@ -47,6 +47,7 @@ dependencies = [
     "longbox-matcher @ file:///mnt/extra/josh/code/longbox-matcher",
     # HTTP client (replaces duplicate http_client.py)
     "scrapekit @ git+https://github.com/JoshCLWren/scrapekit.git",
+    "tqdm>=4.67.3",
 ]
 
 [dependency-groups]

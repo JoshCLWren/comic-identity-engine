@@ -429,7 +429,9 @@ class TestLoCGAdapterHTTPMethods:
         """Network error raises SourceError."""
         from comic_identity_engine.adapters import SourceError
 
-        mock_http_client.get = AsyncMock(side_effect=httpx.RequestError("Connection failed"))
+        mock_http_client.get = AsyncMock(
+            side_effect=httpx.RequestError("Connection failed")
+        )
 
         adapter = LoCGAdapter(http_client=mock_http_client)
         with pytest.raises(SourceError, match="Network error"):
@@ -903,7 +905,9 @@ class TestLoCGAdapterEdgeCases:
         """Network error when fetching series."""
         from comic_identity_engine.adapters import SourceError
 
-        mock_http_client.get = AsyncMock(side_effect=httpx.RequestError("Connection failed"))
+        mock_http_client.get = AsyncMock(
+            side_effect=httpx.RequestError("Connection failed")
+        )
 
         adapter = LoCGAdapter(http_client=mock_http_client)
         with pytest.raises(SourceError, match="Network error"):
@@ -1129,7 +1133,6 @@ class TestLoCGAdapterEdgeCases:
         result = adapter.fetch_issue_from_html("12345", html)
 
         assert result.price is None
-
 
 
 class TestLoCGAdapterAsync:

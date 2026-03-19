@@ -205,10 +205,14 @@ def _extract_duplicate_mapping_hint(
 
     hint_parts = [f"retry with `--clear-mappings {source_issue_id}`"]
     if url:
-        hint_parts.append(f"`cie-find {url} --force --clear-mappings {source_issue_id} --verbose`")
+        hint_parts.append(
+            f"`cie-find {url} --force --clear-mappings {source_issue_id} --verbose`"
+        )
 
     if "DuplicateEntityError" in error_message:
-        hint_parts.append("if you already patched the code, restart the API and worker so they stop running stale task code")
+        hint_parts.append(
+            "if you already patched the code, restart the API and worker so they stop running stale task code"
+        )
 
     return "; ".join(hint_parts)
 
@@ -275,9 +279,7 @@ def _poll_operation(
 
     if verbose:
         console.print(f"[dim]Polling operation {operation_id}...[/dim]")
-        console.print(
-            "[dim]Cross-platform fan-out: gcd, locg, aa, ccl, cpg, hip[/dim]"
-        )
+        console.print("[dim]Cross-platform fan-out: gcd, locg, aa, ccl, cpg, hip[/dim]")
 
     last_metadata: dict[str, Any] = {}
     last_platform_status: dict[str, Any] = {}
@@ -351,7 +353,9 @@ def _display_json(data: dict[str, Any]) -> None:
     click.echo(json.dumps(data, indent=2))
 
 
-def _display_table(data: dict[str, Any], console: Console, *, verbose: bool = False) -> None:
+def _display_table(
+    data: dict[str, Any], console: Console, *, verbose: bool = False
+) -> None:
     """Display results in a pretty table format.
 
     Args:
@@ -526,7 +530,9 @@ def _build_platform_timeline(
                 final_status = str(raw_status)
 
         started_delta = (
-            f"+{started_at - base_time:.1f}s" if started_at is not None and base_time else "-"
+            f"+{started_at - base_time:.1f}s"
+            if started_at is not None and base_time
+            else "-"
         )
         finished_delta = (
             f"+{finished_at - base_time:.1f}s"

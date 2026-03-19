@@ -107,7 +107,9 @@ class CorrectionAnalyticsService:
                 func.count(MappingCorrection.id),
             ).group_by(MappingCorrection.source)
         )
-        by_platform: dict[str, int] = {str(k): int(v) for k, v in by_platform_result.all()}
+        by_platform: dict[str, int] = {
+            str(k): int(v) for k, v in by_platform_result.all()
+        }
 
         by_type_result = await self.session.execute(
             select(
