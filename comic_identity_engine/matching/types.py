@@ -86,6 +86,8 @@ class CLZInput:
     year: int | None
     barcode: str
     cover_year: int | None
+    publisher: str  # Normalized publisher name from CLZ
+    publisher_normalized: str  # Normalized for matching
 
     @classmethod
     def from_csv_row(cls, row: dict) -> CLZInput:
@@ -94,6 +96,7 @@ class CLZInput:
 
         raw_series = row.get("Series", "")
         raw_series_group = row.get("Series Group", "")
+        raw_publisher = row.get("Publisher", "")
         issue_full = row.get("Issue", "").strip()
         issue_nr_raw = row.get("Issue Nr", "").strip()
 
@@ -112,6 +115,8 @@ class CLZInput:
             year=cls._parse_year(row.get("Cover Year")),
             barcode=row.get("Barcode", ""),
             cover_year=cls._parse_year(row.get("Cover Year")),
+            publisher=raw_publisher,
+            publisher_normalized=normalizers.normalize_publisher(raw_publisher),
         )
 
     @staticmethod

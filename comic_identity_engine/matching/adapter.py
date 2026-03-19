@@ -8,8 +8,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from comic_identity_engine.matching.normalizers import (
+    normalize_publisher,
+    normalize_series_name,
     normalize_series_name_strict,
     strip_diacritics,
+    strip_subtitle,
 )
 
 DB_PATH = "/mnt/bigdata/downloads/2026-03-15.db"
@@ -43,17 +46,39 @@ class GCDLocalAdapter:
         self._db = sqlite3.connect(DB_PATH)
         self._db.row_factory = sqlite3.Row
 
+        self._load_publishers()
         self._load_series()
         self._load_issues()
         self._load_barcodes()
 
         self._loaded = True
 
+    def _load_publishers(self) -> None:
+        """Load publishers from gcd_publisher table."""
+        rows = self._db.execute(
+            "SELECT id, name FROM gcd_publisher WHERE deleted = 0"
+        ).fetchall()
+        self._publisher_map: dict[int, str] = {row["id"]: row["name"] for row in rows}
+
+    def _gcd_normalize_name(self, name: str) -> str:
+        """Normalize GCD series name for matching against CLZ.
+
+        Pipeline:
+        1. strip_diacritics - handles unicode variants
+        2. strip_subtitle - removes " : Subtitle" or " - Subtitle"
+        3. normalize_series_name - removes Vol. X, publisher parens, II/III, Annual, (YYYY)
+        4. lower - case-insensitive comparison
+        """
+        n = strip_diacritics(name)
+        n = strip_subtitle(n)
+        n = normalize_series_name(n)
+        return n.lower()
+
     def _load_series(self) -> None:
         """Load all active series from gcd_series table."""
         rows = self._db.execute(
             """
-            SELECT name, id, year_began, year_ended, issue_count
+            SELECT name, id, year_began, year_ended, issue_count, publisher_id
             FROM gcd_series
             WHERE deleted = 0
               AND language_id = 25
@@ -63,20 +88,26 @@ class GCDLocalAdapter:
         ).fetchall()
 
         for row in rows:
-            name_lower = strip_diacritics(row["name"]).lower()
-            name_strict = normalize_series_name_strict(name_lower)
+            raw_name = row["name"]
+            name_normalized = self._gcd_normalize_name(raw_name)
+            name_for_strict = strip_subtitle(raw_name)
+            name_strict = normalize_series_name_strict(name_for_strict)
+            publisher = self._publisher_map.get(row["publisher_id"], "")
             series_info = {
                 "id": row["id"],
-                "name": row["name"],
+                "name": raw_name,
+                "name_normalized": name_normalized,
                 "name_strict": name_strict,
                 "year_began": row["year_began"],
                 "year_ended": row["year_ended"],
                 "issue_count": row["issue_count"],
+                "publisher": publisher,
+                "publisher_normalized": normalize_publisher(publisher),
             }
             self._series_id_to_info[row["id"]] = series_info
-            if name_lower not in self._series_map:
-                self._series_map[name_lower] = []
-            self._series_map[name_lower].append(series_info)
+            if name_normalized not in self._series_map:
+                self._series_map[name_normalized] = []
+            self._series_map[name_normalized].append(series_info)
 
     def _load_issues(self) -> None:
         """Load all issues from gcd_issue table."""
@@ -154,19 +185,40 @@ class GCDLocalAdapter:
 
     # === Series queries ===
 
-    def find_series_exact(self, name_lower: str) -> list[dict]:
-        """Find series by exact name match (case-insensitive, diacritics stripped)."""
-        self.ensure_loaded()
-        return self._series_map.get(name_lower, [])
+    def find_series_exact(
+        self, name_lower: str, publisher_normalized: str = ""
+    ) -> list[dict]:
+        """Find series by exact name match (case-insensitive, diacritics stripped).
 
-    def find_series_strict(self, name_strict: str) -> list[dict]:
-        """Find series by strict-normalized name match."""
+        If publisher_normalized is provided, filter results by publisher.
+        """
+        self.ensure_loaded()
+        results = self._series_map.get(name_lower, [])
+        if publisher_normalized:
+            results = [
+                s
+                for s in results
+                if s.get("publisher_normalized") == publisher_normalized
+            ]
+        return results
+
+    def find_series_strict(
+        self, name_strict: str, publisher_normalized: str = ""
+    ) -> list[dict]:
+        """Find series by strict-normalized name match.
+
+        If publisher_normalized is provided, filter results by publisher.
+        """
         self.ensure_loaded()
         results = []
         for series_list in self._series_map.values():
             info = self._series_id_to_info.get(series_list[0]["id"], {})
             if info.get("name_strict") == name_strict:
-                results.extend(series_list)
+                if (
+                    not publisher_normalized
+                    or info.get("publisher_normalized") == publisher_normalized
+                ):
+                    results.extend(series_list)
         return results
 
     def find_series_by_year(self, year: int) -> list[dict]:

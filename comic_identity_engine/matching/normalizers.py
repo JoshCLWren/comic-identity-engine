@@ -22,8 +22,17 @@ def strip_vol_suffix(name: str) -> str:
     return re.sub(pattern, "", name, flags=re.IGNORECASE).rstrip()
 
 
+def strip_subtitle(name: str) -> str:
+    """Strip subtitle after colon from series name.
+
+    Handles patterns like "WildC.A.T.s: Covert Action Teams".
+    Does NOT strip dashes as they're common in series names (e.g., X-Men).
+    """
+    return re.sub(r"\s*[:]\s*[^:]+$", "", name)
+
+
 def normalize_series_name(name: str) -> str:
-    """Remove publisher suffixes, volume info, articles for clean matching."""
+    """Remove publisher suffixes, volume info, year parens, articles for clean matching."""
     result = name
 
     result = re.sub(
@@ -43,6 +52,8 @@ def normalize_series_name(name: str) -> str:
     result = re.sub(r"\s+(?:II|III)\s*$", "", result, flags=re.IGNORECASE)
 
     result = re.sub(r",?\s*Annual\s*$", "", result, flags=re.IGNORECASE)
+
+    result = re.sub(r"\s*\(\d{4}\)\s*$", "", result, flags=re.IGNORECASE)
 
     return result.strip()
 
@@ -80,3 +91,33 @@ def parse_year(row: dict) -> int | None:
         return None
     except (ValueError, TypeError):
         return None
+
+
+def normalize_publisher(publisher: str) -> str:
+    """Normalize publisher name for matching.
+
+    Maps common CLZ-style names to GCD-style names:
+    - "Marvel Comics" → "Marvel"
+    - "DC Comics" → "DC"
+    - "Image Comics" → "Image"
+    - "Dark Horse Comics" → "Dark Horse"
+
+    Also handles publishers with slashes (e.g., "DC Comics and Marvel Comics"
+    returns "DC" as the primary).
+    """
+    if not publisher:
+        return ""
+
+    p = publisher.strip()
+
+    p = re.sub(r"\s+and\s+.+$", "", p, flags=re.IGNORECASE)
+
+    p = re.sub(r"\s*\(.*\)\s*$", "", p)
+
+    p = re.sub(r"\s+Publishing\s*$", "", p, flags=re.IGNORECASE)
+
+    p = re.sub(r"\s+Comics\s*$", "", p, flags=re.IGNORECASE)
+
+    p = re.sub(r"\s+Entertainment\s*$", "", p, flags=re.IGNORECASE)
+
+    return p.strip().lower()

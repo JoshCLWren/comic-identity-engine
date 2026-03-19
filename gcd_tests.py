@@ -2,6 +2,7 @@ import argparse
 import csv
 import sqlite3
 import re
+import unicodedata
 from collections import Counter
 from pathlib import Path
 from tqdm import tqdm
@@ -27,17 +28,20 @@ def load_series(
         FROM gcd_series
         WHERE deleted = 0
           AND language_id = 25
-          AND year_began BETWEEN 1950 AND 2026
+          AND year_began <= 2026
+          AND (year_ended IS NULL OR year_ended >= 1950)
     """
     ).fetchall()
 
     series_map: dict[str, list[dict]] = {}
     series_id_to_info: dict[int, dict] = {}
     for row in rows:
-        name = row["name"].lower()
+        name = strip_diacritics(row["name"]).lower()
+        name_strict = normalize_series_name_strict(name)
         series_info = {
             "id": row["id"],
             "name": row["name"],
+            "name_strict": name_strict,
             "year_began": row["year_began"],
             "year_ended": row["year_ended"],
             "issue_count": row["issue_count"],
@@ -53,11 +57,13 @@ def load_series(
 def load_issues(
     db: sqlite3.Connection,
 ) -> tuple[
-    dict[tuple[int, str], tuple[int, str]], dict[int, list[tuple[int, int, str]]]
+    dict[tuple[int, str], tuple[int, str]],
+    dict[int, list[tuple[int, int, str]]],
+    dict[tuple[int, str], int],
 ]:
     rows = db.execute(
         """
-        SELECT series_id, number, id, key_date,
+        SELECT series_id, number, id, key_date, publication_date,
                CASE WHEN variant_name = 'Newsstand' THEN 'newsstand'
                     WHEN variant_of_id IS NULL THEN 'canonical'
                     ELSE 'variant' END as match_type
@@ -68,13 +74,32 @@ def load_issues(
 
     issue_map: dict[tuple[int, str], tuple[int, str]] = {}
     year_to_issues: dict[int, list[tuple[int, int, str]]] = {}
+    issue_cover_year: dict[tuple[int, str], int] = {}
 
     for row in rows:
         key = (row["series_id"], row["number"])
         existing = issue_map.get(key)
 
+        # Parse cover year from publication_date (the actual cover date, not GCD's key_date).
+        # Falls back to key_date if publication_date is absent.
+        pub_date = row["publication_date"]
+        cover_year: int | None = None
+        if pub_date:
+            m = re.search(r"(\d{4})", pub_date)
+            if m:
+                cover_year = int(m.group(1))
+        if cover_year is None:
+            key_date = row["key_date"]
+            if key_date:
+                try:
+                    cover_year = int(key_date.split("-")[0])
+                except (ValueError, IndexError):
+                    pass
+
         if not existing:
             issue_map[key] = (row["id"], row["match_type"])
+            if cover_year is not None:
+                issue_cover_year[key] = cover_year
         else:
             existing_type = existing[1]
             new_type = row["match_type"]
@@ -82,22 +107,23 @@ def load_issues(
                 existing_type == "canonical" and new_type == "newsstand"
             ):
                 issue_map[key] = (row["id"], row["match_type"])
+                if cover_year is not None:
+                    issue_cover_year[key] = cover_year
 
         # Build year index for reverse lookup
-        key_date = row["key_date"]
-        if key_date:
-            try:
-                year = int(key_date.split("-")[0])
-                if 1950 <= year <= 2026:
-                    if year not in year_to_issues:
-                        year_to_issues[year] = []
-                    year_to_issues[year].append(
-                        (row["series_id"], row["id"], row["number"])
-                    )
-            except (ValueError, IndexError):
-                pass
+        if cover_year is not None and 1950 <= cover_year <= 2026:
+            if cover_year not in year_to_issues:
+                year_to_issues[cover_year] = []
+            year_to_issues[cover_year].append(
+                (row["series_id"], row["id"], row["number"])
+            )
 
-    return issue_map, year_to_issues
+    return issue_map, year_to_issues, issue_cover_year
+
+
+def strip_diacritics(text: str) -> str:
+    """Normalize unicode diacritics so e.g. 'Rōnin' matches 'Ronin'."""
+    return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
 
 
 def normalize_series_name(name: str) -> str:
@@ -108,8 +134,9 @@ def normalize_series_name(name: str) -> str:
     name = re.sub(r"\s*\([^)]*\)$", "", name)
 
     # Remove volume info: ", Vol. 1", ", Volume 2", etc.
-    name = re.sub(r",\s*Vol\.\s*\d+$", "", name, flags=re.IGNORECASE)
-    name = re.sub(r",\s*Volume\s*\d+$", "", name, flags=re.IGNORECASE)
+    # Handles both trailing (", Vol. 1") and mid-string (", Vol. 1 Annual") patterns.
+    name = re.sub(r",\s*Vol\.\s*\d+(\s+|$)", " ", name, flags=re.IGNORECASE).strip()
+    name = re.sub(r",\s*Volume\s+\d+(\s+|$)", " ", name, flags=re.IGNORECASE).strip()
 
     # Remove extra suffixes like "II", "III" if they're separate words
     # But be careful not to remove "II" from names like "Batman II"
@@ -117,6 +144,18 @@ def normalize_series_name(name: str) -> str:
     name = re.sub(r"\s+III\s*$", "", name)
 
     return name.strip()
+
+
+def normalize_series_name_strict(name: str) -> str:
+    """Strip all punctuation and normalize &/and for deep matching."""
+    if not name:
+        return ""
+    name = normalize_series_name(name)
+    name = name.lower()
+    name = re.sub(r"&", "and", name)
+    name = re.sub(r"[^\w\s]", "", name)
+    name = re.sub(r"\s+", " ", name).strip()
+    return name
 
 
 def parse_year(row: dict) -> int | None:
@@ -140,9 +179,16 @@ def parse_issue_nr(row: dict) -> str | None:
 
 
 def find_series_candidates(
-    series_map: dict[str, list[dict]], series_name: str, year: int | None
+    series_map: dict[str, list[dict]],
+    series_id_to_info: dict[int, dict],
+    series_name: str,
+    year: int | None,
+    issue_nr: str | None = None,
+    issue_map: dict[tuple[int, str], tuple[int, str]] | None = None,
+    issue_cover_year: dict[tuple[int, str], int] | None = None,
 ) -> list[dict]:
-    name_lower = series_name.lower()
+    name_lower = strip_diacritics(series_name).lower()
+    name_strict = normalize_series_name_strict(name_lower)
     candidates = []
     seen = set()
 
@@ -153,8 +199,26 @@ def find_series_candidates(
                 seen.add(c["id"])
                 candidates.append(c)
 
-    # 1. Try exact match
+    def add_from_strict_match():
+        for series_key, series_list in series_map.items():
+            if (
+                series_id_to_info.get(series_list[0]["id"], {}).get("name_strict")
+                == name_strict
+            ):
+                add_candidates(series_list)
+
+    # 1. Try strict-normalized exact match (handles &/and, punctuation)
+    add_from_strict_match()
+
+    # 1a. Try exact match
     add_candidates(series_map.get(name_lower, []))
+
+    # 1b. Try colon-to-comma variant: CLZ uses "Series A: Series B" but GCD may use
+    #     "Series A, Series B" (e.g. "Doctor Strange: Sorcerer Supreme" vs
+    #     "Doctor Strange, Sorcerer Supreme").
+    comma_name = name_lower.replace(": ", ", ")
+    if comma_name != name_lower:
+        add_candidates(series_map.get(comma_name, []))
 
     # 2. Try with/without "The" prefix
     if name_lower.startswith("the "):
@@ -168,8 +232,26 @@ def find_series_candidates(
             add_candidates(series_map.get(name_lower[len(article) :], []))
             break
 
-    # 4. If still no candidates and name is long enough, try substring matching
-    if not candidates and len(name_lower) > 5:
+    # 3b. Word-set match: handles word-order variants ("X-Men Classic" vs "Classic X-Men").
+    # Always run so we don't miss reversed-word series when direct lookup found wrong-era ones.
+    search_words = set(name_lower.split())
+    if len(search_words) >= 2:
+        for series_key, series_list in series_map.items():
+            if set(series_key.split()) == search_words and series_key != name_lower:
+                add_candidates(series_list)
+
+    # 4. If no candidates (or all existing ones are from the wrong era), try substring.
+    # "All wrong era" = every candidate ended >5yr before or started >5yr after target year.
+    all_wrong_era = (
+        year is not None
+        and bool(candidates)
+        and all(
+            (s["year_ended"] is not None and s["year_ended"] < year - 5)
+            or s["year_began"] > year + 5
+            for s in candidates
+        )
+    )
+    if (not candidates or all_wrong_era) and len(name_lower) >= 4:
         # Remove common articles from search string for matching
         search_terms = name_lower
         for prefix in ["the ", "a ", "an "]:
@@ -200,21 +282,32 @@ def find_series_candidates(
     if year is None:
         return sorted(candidates, key=lambda x: -x["issue_count"])
 
-    # Score each series by how likely it is
+    def _series_year_score(series: dict) -> tuple[int, int]:
+        if (
+            issue_map is not None
+            and issue_cover_year is not None
+            and issue_nr is not None
+        ):
+            key = (series["id"], issue_nr)
+            if key in issue_map:
+                cy = issue_cover_year.get(key)
+                if cy is not None:
+                    return cy, abs(cy - year)
+        return series["year_began"], abs(series["year_began"] - year)
+
     scored = []
     for series in candidates:
         score = 0
 
-        # Penalize heavily if series doesn't include this year
-        if series["year_ended"] and series["year_ended"] < year:
+        year_for_series, distance = _series_year_score(series)
+
+        if series["year_ended"] and series["year_ended"] < year_for_series:
             score -= 1000
-        if series["year_began"] > year + 5:
+        if year_for_series > year + 5:
             score -= 1000
 
-        # Prefer series that started close to this year
-        score -= abs(series["year_began"] - year)
+        score -= distance
 
-        # Prefer series with more issues (more popular/mainstream)
         score += series["issue_count"] / 10
 
         scored.append((score, series))
@@ -258,16 +351,34 @@ def similarity_score(s1: str, s2: str) -> float:
     s1, s2 = s1.lower(), s2.lower()
     if s1 == s2:
         return 1.0
+
+    score = 0.0
+
     if s1 in s2 or s2 in s1:
-        return 0.8
-    # Count common words
-    words1 = set(s1.split())
-    words2 = set(s2.split())
+        shorter = s1 if len(s1) <= len(s2) else s2
+        longer = s2 if len(s1) <= len(s2) else s1
+        overlap = len(shorter)
+        total = len(longer)
+        # Prefix match: "supreme" is a title prefix of "supreme: the new adventures"
+        # but not of "doctor strange, sorcerer supreme". Boost prefix matches so they
+        # beat Jaccard's flat per-word score.
+        if longer.startswith(shorter):
+            score = max(score, min(0.9, 1.4 * overlap / total))
+        else:
+            score = max(score, 0.8 * overlap / total)
+
+    # Word-overlap Jaccard (strip punctuation so "supreme:" == "supreme")
+    def _words(s: str) -> set[str]:
+        return {re.sub(r"[^\w-]", "", w) for w in s.split() if re.sub(r"[^\w-]", "", w)}
+
+    words1 = _words(s1)
+    words2 = _words(s2)
     if words1 and words2:
         intersection = len(words1 & words2)
         union = len(words1 | words2)
-        return intersection / union if union > 0 else 0.0
-    return 0.0
+        score = max(score, intersection / union if union > 0 else 0.0)
+
+    return score
 
 
 def find_best_series_id(
@@ -278,8 +389,17 @@ def find_best_series_id(
     issue_nr: str,
     year: int | None,
     year_to_issues: dict[int, list[tuple[int, int, str]]] | None = None,
+    issue_cover_year: dict[tuple[int, str], int] | None = None,
 ) -> tuple[int | None, str]:
-    candidates = find_series_candidates(series_map, series_name, year)
+    candidates = find_series_candidates(
+        series_map,
+        series_id_to_info,
+        series_name,
+        year,
+        issue_nr,
+        issue_map,
+        issue_cover_year,
+    )
 
     if not candidates:
         # FALLBACK: Try reverse lookup by issue number and year
@@ -331,12 +451,17 @@ def find_best_series_id(
     if year is not None and len(candidates) > 1:
         date_filtered = []
         for series in candidates:
-            # Check if series was active when comic was published
-            # More lenient: widened window from ±2 to ±5 years
+            if issue_cover_year is not None and issue_nr is not None:
+                cy = issue_cover_year.get((series["id"], issue_nr))
+                if cy is not None:
+                    if cy > year + 5 or cy < year - 5:
+                        continue
+                    date_filtered.append(series)
+                    continue
             if series["year_began"] > year + 5:
-                continue  # Series started too late
+                continue
             if series["year_ended"] and series["year_ended"] < year - 5:
-                continue  # Series ended too early
+                continue
             date_filtered.append(series)
 
         # If we have date-filtered candidates, use them instead of all candidates
@@ -354,9 +479,18 @@ def find_best_series_id(
         return candidates_with_issue[0]["id"], "only_one_with_issue"
 
     if len(candidates_with_issue) > 1:
-        # Multiple series have this issue - pick the one with closest year
+        # Multiple series have this issue - pick the one whose actual issue cover
+        # date is closest to the CLZ year (falls back to series year_began).
         if year is not None:
-            candidates_with_issue.sort(key=lambda s: abs(s["year_began"] - year))
+
+            def _issue_year_distance(s: dict) -> int:
+                if issue_cover_year is not None:
+                    cy = issue_cover_year.get((s["id"], issue_nr))
+                    if cy is not None:
+                        return abs(cy - year)
+                return abs(s["year_began"] - year)
+
+            candidates_with_issue.sort(key=_issue_year_distance)
             return candidates_with_issue[0]["id"], "closest_year_with_issue"
         return candidates_with_issue[0]["id"], "multiple_with_issue"
 
@@ -451,7 +585,7 @@ def main():
     print(f"Built series ID index with {len(series_id_to_info)} series")
 
     print("Loading issue mappings...")
-    issue_map, year_to_issues = load_issues(db)
+    issue_map, year_to_issues, issue_cover_year = load_issues(db)
     print(f"Loaded {len(issue_map)} issues")
     print(f"Built year index with {len(year_to_issues)} years")
 
@@ -498,13 +632,11 @@ def main():
                 else:
                     year = parse_year(row)
 
-                    # Try Series Group first, but check if it's too generic
+                    # Deprioritize Series Group: try Series name first, then Series Group.
+                    # CLZ uses Series Group as a category grouping, not always the correct series name.
+                    # "X-Men" SG can group "X-Men Classic", "Valor" SG points to wrong series.
+                    series_name = normalize_series_name(row.get("Series", ""))
                     series_group = row.get("Series Group", "").strip()
-                    series_name = (
-                        series_group
-                        if series_group
-                        else normalize_series_name(row.get("Series", ""))
-                    )
 
                     series_id, series_match = find_best_series_id(
                         series_map,
@@ -514,43 +646,96 @@ def main():
                         issue_nr,
                         year,
                         year_to_issues,
+                        issue_cover_year,
                     )
 
-                    # If Series Group returned candidates but no match, retry with full Series name
+                    # If Issue field has a variant suffix that Issue Nr doesn't (e.g. "52A" vs "52"),
+                    # retry with the full Issue field as the issue number.
+                    issue_full = row.get("Issue", "").strip()
+                    issue_nr_raw = row.get("Issue Nr", "").strip()
+                    issue_nr_for_lookup = issue_nr
                     if (
-                        series_group
-                        and series_match.startswith("no_issue_in_")
-                        and series_id
+                        not series_id
+                        and issue_full
+                        and issue_full != issue_nr_raw
+                        and any(c.isalpha() for c in issue_full)
+                        and not any(c.isalpha() for c in issue_nr_raw)
                     ):
-                        # Extract candidate count from "no_issue_in_5_series"
-                        parts = series_match.split("_")
-                        if len(parts) >= 4:
-                            try:
-                                candidate_count = int(
-                                    parts[3]
-                                )  # "no_issue_in_5_series" -> 5
-                                if candidate_count > 0:
-                                    # Retry with full Series name (with volume stripped)
-                                    series_name = normalize_series_name(
-                                        row.get("Series", "")
+                        issue_nr_alt = parse_issue_nr({"Issue Nr": issue_full})
+                        if issue_nr_alt and issue_nr_alt != issue_nr:
+                            series_id, series_match = find_best_series_id(
+                                series_map,
+                                series_id_to_info,
+                                issue_map,
+                                series_name,
+                                issue_nr_alt,
+                                year,
+                                year_to_issues,
+                                issue_cover_year,
+                            )
+                            if series_id:
+                                series_match = f"{series_match}_from_issue_field"
+                                issue_nr_for_lookup = issue_nr_alt
+
+                    # If Series name found nothing, retry with Series Group as a fallback.
+                    # CLZ uses SG as a category/grouping, not always the correct series name,
+                    # so we only use it when the actual Series name fails.
+                    if not series_id and series_group:
+                        series_id, series_match = find_best_series_id(
+                            series_map,
+                            series_id_to_info,
+                            issue_map,
+                            series_group,
+                            issue_nr,
+                            year,
+                            year_to_issues,
+                            issue_cover_year,
+                        )
+                        if series_id:
+                            series_match = f"{series_match}_from_series_group"
+
+                    # Year-gap safety net: if we have a large gap (>6yr) and SG is available,
+                    # try SG as a fallback to see if it finds the right series.
+                    matched_cover_yr = (
+                        issue_cover_year.get((series_id, issue_nr_for_lookup))
+                        if series_id
+                        else None
+                    )
+                    large_year_gap = (
+                        matched_cover_yr is not None
+                        and year is not None
+                        and abs(matched_cover_yr - year) >= 6
+                    )
+                    if large_year_gap and series_group and series_id:
+                        series_id_sg, series_match_sg = find_best_series_id(
+                            series_map,
+                            series_id_to_info,
+                            issue_map,
+                            series_group,
+                            issue_nr_for_lookup,
+                            year,
+                            year_to_issues,
+                            issue_cover_year,
+                        )
+                        if series_id_sg is not None:
+                            sg_cyr = issue_cover_year.get(
+                                (series_id_sg, issue_nr_for_lookup)
+                            )
+                            if (
+                                sg_cyr is not None
+                                and year is not None
+                                and matched_cover_yr is not None
+                            ):
+                                if abs(sg_cyr - year) < abs(matched_cover_yr - year):
+                                    series_id = series_id_sg
+                                    series_match = (
+                                        f"{series_match_sg}_fallback_from_series"
                                     )
-                                    series_id, series_match = find_best_series_id(
-                                        series_map,
-                                        series_id_to_info,
-                                        issue_map,
-                                        series_name,
-                                        issue_nr,
-                                        year,
-                                        year_to_issues,
-                                    )
-                                    series_match = f"{series_match}_fallback_from_group"
-                            except ValueError:
-                                pass
 
                     if not series_id:
                         match_type = f"no_series:{series_match}"
                     else:
-                        issue_key = (series_id, issue_nr)
+                        issue_key = (series_id, issue_nr_for_lookup)
                         issue_result = issue_map.get(issue_key)
                         if issue_result:
                             gcd_issue_id, issue_match = issue_result

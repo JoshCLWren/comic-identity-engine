@@ -77,7 +77,9 @@ class GCDMatchingService:
     def _try_exact_one_issue(self, clz: CLZInput) -> StrategyResult:
         """Try exact series name + issue number, single match. EXACT_ONE_ISSUE=90."""
         name_lower = clz.series_name.lower()
-        series_list = self.adapter.find_series_exact(name_lower)
+        series_list = self.adapter.find_series_exact(
+            name_lower, clz.publisher_normalized
+        )
 
         if not series_list:
             return StrategyResult(confidence=MatchConfidence.NO_MATCH)
@@ -107,7 +109,9 @@ class GCDMatchingService:
     def _try_exact_closest_year(self, clz: CLZInput) -> StrategyResult:
         """Try exact name + multiple matches, pick closest year. EXACT_CLOSEST_YEAR=85."""
         name_lower = clz.series_name.lower()
-        series_list = self.adapter.find_series_exact(name_lower)
+        series_list = self.adapter.find_series_exact(
+            name_lower, clz.publisher_normalized
+        )
 
         if not series_list:
             return StrategyResult(confidence=MatchConfidence.NO_MATCH)
@@ -144,7 +148,9 @@ class GCDMatchingService:
     def _try_exact_series(self, clz: CLZInput) -> StrategyResult:
         """Try exact series name only. EXACT_SERIES=80."""
         name_lower = clz.series_name.lower()
-        series_list = self.adapter.find_series_exact(name_lower)
+        series_list = self.adapter.find_series_exact(
+            name_lower, clz.publisher_normalized
+        )
 
         if len(series_list) == 1:
             return StrategyResult(
@@ -158,7 +164,9 @@ class GCDMatchingService:
 
     def _try_normalized_series(self, clz: CLZInput) -> StrategyResult:
         """Try strict-normalized name match. NORMALIZED_SERIES=75."""
-        series_list = self.adapter.find_series_strict(clz.series_name_strict)
+        series_list = self.adapter.find_series_strict(
+            clz.series_name_strict, clz.publisher_normalized
+        )
 
         if len(series_list) == 1:
             return StrategyResult(
@@ -179,7 +187,13 @@ class GCDMatchingService:
         name_lower = clz.series_name.lower()
         results = []
         for series_list in self.adapter._series_map.values():  # noqa: SLF001
-            key = series_list[0]["name"]
+            s = series_list[0]
+            if (
+                clz.publisher_normalized
+                and s.get("publisher_normalized") != clz.publisher_normalized
+            ):
+                continue
+            key = s["name"]
             if set(key.split()) == search_words and key != name_lower:
                 results.extend(series_list)
 
@@ -200,7 +214,9 @@ class GCDMatchingService:
         if comma_name == name_lower:
             return StrategyResult(confidence=MatchConfidence.NO_MATCH)
 
-        series_list = self.adapter.find_series_exact(comma_name)
+        series_list = self.adapter.find_series_exact(
+            comma_name, clz.publisher_normalized
+        )
         if len(series_list) == 1:
             return StrategyResult(
                 confidence=MatchConfidence.COLON_COMMA_SERIES,
@@ -221,11 +237,29 @@ class GCDMatchingService:
         else:
             alt = f"the {name_lower}"
 
-        series_list = self.adapter.find_series_exact(alt)
+        series_list = self.adapter.find_series_exact(alt, clz.publisher_normalized)
+
+        if not series_list:
+            return StrategyResult(confidence=MatchConfidence.NO_MATCH)
+
         if len(series_list) == 1:
+            series = series_list[0]
+            issue = self.adapter.find_issue(series["id"], clz.issue_nr)
+            if issue:
+                cy = self.adapter.get_issue_cover_year(series["id"], clz.issue_nr)
+                year_dist = abs(cy - clz.year) if cy and clz.year else None
+                return StrategyResult(
+                    confidence=MatchConfidence.EXACT_ONE_ISSUE,
+                    gcd_issue_id=issue[0],
+                    gcd_series_id=series["id"],
+                    strategy_name="article_series",
+                    series_name=clz.series_name,
+                    issue_number=clz.issue_nr,
+                    year_distance=year_dist,
+                )
             return StrategyResult(
                 confidence=MatchConfidence.ARTICLE_SERIES,
-                gcd_series_id=series_list[0]["id"],
+                gcd_series_id=series["id"],
                 strategy_name="article_series",
                 series_name=clz.series_name,
                 match_details=f"matched_as={alt}",
@@ -248,7 +282,13 @@ class GCDMatchingService:
 
         results = []
         for series_list in self.adapter._series_map.values():  # noqa: SLF001
-            key = series_list[0]["name"]
+            s = series_list[0]
+            if (
+                clz.publisher_normalized
+                and s.get("publisher_normalized") != clz.publisher_normalized
+            ):
+                continue
+            key = s["name"].lower()
             if search_terms in key or key in search_terms:
                 results.extend(series_list)
 
@@ -296,6 +336,31 @@ class GCDMatchingService:
                     )
 
         if len(unique_series) > 1:
+            if clz.publisher_normalized:
+                pub_matches = [
+                    sid
+                    for sid in unique_series
+                    if self.adapter._series_id_to_info.get(sid, {}).get(
+                        "publisher_normalized"
+                    )
+                    == clz.publisher_normalized
+                ]
+                if pub_matches:
+                    unique_series = pub_matches
+
+            if len(unique_series) == 1:
+                sid = unique_series[0]
+                for s_id, gid in matches:
+                    if s_id == sid:
+                        return StrategyResult(
+                            confidence=MatchConfidence.REVERSE_LOOKUP_ONE,
+                            gcd_issue_id=gid,
+                            gcd_series_id=sid,
+                            strategy_name="reverse_lookup_one",
+                            series_name=clz.series_name,
+                            issue_number=clz.issue_nr,
+                        )
+
             best, best_score = None, 0.0
             for sid in unique_series:
                 info = self.adapter._series_id_to_info.get(sid, {})  # noqa: SLF001
