@@ -116,6 +116,7 @@ class TestIdentityResolver:
         result = await resolver.resolve_issue(parsed_url, upc="75960601772099911")
 
         assert result.issue_id == sample_issue.id
+        assert result.best_match is not None
         assert result.best_match.issue_confidence == 1.0
         assert "upc exact match" in result.best_match.match_reason.lower()
 
@@ -157,6 +158,7 @@ class TestIdentityResolver:
         )
 
         assert result.issue_id == sample_issue.id
+        assert result.best_match is not None
         assert result.best_match.issue_confidence == 0.95
 
     @patch("comic_identity_engine.services.identity_resolver.ExternalMappingRepository")
@@ -192,6 +194,7 @@ class TestIdentityResolver:
         )
 
         assert result.issue_id == sample_issue.id
+        assert result.best_match is not None
         assert result.best_match.issue_confidence == 0.95
 
     @patch("comic_identity_engine.services.identity_resolver.ExternalMappingRepository")
@@ -234,6 +237,7 @@ class TestIdentityResolver:
         )
 
         assert result.issue_id == sample_issue.id
+        assert result.best_match is not None
         assert result.best_match.issue_confidence == 0.85
         assert "series + issue" in result.best_match.match_reason.lower()
 
@@ -270,6 +274,7 @@ class TestIdentityResolver:
         )
 
         assert result.issue_id == sample_issue.id
+        assert result.best_match is not None
         assert result.best_match.issue_confidence == 0.85
 
     @patch("comic_identity_engine.services.identity_resolver.ExternalMappingRepository")

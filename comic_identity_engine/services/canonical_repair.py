@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Iterable, Sequence
+from typing import Any, Iterable, Sequence, cast
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -256,7 +256,7 @@ class CanonicalRepairService:
     def _serialize_series_group(
         self, series_runs: Sequence[SeriesRun]
     ) -> dict[str, Any]:
-        ordered = sorted(series_runs, key=self._entity_sort_key)
+        ordered = cast(list[SeriesRun], sorted(series_runs, key=self._entity_sort_key))
         winner = ordered[0]
         return {
             "title": winner.title,
@@ -287,7 +287,7 @@ class CanonicalRepairService:
         }
 
     def _serialize_issue_group(self, issues: Sequence[Issue]) -> dict[str, Any]:
-        ordered = sorted(issues, key=self._entity_sort_key)
+        ordered = cast(list[Issue], sorted(issues, key=self._entity_sort_key))
         winner = ordered[0]
         return {
             "series_title": winner.series_run.title,
@@ -342,11 +342,13 @@ class CanonicalRepairService:
                 "variant_conflicts": [],
             }
 
-        ordered = sorted(issues, key=self._entity_sort_key)
+        ordered = cast(list[Issue], sorted(issues, key=self._entity_sort_key))
         winner = ordered[0]
+        assert isinstance(winner, Issue)
+        losers: list[Issue] = ordered[1:]
         return await self._merge_issue_objects(
             winner=winner,
-            losers=ordered[1:],
+            losers=losers,
             series_title=title,
             series_start_year=start_year,
         )
@@ -367,13 +369,15 @@ class CanonicalRepairService:
                 "publisher_conflicts": [],
             }
 
-        ordered = sorted(series_runs, key=self._entity_sort_key)
+        ordered = cast(list[SeriesRun], sorted(series_runs, key=self._entity_sort_key))
         winner = ordered[0]
+        assert isinstance(winner, SeriesRun)
         winner_issues_by_number = {issue.issue_number: issue for issue in winner.issues}
         merged_series_ids: list[str] = []
         publisher_conflicts: list[dict[str, Any]] = []
 
         for loser in ordered[1:]:
+            assert isinstance(loser, SeriesRun)
             if winner.publisher is None and loser.publisher is not None:
                 winner.publisher = loser.publisher
             elif (
@@ -395,6 +399,7 @@ class CanonicalRepairService:
                     loser_issue.issue_number
                 )
                 if existing_winner_issue is not None:
+                    assert isinstance(existing_winner_issue, Issue)
                     await self._merge_issue_objects(
                         winner=existing_winner_issue,
                         losers=[loser_issue],

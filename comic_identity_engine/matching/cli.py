@@ -8,7 +8,7 @@ from pathlib import Path
 from collections import Counter
 
 from .adapter import GCDLocalAdapter
-from .service import GCDMatchingService, MatchConfidence
+from .service import GCDMatchingService
 from .types import CLZInput
 
 CSV_PATH = Path("/mnt/extra/josh/code/clz_export_all_columns.csv")
@@ -21,6 +21,11 @@ def main():
     parser = argparse.ArgumentParser(description="Match CLZ comics to GCD database")
     parser.add_argument("--force", action="store_true", help="Reprocess all rows")
     parser.add_argument("--debug", action="store_true", help="Show top mismatches")
+    parser.add_argument(
+        "--report-fp",
+        action="store_true",
+        help="Report potential false positives (|gcd_cover_year - clz_year| > 2, non-barcode)",
+    )
     args = parser.parse_args()
 
     # Load CLZ data
@@ -42,6 +47,8 @@ def main():
 
     if not pending:
         print("Nothing to do")
+        if args.report_fp:
+            _print_false_positive_report()
         return
 
     # Initialize adapter and service
@@ -77,7 +84,7 @@ def main():
             # Get series name for URL
             series_name = ""
             if result.gcd_series_id:
-                info = adapter._series_id_to_info.get(result.gcd_series_id, {})  # noqa: SLF001
+                info = adapter.get_series_info(result.gcd_series_id)
                 series_name = info.get("name", "")
 
             gcd_url = (
@@ -155,6 +162,49 @@ def main():
             print(
                 f"  {row['series'][:40]:40s} #{row['issue']:6s} CLZ:{row['clz_year']} GCD:{row['gcd_year']} ({row['gap']:+d}) [{row['strategy']}]"
             )
+
+    if args.report_fp:
+        _print_false_positive_report()
+
+
+def _print_false_positive_report() -> None:
+    fp_rows = []
+    if OUTPUT_PATH.exists():
+        with open(OUTPUT_PATH, newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                strategy = row.get("gcd_strategy", "")
+                if not strategy or strategy == "no_match" or "barcode" in strategy:
+                    continue
+                clz_year_str = row.get("Cover Year", "")
+                gcd_year_str = row.get("gcd_cover_year", "")
+                if not clz_year_str or not gcd_year_str:
+                    continue
+                try:
+                    clz_year = int(float(clz_year_str))
+                    gcd_year = int(float(gcd_year_str))
+                except (ValueError, TypeError):
+                    continue
+                gap = gcd_year - clz_year
+                if abs(gap) > 2:
+                    fp_rows.append(
+                        {
+                            "id": row.get("Core ComicID", ""),
+                            "series": row.get("Series", ""),
+                            "issue": row.get("Issue Nr", ""),
+                            "clz_year": clz_year,
+                            "gcd_year": gcd_year,
+                            "strategy": strategy,
+                            "gap": gap,
+                        }
+                    )
+    print("\n" + "=" * 80)
+    print(f"POTENTIAL FALSE POSITIVES (|gap| > 2, non-barcode): {len(fp_rows)}")
+    print("=" * 80)
+    for row in sorted(fp_rows, key=lambda x: -abs(x["gap"]))[:50]:
+        print(
+            f"  {row['series'][:40]:40s} #{row['issue']:6s} CLZ:{row['clz_year']} GCD:{row['gcd_year']} ({row['gap']:+d}) [{row['strategy']}]"
+        )
 
 
 if __name__ == "__main__":

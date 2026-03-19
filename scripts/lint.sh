@@ -154,7 +154,7 @@ fi
 # Type checking with ty (if available)
 if command -v ty >/dev/null 2>&1; then
     echo "Running type checker..."
-    if ! uv run ty check --error-on-warning; then
+    if ! uv run ty check --error-on-warning comic_identity_engine tests; then
         echo -e "${RED}ERROR: Type checking failed${NC}"
         exit 1
     fi

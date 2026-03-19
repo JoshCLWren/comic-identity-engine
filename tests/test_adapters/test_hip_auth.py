@@ -137,6 +137,7 @@ class TestAuthenticatedHIPAdapter:
         await adapter._authenticate()
 
         assert adapter._authenticated_cookies == mock_cookies
+        assert adapter._authenticated_cookies is not None
         assert len(adapter._authenticated_cookies) == 2
 
     @pytest.mark.asyncio

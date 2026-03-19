@@ -5,8 +5,6 @@ from __future__ import annotations
 import re
 import sqlite3
 from dataclasses import dataclass, field
-from pathlib import Path
-
 from comic_identity_engine.matching.normalizers import (
     normalize_publisher,
     normalize_series_name,
@@ -55,6 +53,7 @@ class GCDLocalAdapter:
 
     def _load_publishers(self) -> None:
         """Load publishers from gcd_publisher table."""
+        assert self._db is not None
         rows = self._db.execute(
             "SELECT id, name FROM gcd_publisher WHERE deleted = 0"
         ).fetchall()
@@ -76,6 +75,7 @@ class GCDLocalAdapter:
 
     def _load_series(self) -> None:
         """Load all active series from gcd_series table."""
+        assert self._db is not None
         rows = self._db.execute(
             """
             SELECT name, id, year_began, year_ended, issue_count, publisher_id
@@ -111,6 +111,7 @@ class GCDLocalAdapter:
 
     def _load_issues(self) -> None:
         """Load all issues from gcd_issue table."""
+        assert self._db is not None
         rows = self._db.execute(
             """
             SELECT series_id, number, id, key_date, publication_date,
@@ -151,7 +152,9 @@ class GCDLocalAdapter:
                     existing_type == "canonical" and new_type == "newsstand"
                 ):
                     self._issue_map[key] = (row["id"], row["match_type"])
-                    if cover_year is not None:
+                if cover_year is not None:
+                    existing_cy = self._issue_cover_year.get(key)
+                    if existing_cy is None or cover_year < existing_cy:
                         self._issue_cover_year[key] = cover_year
 
             if cover_year is not None and 1950 <= cover_year <= 2026:
@@ -163,6 +166,7 @@ class GCDLocalAdapter:
 
     def _load_barcodes(self) -> None:
         """Load all barcodes from gcd_issue table."""
+        assert self._db is not None
         rows = self._db.execute(
             "SELECT barcode, id FROM gcd_issue WHERE barcode IS NOT NULL AND deleted = 0"
         ).fetchall()
@@ -270,6 +274,16 @@ class GCDLocalAdapter:
             if bc_key.startswith(barcode) or barcode.startswith(bc_key[:13]):
                 return (bc_id, bc_key)
         return None
+
+    def get_series_info(self, series_id: int) -> dict:
+        """Get series info dict by ID. Returns empty dict if not found."""
+        self.ensure_loaded()
+        return self._series_id_to_info.get(series_id, {})
+
+    def iter_series_groups(self) -> list[list[dict]]:
+        """Iterate all series groups (one list per normalized name)."""
+        self.ensure_loaded()
+        return list(self._series_map.values())
 
     # === Stats ===
 

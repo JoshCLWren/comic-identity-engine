@@ -16,7 +16,7 @@ USED BY:
 import logging
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional, cast
 
 from sqlalchemy import Delete, Select, and_, delete, exc as sqlalchemy_exc, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -786,6 +786,9 @@ class ExternalMappingRepository:
             ExternalMapping.source_issue_id == source_issue_id
         )
         result = await self.session.execute(stmt)
+        from sqlalchemy.engine import CursorResult
+
+        result = cast(CursorResult[Any], result)
         return result.rowcount
 
 

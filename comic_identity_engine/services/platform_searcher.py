@@ -29,7 +29,7 @@ from __future__ import annotations
 import asyncio
 import re
 import time
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, TypedDict
 from uuid import UUID
 
 import jellyfish
@@ -40,11 +40,21 @@ from comic_identity_engine.database.connection import AsyncSessionLocal
 from comic_identity_engine.errors import NetworkError
 from comic_identity_engine.services.operations import OperationsManager
 
+if TYPE_CHECKING:
+    from longbox_scrapers.models import SearchResult
+
 logger = structlog.get_logger(__name__)
 
 
+class PlatformSearchConfigDict(TypedDict):
+    request_timeout_sec: int
+    strategies: list[str]
+    circuit_breaker: dict[str, int]
+    notes: str
+
+
 # Platform-specific search configurations
-PLATFORM_SEARCH_CONFIG = {
+PLATFORM_SEARCH_CONFIG: dict[str, PlatformSearchConfigDict] = {
     "gcd": {
         "request_timeout_sec": 15,
         "strategies": ["exact", "no_year", "subtitle_only", "normalized_title"],
@@ -966,7 +976,7 @@ class PlatformSearcher:
         issue: str,
         year: Optional[int],
         publisher: Optional[str],
-    ) -> Optional[object]:
+    ) -> Optional[SearchResult]:
         """Call scraper with correct arguments based on its signature.
 
         Args:

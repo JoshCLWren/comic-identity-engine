@@ -21,7 +21,6 @@ from uuid import UUID
 
 import httpx
 import pytest
-from fastapi.responses import FileResponse  # noqa: F401
 from httpx import ASGITransport
 
 os.environ.setdefault("DATABASE_URL", "postgresql://user:pass@localhost/test_db")
@@ -484,6 +483,10 @@ class TestImportClzValid:
                         files={"file": ("test.csv", io.BytesIO(csv), "text/csv")},
                     )
                     assert response.status_code == 202
+                    assert (
+                        mock_ops.create_or_resume_import_operation.await_args
+                        is not None
+                    )
                     create_call = (
                         mock_ops.create_or_resume_import_operation.await_args.kwargs
                     )
@@ -555,6 +558,10 @@ class TestImportClzValid:
                     await client.post(
                         "/api/v1/jobs/import-clz",
                         files={"file": ("data.csv", io.BytesIO(csv), "text/csv")},
+                    )
+                    assert (
+                        mock_ops.create_or_resume_import_operation.await_args
+                        is not None
                     )
                     create_call = (
                         mock_ops.create_or_resume_import_operation.await_args.kwargs

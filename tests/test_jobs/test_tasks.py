@@ -454,6 +454,7 @@ class TestResolveIdentityTask:
         assert result["canonical_uuid"] == str(TEST_ISSUE_ID)
         mock_mapping_repo.create_mapping.assert_not_awaited()
         mock_searcher.search_all_platforms.assert_awaited_once()
+        assert mock_searcher.search_all_platforms.await_args is not None
         assert mock_searcher.search_all_platforms.await_args.kwargs["year"] == 2020
 
     @pytest.mark.asyncio
@@ -616,6 +617,7 @@ class TestResolveIdentityTask:
 
         assert result["canonical_uuid"] == str(TEST_ISSUE_ID)
         mock_searcher.search_all_platforms.assert_awaited_once()
+        assert mock_searcher.search_all_platforms.await_args is not None
         assert mock_searcher.search_all_platforms.await_args.kwargs["year"] == 1991
 
 

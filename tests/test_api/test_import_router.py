@@ -84,6 +84,7 @@ async def test_import_clz_submits_checksum_addressed_operation(tmp_path: Path):
         )
 
     assert response.status_code == 202
+    assert mock_ops.create_or_resume_import_operation.await_args is not None
     create_call = mock_ops.create_or_resume_import_operation.await_args.kwargs
     assert create_call["operation_type"] == "import_clz"
     assert (
@@ -185,6 +186,7 @@ async def test_import_clz_passes_retry_failed_only_flag(tmp_path: Path):
         )
 
     assert response.status_code == 202
+    assert mock_ops.create_or_resume_import_operation.await_args is not None
     create_call = mock_ops.create_or_resume_import_operation.await_args.kwargs
     assert create_call["retry_failed_only"] is True
     data = response.json()

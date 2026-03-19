@@ -70,6 +70,7 @@ extend-exclude = ["comic-search-lib", "test_search.py", "test_browser_pool.py"]
 
 
 
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
@@ -95,3 +96,4 @@ cie-api = "comic_identity_engine.api.__main__:run"
 cie-import-clz = "comic_identity_engine.cli.commands.import_clz:cli_import_clz"
 cie-admin = "comic_identity_engine.cli.commands.admin:cli_admin"
 cie-worker = "comic_identity_engine.jobs.worker:main"
+cie-match = "comic_identity_engine.matching.cli:main"

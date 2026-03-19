@@ -8,6 +8,8 @@ from .adapter import GCDLocalAdapter
 from .types import CLZInput, MatchConfidence, StrategyResult
 
 CONFIDENCE_THRESHOLD = 50
+YEAR_GAP_RETRY_THRESHOLD = 4
+GROUP_YEAR_GAP_MAX = 15
 
 
 @dataclass
@@ -30,21 +32,87 @@ class GCDMatchingService:
             if result.is_match():
                 return result
 
-        results = []
-        results.append(self._try_exact_one_issue(clz_input))
-        results.append(self._try_exact_closest_year(clz_input))
-        results.append(self._try_exact_series(clz_input))
-        results.append(self._try_normalized_series(clz_input))
-        results.append(self._try_word_order_series(clz_input))
-        results.append(self._try_colon_comma_series(clz_input))
-        results.append(self._try_article_series(clz_input))
-        results.append(self._try_substring_series(clz_input))
-        results.append(self._try_reverse_lookup(clz_input))
+        # Run group-name strategies first (Series Group often matches GCD better)
+        group_differs = bool(clz_input.series_group) and (
+            clz_input.series_group_normalized.lower()
+            != clz_input.series_name_normalized.lower()
+        )
+        group_exact = (
+            self._try_exact_one_issue_for(clz_input, use_group=True)
+            if group_differs
+            else StrategyResult(confidence=MatchConfidence.NO_MATCH)
+        )
+        group_year = (
+            self._try_exact_closest_year_for(clz_input, use_group=True)
+            if group_differs
+            else StrategyResult(confidence=MatchConfidence.NO_MATCH)
+        )
+
+        # Run series-name strategies
+        name_exact = self._try_exact_one_issue_for(clz_input, use_group=False)
+        name_year = self._try_exact_closest_year_for(clz_input, use_group=False)
+
+        results = [
+            group_exact,
+            group_year,
+            name_exact,
+            name_year,
+            self._try_exact_series(clz_input),
+            self._try_normalized_series(clz_input),
+            self._try_word_order_series(clz_input),
+            self._try_colon_comma_series(clz_input),
+            self._try_article_series(clz_input),
+            self._try_substring_series(clz_input),
+            self._try_reverse_lookup(clz_input),
+        ]
 
         best = StrategyResult(confidence=MatchConfidence.NO_MATCH)
         for r in results:
             if r.confidence.value > best.confidence.value:
                 best = r
+            elif (
+                r.confidence.value == best.confidence.value
+                and r.year_distance is not None
+            ):
+                if best.year_distance is None or r.year_distance < best.year_distance:
+                    best = r
+
+        # Year-gap retry: if best has a large cover year gap AND group differs from
+        # series_name, check whether the series_name exact strategies give a closer match.
+        if (
+            best.is_match()
+            and best.confidence != MatchConfidence.BARCODE
+            and clz_input.year is not None
+            and best.gcd_series_id is not None
+            and group_differs
+        ):
+            cy = self.adapter.get_issue_cover_year(
+                best.gcd_series_id, clz_input.issue_nr
+            )
+            if cy is not None and abs(cy - clz_input.year) >= YEAR_GAP_RETRY_THRESHOLD:
+                for candidate in (name_exact, name_year):
+                    if candidate.is_match() and candidate.gcd_series_id is not None:
+                        cand_cy = self.adapter.get_issue_cover_year(
+                            candidate.gcd_series_id, clz_input.issue_nr
+                        )
+                        if cand_cy is not None and abs(cand_cy - clz_input.year) < abs(
+                            cy - clz_input.year
+                        ):
+                            best = candidate
+                            break
+
+        # Reject group-strategy matches with implausibly large year gaps — likely omnibus false positives
+        if (
+            best.is_match()
+            and "group" in (best.strategy_name or "")
+            and best.gcd_series_id is not None
+            and clz_input.year is not None
+        ):
+            cy = self.adapter.get_issue_cover_year(
+                best.gcd_series_id, clz_input.issue_nr
+            )
+            if cy is not None and abs(cy - clz_input.year) > GROUP_YEAR_GAP_MAX:
+                best = StrategyResult(confidence=MatchConfidence.NO_MATCH)
 
         if not best.gcd_issue_id and best.gcd_series_id:
             variant_result = self._try_variant_fallback(clz_input, best)
@@ -74,9 +142,19 @@ class GCDMatchingService:
 
         return StrategyResult(confidence=MatchConfidence.NO_MATCH)
 
-    def _try_exact_one_issue(self, clz: CLZInput) -> StrategyResult:
-        """Try exact series name + issue number, single match. EXACT_ONE_ISSUE=90."""
-        name_lower = clz.series_name.lower()
+    def _try_exact_one_issue_for(
+        self, clz: CLZInput, *, use_group: bool
+    ) -> StrategyResult:
+        """Try exact series name + issue number, single match. EXACT_ONE_ISSUE=90.
+
+        Uses series_group_normalized when use_group=True, series_name_normalized otherwise.
+        """
+        name_lower = (
+            clz.series_group_normalized.lower()
+            if use_group
+            else clz.series_name_normalized.lower()
+        )
+        strategy_suffix = "_group" if use_group else ""
         series_list = self.adapter.find_series_exact(
             name_lower, clz.publisher_normalized
         )
@@ -98,7 +176,7 @@ class GCDMatchingService:
                 confidence=MatchConfidence.EXACT_ONE_ISSUE,
                 gcd_issue_id=issue[0],
                 gcd_series_id=series["id"],
-                strategy_name="exact_one_issue",
+                strategy_name=f"exact_one_issue{strategy_suffix}",
                 series_name=clz.series_name,
                 issue_number=clz.issue_nr,
                 year_distance=year_dist,
@@ -106,9 +184,23 @@ class GCDMatchingService:
 
         return StrategyResult(confidence=MatchConfidence.NO_MATCH)
 
-    def _try_exact_closest_year(self, clz: CLZInput) -> StrategyResult:
-        """Try exact name + multiple matches, pick closest year. EXACT_CLOSEST_YEAR=85."""
-        name_lower = clz.series_name.lower()
+    # Keep original name for backwards compatibility in callers
+    def _try_exact_one_issue(self, clz: CLZInput) -> StrategyResult:
+        return self._try_exact_one_issue_for(clz, use_group=False)
+
+    def _try_exact_closest_year_for(
+        self, clz: CLZInput, *, use_group: bool
+    ) -> StrategyResult:
+        """Try exact name + multiple matches, pick closest year. EXACT_CLOSEST_YEAR=85.
+
+        Uses series_group_normalized when use_group=True, series_name_normalized otherwise.
+        """
+        name_lower = (
+            clz.series_group_normalized.lower()
+            if use_group
+            else clz.series_name_normalized.lower()
+        )
+        strategy_suffix = "_group" if use_group else ""
         series_list = self.adapter.find_series_exact(
             name_lower, clz.publisher_normalized
         )
@@ -124,7 +216,7 @@ class GCDMatchingService:
 
         if len(candidates_with_issue) > 1 and clz.year is not None:
 
-            def year_dist(s):
+            def year_dist(s: dict) -> int:
                 cy = self.adapter.get_issue_cover_year(s["id"], clz.issue_nr)
                 if cy is not None and clz.year is not None:
                     return abs(cy - clz.year)
@@ -132,12 +224,11 @@ class GCDMatchingService:
 
             best = min(candidates_with_issue, key=year_dist)
             issue = self.adapter.find_issue(best["id"], clz.issue_nr)
-            cy = self.adapter.get_issue_cover_year(best["id"], clz.issue_nr)
             return StrategyResult(
                 confidence=MatchConfidence.EXACT_CLOSEST_YEAR,
                 gcd_issue_id=issue[0] if issue else None,
                 gcd_series_id=best["id"],
-                strategy_name="exact_closest_year",
+                strategy_name=f"exact_closest_year{strategy_suffix}",
                 series_name=clz.series_name,
                 issue_number=clz.issue_nr,
                 year_distance=year_dist(best),
@@ -145,9 +236,13 @@ class GCDMatchingService:
 
         return StrategyResult(confidence=MatchConfidence.NO_MATCH)
 
+    # Keep original name for backwards compatibility in callers
+    def _try_exact_closest_year(self, clz: CLZInput) -> StrategyResult:
+        return self._try_exact_closest_year_for(clz, use_group=False)
+
     def _try_exact_series(self, clz: CLZInput) -> StrategyResult:
         """Try exact series name only. EXACT_SERIES=80."""
-        name_lower = clz.series_name.lower()
+        name_lower = clz.series_name_normalized.lower()
         series_list = self.adapter.find_series_exact(
             name_lower, clz.publisher_normalized
         )
@@ -184,9 +279,9 @@ class GCDMatchingService:
         if len(search_words) < 2:
             return StrategyResult(confidence=MatchConfidence.NO_MATCH)
 
-        name_lower = clz.series_name.lower()
+        name_lower = clz.series_name_normalized.lower()
         results = []
-        for series_list in self.adapter._series_map.values():  # noqa: SLF001
+        for series_list in self.adapter.iter_series_groups():
             s = series_list[0]
             if (
                 clz.publisher_normalized
@@ -209,7 +304,7 @@ class GCDMatchingService:
 
     def _try_colon_comma_series(self, clz: CLZInput) -> StrategyResult:
         """Try colon/comma variant. COLON_COMMA_SERIES=68."""
-        name_lower = clz.series_name.lower()
+        name_lower = clz.series_name_normalized.lower()
         comma_name = name_lower.replace(": ", ", ")
         if comma_name == name_lower:
             return StrategyResult(confidence=MatchConfidence.NO_MATCH)
@@ -230,7 +325,7 @@ class GCDMatchingService:
 
     def _try_article_series(self, clz: CLZInput) -> StrategyResult:
         """Try with/without 'The' prefix. ARTICLE_SERIES=60."""
-        name_lower = clz.series_name.lower()
+        name_lower = clz.series_name_normalized.lower()
 
         if name_lower.startswith("the "):
             alt = name_lower[4:]
@@ -272,7 +367,7 @@ class GCDMatchingService:
         if len(clz.series_name) < 4:
             return StrategyResult(confidence=MatchConfidence.NO_MATCH)
 
-        name_lower = clz.series_name.lower()
+        name_lower = clz.series_name_normalized.lower()
         search_terms = name_lower
         for prefix in ["the ", "a ", "an "]:
             if search_terms.startswith(prefix):
@@ -281,7 +376,7 @@ class GCDMatchingService:
         search_terms = search_terms.rstrip(" the")
 
         results = []
-        for series_list in self.adapter._series_map.values():  # noqa: SLF001
+        for series_list in self.adapter.iter_series_groups():
             s = series_list[0]
             if (
                 clz.publisher_normalized
@@ -340,9 +435,7 @@ class GCDMatchingService:
                 pub_matches = [
                     sid
                     for sid in unique_series
-                    if self.adapter._series_id_to_info.get(sid, {}).get(
-                        "publisher_normalized"
-                    )
+                    if self.adapter.get_series_info(sid).get("publisher_normalized")
                     == clz.publisher_normalized
                 ]
                 if pub_matches:
@@ -363,7 +456,7 @@ class GCDMatchingService:
 
             best, best_score = None, 0.0
             for sid in unique_series:
-                info = self.adapter._series_id_to_info.get(sid, {})  # noqa: SLF001
+                info = self.adapter.get_series_info(sid)
                 score = self._similarity(
                     clz.series_name.lower(), info.get("name", "").lower()
                 )
@@ -380,7 +473,7 @@ class GCDMatchingService:
                             strategy_name="reverse_lookup_similarity",
                             series_name=clz.series_name,
                             issue_number=clz.issue_nr,
-                            match_details=f"matched_series={self.adapter._series_id_to_info.get(best, {}).get('name', '')}",
+                            match_details=f"matched_series={self.adapter.get_series_info(best).get('name', '')}",
                         )
 
         return StrategyResult(confidence=MatchConfidence.NO_MATCH)
