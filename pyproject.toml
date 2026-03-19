@@ -44,7 +44,7 @@ dependencies = [
     # Comic domain utilities
     "longbox-commons @ git+https://github.com/JoshCLWren/longbox-commons.git",
     # Comic entity matching and identity resolution
-    "longbox-matcher @ file:///mnt/extra/josh/code/longbox-matcher",
+    "longbox-matcher @ git+https://github.com/JoshCLWren/longbox-matcher.git",
     # HTTP client (replaces duplicate http_client.py)
     "scrapekit @ git+https://github.com/JoshCLWren/scrapekit.git",
     "tqdm>=4.67.3",

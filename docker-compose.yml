@@ -66,6 +66,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        - DEPLOY_TOKEN=${DEPLOY_TOKEN:-}
     environment:
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1

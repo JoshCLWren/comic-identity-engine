@@ -295,7 +295,7 @@ requires-dist = [
     { name = "jellyfish", specifier = ">=1.1" },
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "longbox-commons", git = "https://github.com/JoshCLWren/longbox-commons.git" },
-    { name = "longbox-matcher", directory = "../longbox-matcher" },
+    { name = "longbox-matcher", git = "https://github.com/JoshCLWren/longbox-matcher.git" },
     { name = "longbox-scrapers", git = "https://github.com/JoshCLWren/longbox-scrapers.git" },
     { name = "playwright", specifier = ">=1.48" },
     { name = "pydantic", specifier = ">=2.9" },
@@ -697,7 +697,7 @@ dependencies = [
 [[package]]
 name = "longbox-matcher"
 version = "0.1.0"
-source = { directory = "../longbox-matcher" }
+source = { git = "https://github.com/JoshCLWren/longbox-matcher.git#e2a1afccbad51f076ed499e7703d4aeefe3d8472" }
 dependencies = [
     { name = "jellyfish" },
     { name = "longbox-commons" },
@@ -705,29 +705,6 @@ dependencies = [
     { name = "pydantic" },
     { name = "rapidfuzz" },
     { name = "recordlinkage" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "jellyfish", specifier = ">=1.0" },
-    { name = "longbox-commons", git = "https://github.com/JoshCLWren/longbox-commons.git" },
-    { name = "numpy", marker = "extra == 'ml'", specifier = ">=1.20" },
-    { name = "pandas", specifier = ">=2.0" },
-    { name = "pydantic", specifier = ">=2.0" },
-    { name = "rapidfuzz", specifier = ">=3.0" },
-    { name = "recordlinkage", specifier = ">=0.16" },
-    { name = "scikit-learn", marker = "extra == 'ml'", specifier = ">=1.0" },
-    { name = "sentence-transformers", marker = "extra == 'ml'", specifier = ">=2.0" },
-    { name = "torch", marker = "extra == 'ml'", specifier = ">=2.0" },
-]
-provides-extras = ["ml"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pyright", specifier = ">=1.1.0" },
-    { name = "pytest", specifier = ">=8.0.0" },
-    { name = "pytest-cov", specifier = ">=4.0.0" },
-    { name = "ruff", specifier = ">=0.1.0" },
 ]
 
 [[package]]
