@@ -282,6 +282,11 @@ class GCDLocalAdapter:
                         candidates.append((sid, iid))
         return candidates
 
+    def find_issues_by_year(self, year: int) -> list[tuple[int, int, str]]:
+        """Find all issues from a given year. Returns list of (series_id, gcd_issue_id, issue_number)."""
+        self.ensure_loaded()
+        return self._year_to_issues.get(year, [])
+
     def get_issue_cover_year(self, series_id: int, issue_nr: str) -> int | None:
         """Get the actual cover/publication year of an issue."""
         self.ensure_loaded()

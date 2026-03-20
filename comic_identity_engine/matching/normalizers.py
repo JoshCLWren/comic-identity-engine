@@ -31,6 +31,23 @@ def strip_subtitle(name: str) -> str:
     return re.sub(r"\s*[:]\s*[^:]+$", "", name)
 
 
+def extract_base_series_name(name: str) -> str:
+    """Extract base series name without subtitle (for fuzzy matching).
+
+    Handles patterns like:
+    - "B.P.R.D.: Hell on Earth" → "B.P.R.D."
+    - "B.P.R.D.: Hell on Earth — New World" → "B.P.R.D."
+    - "X-Men: Legacy" → "X-Men"
+
+    Strips everything after the first colon or em-dash.
+    """
+    if not name:
+        return ""
+    # Strip subtitle after colon, em-dash, or en-dash (NOT regular hyphen)
+    result = re.sub(r"\s*[:\u2014\u2013]\s*.+$", "", name)
+    return result.strip()
+
+
 def normalize_series_name(name: str) -> str:
     """Remove publisher suffixes, volume info, year parens, articles for clean matching."""
     result = name
@@ -68,15 +85,46 @@ def normalize_series_name_strict(name: str) -> str:
     return result.strip()
 
 
-def parse_issue_nr(row: dict) -> str | None:
-    """Parse CLZ issue number from CSV row dict."""
-    value = row.get("Issue Nr", "")
+def normalize_issue_number(value: str) -> str | None:
+    """Normalize CLZ issue number to GCD format.
+
+    Maps special issue formats to GCD equivalents:
+    - "½", "1/2" → "0.5"
+    - "Annual", "Ann" → "Annual"
+    - "AU" → "AU" (kept as-is for variant matching)
+    """
     if not value:
         return "1"
+
+    value = value.strip()
+
+    # Handle half issues: ½, 1/2, 0.5
+    if value == "½" or value == "1/2":
+        return "0.5"
+
+    # Handle Annual issues
+    if value.lower() in ("annual", "ann"):
+        return "Annual"
+
+    # Handle AU (Age of Ultron) and similar variant suffixes - keep as-is
+    if value.isalpha():
+        return value
+
+    # Handle mixed like "1AU", "2AU" - these are variants, return as-is
+    if any(c.isalpha() for c in value) and any(c.isdigit() for c in value):
+        return value
+
+    # Standard numeric parsing
     try:
         return str(int(float(value)))
     except (ValueError, TypeError):
         return None
+
+
+def parse_issue_nr(row: dict) -> str | None:
+    """Parse CLZ issue number from CSV row dict."""
+    value = row.get("Issue Nr", "")
+    return normalize_issue_number(value)
 
 
 def parse_year(row: dict) -> int | None:

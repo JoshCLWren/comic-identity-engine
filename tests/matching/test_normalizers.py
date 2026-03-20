@@ -47,6 +47,36 @@ class TestStripSubtitle:
         assert result == "A: B"
 
 
+class TestExtractBaseSeriesName:
+    def test_strips_colon_subtitle(self) -> None:
+        from comic_identity_engine.matching.normalizers import extract_base_series_name
+
+        assert extract_base_series_name("B.P.R.D.: Hell on Earth") == "B.P.R.D."
+
+    def test_preserves_hyphen_in_name(self) -> None:
+        """Spider-Man should NOT become Spider"""
+        from comic_identity_engine.matching.normalizers import extract_base_series_name
+
+        assert extract_base_series_name("Spider-Man: Legacy") == "Spider-Man"
+        assert extract_base_series_name("X-Men: Legacy") == "X-Men"
+
+    def test_preserves_name_without_subtitle(self) -> None:
+        from comic_identity_engine.matching.normalizers import extract_base_series_name
+
+        assert extract_base_series_name("Amazing Spider-Man") == "Amazing Spider-Man"
+
+    def test_strips_em_dash_subtitle(self) -> None:
+        from comic_identity_engine.matching.normalizers import extract_base_series_name
+
+        result = extract_base_series_name("B.P.R.D. — Hell on Earth")
+        assert result == "B.P.R.D."
+
+    def test_empty_string_returns_empty(self) -> None:
+        from comic_identity_engine.matching.normalizers import extract_base_series_name
+
+        assert extract_base_series_name("") == ""
+
+
 class TestNormalizeSeriesName:
     def test_strips_vol_suffix(self) -> None:
         assert normalize_series_name("X-Men, Vol. 1") == "X-Men"
@@ -126,8 +156,25 @@ class TestParseIssueNr:
     def test_returns_one_for_missing_key(self) -> None:
         assert parse_issue_nr({}) == "1"
 
-    def test_returns_none_for_non_numeric(self) -> None:
-        assert parse_issue_nr({"Issue Nr": "AU"}) is None
+    def test_handles_half_issue_symbol(self) -> None:
+        """½ should map to 0.5"""
+        assert parse_issue_nr({"Issue Nr": "½"}) == "0.5"
+
+    def test_handles_half_issue_fraction(self) -> None:
+        """1/2 should map to 0.5"""
+        assert parse_issue_nr({"Issue Nr": "1/2"}) == "0.5"
+
+    def test_handles_annual(self) -> None:
+        """Annual should be preserved"""
+        assert parse_issue_nr({"Issue Nr": "Annual"}) == "Annual"
+
+    def test_handles_au_variant(self) -> None:
+        """AU (Age of Ultron) variant should be preserved"""
+        assert parse_issue_nr({"Issue Nr": "AU"}) == "AU"
+
+    def test_handles_mixed_variant(self) -> None:
+        """1AU should be preserved as variant"""
+        assert parse_issue_nr({"Issue Nr": "1AU"}) == "1AU"
 
     def test_strips_whitespace(self) -> None:
         assert parse_issue_nr({"Issue Nr": "  42  "}) == "42"

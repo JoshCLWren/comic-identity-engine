@@ -46,6 +46,12 @@ class MatchConfidence(Enum):
     # Substring match (last resort for name)
     SUBSTRING_SERIES = 50
 
+    # Fuzzy subtitle match (base series matches, different subtitle)
+    FUZZY_SUBTITLE_SERIES = 45
+
+    # Date-based match (issue number mismatch, matched by cover date)
+    DATE_BASED_MATCH = 40
+
     # No match found
     NO_MATCH = 0
 
