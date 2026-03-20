@@ -1185,30 +1185,40 @@ async def _mark_clz_row_active(
 
 ALL_PLATFORMS = {"gcd", "locg", "ccl", "aa", "cpg", "hip"}
 
-_GCD_DUMP_MATCHER = None
+_GCD_MATCHING_SERVICE = None
 
 
-def _get_gcd_dump_matcher():
-    """Get or create the singleton GCD dump matcher.
+def _get_gcd_matching_service():
+    """Get or create the singleton GCD matching service.
 
-    Returns None if the GCD dump database is not available.
+    Returns None if the GCD database is not available.
     """
-    global _GCD_DUMP_MATCHER
-    if _GCD_DUMP_MATCHER is None:
-        from comic_identity_engine.services import GCDDumpMatcher
+    global _GCD_MATCHING_SERVICE
+    if _GCD_MATCHING_SERVICE is None:
+        from comic_identity_engine.matching.adapter import GCDLocalAdapter
+        from comic_identity_engine.matching.service import GCDMatchingService
 
-        _GCD_DUMP_MATCHER = GCDDumpMatcher()
-        if not _GCD_DUMP_MATCHER.is_available():
-            logger.info("GCD dump matcher not available, will use fallback")
-            _GCD_DUMP_MATCHER = None
-    return _GCD_DUMP_MATCHER
+        adapter = GCDLocalAdapter()
+        adapter.load()
+        if not adapter._loaded:
+            logger.info("GCD database not available, closing adapter")
+            adapter.close()
+            return None
+
+        _GCD_MATCHING_SERVICE = GCDMatchingService(adapter=adapter)
+        logger.info(
+            "GCD matching service initialized",
+            series_count=adapter.series_count,
+            issue_count=adapter.issue_count,
+        )
+    return _GCD_MATCHING_SERVICE
 
 
-def _try_gcd_dump_match(
+def _try_gcd_match(
     row: dict[str, str],
     issue_candidate,
 ) -> dict[str, Any] | None:
-    """Try to match using GCD dump before falling back to HTTP-based resolution.
+    """Try to match using GCD local database before falling back to HTTP-based resolution.
 
     Args:
         row: CSV row dictionary
@@ -1216,62 +1226,50 @@ def _try_gcd_dump_match(
 
     Returns:
         Match result dictionary if high-confidence match found, None otherwise.
-        Result contains: gcd_issue_id, gcd_series_id, match_type, confidence
+        Result contains: gcd_issue_id, match_details
     """
-    matcher = _get_gcd_dump_matcher()
-    if matcher is None:
+    service = _get_gcd_matching_service()
+    if service is None:
         return None
 
-    barcode = issue_candidate.upc
-    series_title = issue_candidate.series_title
-    issue_number = issue_candidate.issue_number
-    year = issue_candidate.series_start_year
-
-    series_group = (row.get("Series Group") or "").strip() or None
-
     try:
-        result = matcher.match(
-            barcode=barcode,
-            series_title=series_title,
-            issue_number=issue_number,
-            year=year,
-            series_group=series_group,
-        )
+        from comic_identity_engine.matching.types import CLZInput
 
-        if result.matched and result.is_high_confidence:
+        clz_input = CLZInput.from_csv_row(row)
+
+        result = service.match(clz_input)
+
+        if result.is_match() and result.confidence.value >= 90:
             logger.info(
-                "GCD dump match found",
+                "GCD match found",
                 gcd_issue_id=result.gcd_issue_id,
-                match_type=result.match_type,
-                confidence=result.confidence,
-                series_title=series_title,
-                issue_number=issue_number,
+                confidence=result.confidence.value,
+                strategy_name=result.strategy_name,
+                series_title=issue_candidate.series_title,
+                issue_number=issue_candidate.issue_number,
             )
             return {
                 "gcd_issue_id": result.gcd_issue_id,
-                "gcd_series_id": result.gcd_series_id,
-                "gcd_series_name": result.gcd_series_name,
-                "match_type": result.match_type,
-                "confidence": result.confidence,
-                "gcd_url": result.gcd_url,
+                "strategy_name": result.strategy_name,
+                "confidence": result.confidence.value,
             }
 
         logger.debug(
-            "GCD dump match below threshold",
-            match_type=result.match_type,
-            confidence=result.confidence,
-            series_title=series_title,
-            issue_number=issue_number,
+            "GCD match below threshold or no match",
+            confidence=result.confidence.value,
+            strategy_name=result.strategy_name,
+            series_title=issue_candidate.series_title,
+            issue_number=issue_candidate.issue_number,
         )
         return None
 
     except Exception as e:
         logger.warning(
-            "GCD dump matching failed",
+            "GCD matching failed",
             error=str(e),
             error_type=type(e).__name__,
-            series_title=series_title,
-            issue_number=issue_number,
+            series_title=issue_candidate.series_title,
+            issue_number=issue_candidate.issue_number,
         )
         return None
 
@@ -2183,17 +2181,17 @@ async def _process_single_clz_row(
         source_series_id=issue_candidate.source_series_id,
     )
 
-    gcd_match_result = _try_gcd_dump_match(row, issue_candidate)
+    gcd_match_result = _try_gcd_match(row, issue_candidate)
     result: ResolutionResult | None = None
     gcd_match_used = False
 
     if gcd_match_result:
         logger.info(
-            "GCD dump match found",
+            "GCD match found",
             operation_id=operation_id,
             row=row_index,
             gcd_issue_id=gcd_match_result["gcd_issue_id"],
-            match_type=gcd_match_result["match_type"],
+            strategy_name=gcd_match_result["strategy_name"],
             confidence=gcd_match_result["confidence"],
         )
 
@@ -2220,8 +2218,8 @@ async def _process_single_clz_row(
                     issue_number=gcd_issue.issue_number,
                     series_title=gcd_issue.series_run.title,
                     series_start_year=gcd_issue.series_run.start_year,
-                    match_reason=f"GCD dump match: {gcd_match_result['match_type']}",
-                    issue_confidence=gcd_match_result["confidence"],
+                    match_reason=f"GCD match: {gcd_match_result['strategy_name']}",
+                    issue_confidence=gcd_match_result["confidence"] / 100.0,
                 )
 
                 result = ResolutionResult(
@@ -2229,11 +2227,11 @@ async def _process_single_clz_row(
                     matches=[dummy_candidate],
                     best_match=dummy_candidate,
                     created_new=False,
-                    explanation=f"Matched via GCD dump ({gcd_match_result['match_type']}, confidence: {gcd_match_result['confidence']:.2f})",
+                    explanation=f"Matched via GCD local database ({gcd_match_result['strategy_name']}, confidence: {gcd_match_result['confidence']}%)",
                 )
                 gcd_match_used = True
                 logger.info(
-                    "Used GCD dump match with existing canonical issue",
+                    "Used GCD match with existing canonical issue",
                     operation_id=operation_id,
                     row=row_index,
                     issue_id=str(gcd_issue.id),
@@ -2241,14 +2239,14 @@ async def _process_single_clz_row(
                 )
             else:
                 logger.warning(
-                    "GCD dump match found existing mapping but issue not found in database",
+                    "GCD match found existing mapping but issue not found in database",
                     operation_id=operation_id,
                     row=row_index,
                     gcd_issue_id=gcd_match_result["gcd_issue_id"],
                 )
         else:
             logger.info(
-                "GCD dump match found but no existing canonical issue, falling back to resolver",
+                "GCD match found but no existing canonical issue, falling back to resolver",
                 operation_id=operation_id,
                 row=row_index,
                 gcd_issue_id=gcd_match_result["gcd_issue_id"],
