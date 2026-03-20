@@ -780,14 +780,35 @@ class TestTryVariantFallback:
         result = svc._try_variant_fallback(clz, prior)
         assert result.confidence == MatchConfidence.EXACT_ONE_ISSUE
         assert result.gcd_issue_id == 555
+        assert "variant" in (result.strategy_name or "")
 
-    def test_variant_fallback_no_match_digit_only(self) -> None:
+
+class TestBackwardCompatMethods:
+    def test_try_exact_one_issue_calls_for(self) -> None:
+        adapter = make_adapter()
+        svc = GCDMatchingService(adapter)
+        clz = make_clz(series_name="X-Men", issue_nr="1", year=1991)
+        result = svc._try_exact_one_issue(clz)
+        assert result is not None
+
+    def test_try_exact_closest_year_calls_for(self) -> None:
+        adapter = make_adapter()
+        svc = GCDMatchingService(adapter)
+        clz = make_clz(series_name="X-Men", issue_nr="1", year=1991)
+        result = svc._try_exact_closest_year(clz)
+        assert result is not None
+
+
+class TestVariantFallbackIssueFullEqualsIssueNr:
+    def test_variant_fallback_same_issue_full_as_issue_nr(self) -> None:
+        """When issue_full == issue_nr, variant fallback returns NO_MATCH."""
         adapter = MagicMock()
         adapter.iter_series_groups.return_value = []
         adapter.find_issue_by_barcode.return_value = None
         adapter.find_issue_by_barcode_prefix.return_value = None
         adapter.find_series_exact.return_value = []
         adapter.find_series_strict.return_value = []
+        adapter.find_issues_by_number_and_year.return_value = []
         svc = GCDMatchingService(adapter)
         prior = StrategyResult(
             confidence=MatchConfidence.EXACT_SERIES,
@@ -798,6 +819,208 @@ class TestTryVariantFallback:
         clz.issue_full = "1"
         result = svc._try_variant_fallback(clz, prior)
         assert result.confidence == MatchConfidence.NO_MATCH
+
+
+class TestYearGapRetryMultipleCandidates:
+    def test_year_gap_retry_with_multiple_candidates(self) -> None:
+        """When year-gap retry finds closer match among multiple candidates, it replaces."""
+        group_series = {
+            "id": 10,
+            "year_began": 1963,
+            "year_ended": None,
+            "publisher_normalized": "marvel",
+        }
+        name_series_a = {
+            "id": 11,
+            "year_began": 1991,
+            "year_ended": 2001,
+            "publisher_normalized": "marvel",
+        }
+        name_series_b = {
+            "id": 12,
+            "year_began": 1992,
+            "year_ended": 2002,
+            "publisher_normalized": "marvel",
+        }
+
+        def find_series_exact(name_lower: str, _pub: str = "") -> list[dict]:
+            if name_lower == "x-men":
+                return [group_series]
+            if name_lower == "uncanny x-men":
+                return [name_series_a, name_series_b]
+            return []
+
+        adapter = MagicMock()
+        adapter._series_map = {}
+        adapter._series_id_to_info = {}
+
+        def find_issue(series_id: int, issue_nr: str) -> tuple[int, str] | None:
+            if issue_nr == "1":
+                return (100 + series_id, "canonical")
+            return None
+
+        def get_cover_year(series_id: int, _issue_nr: str) -> int | None:
+            if series_id == 10:
+                return 1966
+            if series_id == 11:
+                return 1991
+            if series_id == 12:
+                return 1992
+            return None
+
+        adapter.find_series_exact.side_effect = find_series_exact
+        adapter.find_issue.side_effect = find_issue
+        adapter.get_issue_cover_year.side_effect = get_cover_year
+        adapter.find_issue_by_barcode.return_value = None
+        adapter.find_issue_by_barcode_prefix.return_value = None
+        adapter.find_issues_by_number_and_year.return_value = []
+        adapter.find_series_strict.return_value = []
+        adapter.iter_series_groups.return_value = []
+
+        svc = GCDMatchingService(adapter)
+        clz = make_clz(
+            series_name="Uncanny X-Men",
+            series_group="X-Men",
+            issue_nr="1",
+            year=1991,
+        )
+        result = svc.match(clz)
+        assert result.gcd_series_id == 11
+        assert "group" not in (result.strategy_name or "")
+
+
+class TestExactClosestYearFallbackYearBegan:
+    def test_exact_closest_year_uses_year_began_when_no_cover_year(self) -> None:
+        """When no cover year is available, year_began is used for distance."""
+        s1 = {
+            "id": 10,
+            "year_began": 1963,
+            "year_ended": 1996,
+            "publisher_normalized": "marvel",
+        }
+        s2 = {
+            "id": 11,
+            "year_began": 1988,
+            "year_ended": 2012,
+            "publisher_normalized": "marvel",
+        }
+        adapter = MagicMock()
+        adapter.find_series_exact.side_effect = lambda n, p=0: [s1, s2]
+        adapter.find_issue.side_effect = lambda s, n: (
+            99 if s == 10 else 100,
+            "canonical",
+        )
+        adapter.get_issue_cover_year.return_value = None
+        adapter.find_issue_by_barcode.return_value = None
+        adapter.find_issue_by_barcode_prefix.return_value = None
+        adapter.find_series_strict.return_value = []
+        adapter.find_issues_by_number_and_year.return_value = []
+        adapter.iter_series_groups.return_value = []
+        svc = GCDMatchingService(adapter)
+        clz = make_clz(series_name="Amazing Spider-Man", issue_nr="1", year=1990)
+        result = svc.match(clz)
+        assert result.confidence == MatchConfidence.EXACT_CLOSEST_YEAR
+        assert result.gcd_series_id == 11
+
+
+class TestSimilarityEdgeCases:
+    def test_similarity_substring_at_start(self) -> None:
+        """When s1 is a prefix of s2, score depends on length ratio."""
+        adapter = make_adapter()
+        svc = GCDMatchingService(adapter)
+        score = svc._similarity("x", "x-men")
+        assert 0.0 < score < 1.0
+
+    def test_similarity_substring_overlap(self) -> None:
+        """Non-prefix substring uses word overlap."""
+        adapter = make_adapter()
+        svc = GCDMatchingService(adapter)
+        score = svc._similarity("x-men", "the x-men classic")
+        assert 0.0 < score < 1.0
+
+    def test_similarity_equal_strings(self) -> None:
+        """Identical strings return 1.0."""
+        adapter = make_adapter()
+        svc = GCDMatchingService(adapter)
+        score = svc._similarity("x-men", "x-men")
+        assert score == 1.0
+
+    def test_similarity_no_word_overlap(self) -> None:
+        adapter = make_adapter()
+        svc = GCDMatchingService(adapter)
+        score = svc._similarity("x-men", "batman")
+        assert score == 0.0
+
+
+class TestTryExactSeriesMultiple:
+    def test_exact_series_no_match_multiple_series(self) -> None:
+        adapter = make_adapter()
+        adapter.find_series_exact.side_effect = lambda n, p=0: [
+            {"id": 1, "name": "X-Men", "publisher_normalized": "marvel"},
+            {"id": 2, "name": "X-Men", "publisher_normalized": "marvel"},
+        ]
+        svc = GCDMatchingService(adapter)
+        clz = make_clz(series_name="X-Men")
+        result = svc._try_exact_series(clz)
+        assert result.confidence == MatchConfidence.NO_MATCH
+
+
+class TestMatchGroupNoYearRetry:
+    """Test year-gap retry when group_differs is False (no group strategy runs)."""
+
+    def test_no_year_retry_when_group_not_differs(self) -> None:
+        """When series_name == series_group, year-gap retry does not run."""
+        series = {
+            "id": 10,
+            "year_began": 1991,
+            "year_ended": 2001,
+            "publisher_normalized": "marvel",
+        }
+        adapter = make_adapter(
+            series_exact={"x-men": [series]},
+            issues={(10, "1"): (100, "canonical")},
+            cover_years={(10, "1"): 1991},
+        )
+        svc = GCDMatchingService(adapter)
+        clz = make_clz(
+            series_name="X-Men",
+            series_group="X-Men",
+            issue_nr="1",
+            year=1991,
+        )
+        result = svc.match(clz)
+        assert result.gcd_series_id == 10
+
+
+class TestMatchBarcodeExactNoPrefix:
+    def test_barcode_exact_no_prefix(self) -> None:
+        """Exact barcode match returns without trying prefix."""
+        adapter = make_adapter(barcode_ids={"0123456789012": 42})
+        svc = GCDMatchingService(adapter)
+        clz = make_clz(barcode="0123456789012")
+        result = svc.match(clz)
+        assert result.confidence == MatchConfidence.BARCODE
+        assert result.gcd_issue_id == 42
+        adapter.find_issue_by_barcode_prefix.assert_not_called()
+
+
+class TestMatchNoMatchCase:
+    def test_match_returns_best_among_all_strategies(self) -> None:
+        """When no high-confidence match, returns the best available."""
+        adapter = make_adapter()
+        adapter.find_series_strict.return_value = [
+            {"id": 42, "name": "X-Men", "publisher_normalized": "marvel"}
+        ]
+        adapter.find_issue_by_barcode.return_value = None
+        adapter.find_issue_by_barcode_prefix.return_value = None
+        adapter.find_series_exact.return_value = []
+        adapter.find_issues_by_number_and_year.return_value = []
+        adapter.iter_series_groups.return_value = []
+        svc = GCDMatchingService(adapter)
+        clz = make_clz(series_name="X-Men")
+        result = svc.match(clz)
+        assert result.confidence == MatchConfidence.NORMALIZED_SERIES
+        assert result.gcd_series_id == 42
 
     def test_variant_fallback_no_match_letter_only(self) -> None:
         adapter = MagicMock()

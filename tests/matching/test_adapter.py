@@ -529,3 +529,121 @@ class TestLoadIssuesKeyDateEdgeCases:
 
         year = adapter.get_issue_cover_year(1, "101")
         assert year is None
+
+
+class TestAdapterLoad:
+    """Tests for load() and ensure_loaded()."""
+
+    def test_load_populates_all_indexes(self, test_db: sqlite3.Connection) -> None:
+        """load() populates publisher, series, issue, and barcode maps."""
+        adapter = GCDLocalAdapter()
+        adapter._db = test_db
+        adapter.load()
+        assert len(adapter._publisher_map) == 2
+        assert len(adapter._series_id_to_info) >= 5
+        assert len(adapter._issue_map) >= 9
+        assert len(adapter._barcode_map) >= 4
+        assert adapter._loaded is True
+
+    def test_load_does_not_reload_if_already_loaded(
+        self, test_db: sqlite3.Connection
+    ) -> None:
+        """load() skips reload when _loaded is already True."""
+        adapter = GCDLocalAdapter()
+        adapter._db = test_db
+        adapter._load_publishers()
+        adapter._load_series()
+        adapter._load_issues()
+        adapter._load_barcodes()
+        adapter._loaded = True
+
+        original_issue_count = len(adapter._issue_map)
+        adapter.load()
+        assert len(adapter._issue_map) == original_issue_count
+
+    def test_load_with_preconnected_db(self, test_db: sqlite3.Connection) -> None:
+        """load() works correctly when _db is pre-connected."""
+        adapter = GCDLocalAdapter()
+        adapter._db = test_db
+        adapter.load()
+        assert adapter._loaded is True
+        assert len(adapter._publisher_map) == 2
+
+
+class TestNormalizeSeriesNameStrict:
+    """Tests for _normalize_series_name_strict."""
+
+    def test_ampersand_normalized_to_and(self, test_db: sqlite3.Connection) -> None:
+        """& is replaced with 'and' in strict normalization."""
+        adapter = GCDLocalAdapter()
+        adapter._db = test_db
+        adapter._load_publishers()
+        adapter._load_series()
+        adapter._loaded = True
+        result = adapter._normalize_series_name_strict("Cloak & Dagger")
+        assert "and" in result
+
+    def test_punctuation_stripped(self, test_db: sqlite3.Connection) -> None:
+        """All punctuation is removed."""
+        adapter = GCDLocalAdapter()
+        adapter._db = test_db
+        adapter._load_publishers()
+        adapter._load_series()
+        adapter._loaded = True
+        result = adapter._normalize_series_name_strict("X-Men: Legacy")
+        assert ":" not in result
+        assert "'" not in result
+
+    def test_empty_string_returns_empty(self, test_db: sqlite3.Connection) -> None:
+        """Empty string returns empty string."""
+        adapter = GCDLocalAdapter()
+        adapter._db = test_db
+        adapter._load_publishers()
+        adapter._load_series()
+        adapter._loaded = True
+        result = adapter._normalize_series_name_strict("")
+        assert result == ""
+
+    def test_whitespace_collapsed(self, test_db: sqlite3.Connection) -> None:
+        """Multiple spaces are collapsed to single space."""
+        adapter = GCDLocalAdapter()
+        adapter._db = test_db
+        adapter._load_publishers()
+        adapter._load_series()
+        adapter._loaded = True
+        result = adapter._normalize_series_name_strict("X    Men")
+        assert "  " not in result
+
+
+class TestGcdNormalizeNameFull:
+    """Tests for _gcd_normalize_name pipeline."""
+
+    def test_handles_vol_suffix(self, test_db: sqlite3.Connection) -> None:
+        """_gcd_normalize_name strips vol info."""
+        adapter = GCDLocalAdapter()
+        adapter._db = test_db
+        adapter._load_publishers()
+        adapter._load_series()
+        adapter._loaded = True
+        result = adapter._gcd_normalize_name("Batman, Vol. 5")
+        assert "vol" not in result
+
+    def test_handles_roman_numerals(self, test_db: sqlite3.Connection) -> None:
+        """_gcd_normalize_name strips roman numeral suffixes."""
+        adapter = GCDLocalAdapter()
+        adapter._db = test_db
+        adapter._load_publishers()
+        adapter._load_series()
+        adapter._loaded = True
+        result = adapter._gcd_normalize_name("X-Men III")
+        assert "iii" not in result
+
+    def test_handles_annual_suffix(self, test_db: sqlite3.Connection) -> None:
+        """_gcd_normalize_name strips Annual suffix."""
+        adapter = GCDLocalAdapter()
+        adapter._db = test_db
+        adapter._load_publishers()
+        adapter._load_series()
+        adapter._loaded = True
+        result = adapter._gcd_normalize_name("X-Men Annual")
+        assert "annual" not in result
