@@ -4,12 +4,12 @@ These tests verify the integration between tasks.py and the GCD matching service
 They mock GCDMatchingService to avoid database dependencies.
 
 Covered scenarios:
-- High-confidence match (>=90) with existing DB mapping → uses GCD result
-- High-confidence match with NO existing DB mapping → falls back to IdentityResolver
+- High-confidence match (>=90) → returns GCD result for downstream processing
 - Low-confidence match (<90) → falls back to IdentityResolver
 - GCDMatchingService raises exception → falls back gracefully, logs warning
 - Adapter unavailable (db not found) → singleton is None, fallback is silent
-- Full pipeline: CLZ CSV row → GCD match → database write
+- CLZInput construction from CSV row data
+- Confidence threshold boundary behavior
 """
 
 from unittest.mock import MagicMock, patch
@@ -380,68 +380,6 @@ class TestGCDMatchConfidenceThresholds:
                 assert result["gcd_issue_id"] == 12345
             else:
                 assert result is None
-
-
-class TestGCDMatchingWithDatabaseMappingScenarios:
-    """Tests for GCD matching behavior with existing database mappings.
-
-    These tests verify the logic flow when:
-    - High-confidence match with existing DB mapping
-    - High-confidence match without existing DB mapping
-    """
-
-    def test_high_confidence_with_existing_mapping_returns_gcd_data(self):
-        """High-confidence match returns GCD data that caller uses for DB lookup."""
-        mock_service = MagicMock()
-        mock_result = StrategyResult(
-            confidence=MatchConfidence.EXACT_ONE_ISSUE,
-            gcd_issue_id=12345,
-            strategy_name="exact_one_issue",
-        )
-        mock_service.match.return_value = mock_result
-
-        with patch(
-            "comic_identity_engine.jobs.tasks._get_gcd_matching_service",
-            return_value=mock_service,
-        ):
-            row = SAMPLE_CSV_ROW.copy()
-            issue_candidate = MagicMock(
-                series_title="Justice League: Another Nail",
-                issue_number="2",
-            )
-
-            result = _try_gcd_match(row, issue_candidate)
-
-            assert result is not None
-            assert result["gcd_issue_id"] == 12345
-            assert result["confidence"] == 90
-            assert result["strategy_name"] == "exact_one_issue"
-
-    def test_high_confidence_without_mapping_returns_gcd_data_for_fallback(self):
-        """High-confidence match without existing mapping returns GCD data for resolver."""
-        mock_service = MagicMock()
-        mock_result = StrategyResult(
-            confidence=MatchConfidence.EXACT_ONE_ISSUE,
-            gcd_issue_id=99999,
-            strategy_name="exact_one_issue",
-        )
-        mock_service.match.return_value = mock_result
-
-        with patch(
-            "comic_identity_engine.jobs.tasks._get_gcd_matching_service",
-            return_value=mock_service,
-        ):
-            row = SAMPLE_CSV_ROW.copy()
-            issue_candidate = MagicMock(
-                series_title="Justice League: Another Nail",
-                issue_number="2",
-            )
-
-            result = _try_gcd_match(row, issue_candidate)
-
-            assert result is not None
-            assert result["gcd_issue_id"] == 99999
-            assert result["confidence"] == 90
 
 
 class TestFullPipelineGCDIntegration:
