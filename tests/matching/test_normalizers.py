@@ -126,8 +126,25 @@ class TestParseIssueNr:
     def test_returns_one_for_missing_key(self) -> None:
         assert parse_issue_nr({}) == "1"
 
-    def test_returns_none_for_non_numeric(self) -> None:
-        assert parse_issue_nr({"Issue Nr": "AU"}) is None
+    def test_handles_half_issue_symbol(self) -> None:
+        """½ should map to 0.5"""
+        assert parse_issue_nr({"Issue Nr": "½"}) == "0.5"
+
+    def test_handles_half_issue_fraction(self) -> None:
+        """1/2 should map to 0.5"""
+        assert parse_issue_nr({"Issue Nr": "1/2"}) == "0.5"
+
+    def test_handles_annual(self) -> None:
+        """Annual should be preserved"""
+        assert parse_issue_nr({"Issue Nr": "Annual"}) == "Annual"
+
+    def test_handles_au_variant(self) -> None:
+        """AU (Age of Ultron) variant should be preserved"""
+        assert parse_issue_nr({"Issue Nr": "AU"}) == "AU"
+
+    def test_handles_mixed_variant(self) -> None:
+        """1AU should be preserved as variant"""
+        assert parse_issue_nr({"Issue Nr": "1AU"}) == "1AU"
 
     def test_strips_whitespace(self) -> None:
         assert parse_issue_nr({"Issue Nr": "  42  "}) == "42"

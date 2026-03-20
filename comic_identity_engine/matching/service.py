@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .adapter import GCDLocalAdapter
+from .normalizers import extract_base_series_name
 from .types import CLZInput, MatchConfidence, StrategyResult
 
 CONFIDENCE_THRESHOLD = 50
@@ -63,6 +64,8 @@ class GCDMatchingService:
             self._try_colon_comma_series(clz_input),
             self._try_article_series(clz_input),
             self._try_substring_series(clz_input),
+            self._try_fuzzy_subtitle_series(clz_input),
+            self._try_date_based_match(clz_input),
             self._try_reverse_lookup(clz_input),
         ]
 
@@ -402,6 +405,146 @@ class GCDMatchingService:
                 gcd_series_id=results[0]["id"],
                 strategy_name="substring_series",
                 series_name=clz.series_name,
+            )
+
+        return StrategyResult(confidence=MatchConfidence.NO_MATCH)
+
+    def _try_fuzzy_subtitle_series(self, clz: CLZInput) -> StrategyResult:
+        """Try fuzzy match on base series name when subtitles differ. FUZZY_SUBTITLE_SERIES=45.
+
+        Example: "B.P.R.D.: Hell on Earth" should match "B.P.R.D.: Hell on Earth — New World"
+        by extracting the base name "B.P.R.D." and finding series with that base name.
+        """
+        base_name = extract_base_series_name(clz.series_name_normalized)
+        if not base_name or base_name == clz.series_name_normalized:
+            return StrategyResult(confidence=MatchConfidence.NO_MATCH)
+
+        base_name_lower = base_name.lower()
+        candidates = []
+
+        # Search through all series groups for base name match
+        for series_list in self.adapter.iter_series_groups():
+            s = series_list[0]
+            if (
+                clz.publisher_normalized
+                and s.get("publisher_normalized") != clz.publisher_normalized
+            ):
+                continue
+
+            series_base = extract_base_series_name(s.get("name", ""))
+            if series_base.lower() == base_name_lower:
+                candidates.extend(series_list)
+
+        if not candidates:
+            return StrategyResult(confidence=MatchConfidence.NO_MATCH)
+
+        # If we have candidates with the issue, prefer those with matching year
+        candidates_with_issue = []
+        for series in candidates:
+            issue = self.adapter.find_issue(series["id"], clz.issue_nr)
+            if issue:
+                candidates_with_issue.append(series)
+
+        if candidates_with_issue:
+            # Prefer candidates with matching year
+            if clz.year is not None:
+                best_match = None
+                best_year_dist = float("inf")
+                for series in candidates_with_issue:
+                    cy = self.adapter.get_issue_cover_year(series["id"], clz.issue_nr)
+                    if cy:
+                        year_dist = abs(cy - clz.year)
+                        if year_dist < best_year_dist:
+                            best_year_dist = year_dist
+                            best_match = series
+                if best_match:
+                    issue = self.adapter.find_issue(best_match["id"], clz.issue_nr)
+                    return StrategyResult(
+                        confidence=MatchConfidence.FUZZY_SUBTITLE_SERIES,
+                        gcd_issue_id=issue[0] if issue else None,
+                        gcd_series_id=best_match["id"],
+                        strategy_name="fuzzy_subtitle_series",
+                        series_name=clz.series_name,
+                        issue_number=clz.issue_nr,
+                        year_distance=int(best_year_dist)
+                        if best_year_dist < float("inf")
+                        else None,
+                        match_details=f"base_name={base_name}",
+                    )
+            # Return first candidate with issue if no year match
+            series = candidates_with_issue[0]
+            issue = self.adapter.find_issue(series["id"], clz.issue_nr)
+            return StrategyResult(
+                confidence=MatchConfidence.FUZZY_SUBTITLE_SERIES,
+                gcd_issue_id=issue[0] if issue else None,
+                gcd_series_id=series["id"],
+                strategy_name="fuzzy_subtitle_series",
+                series_name=clz.series_name,
+                issue_number=clz.issue_nr,
+                match_details=f"base_name={base_name}",
+            )
+
+        # No issue match, return series-only match if single candidate
+        if len(candidates) == 1:
+            return StrategyResult(
+                confidence=MatchConfidence.FUZZY_SUBTITLE_SERIES,
+                gcd_series_id=candidates[0]["id"],
+                strategy_name="fuzzy_subtitle_series",
+                series_name=clz.series_name,
+                match_details=f"base_name={base_name}",
+            )
+
+        return StrategyResult(confidence=MatchConfidence.NO_MATCH)
+
+    def _try_date_based_match(self, clz: CLZInput) -> StrategyResult:
+        """Try matching by cover date when issue number doesn't match. DATE_BASED_MATCH=40.
+
+        This is a fallback for cases where CLZ has the wrong issue number or
+        there's a mismatch. We look for issues in candidate series with
+        matching cover dates (within ±1 year of CLZ cover year).
+        """
+        if clz.year is None:
+            return StrategyResult(confidence=MatchConfidence.NO_MATCH)
+
+        name_lower = clz.series_name_normalized.lower()
+        series_list = self.adapter.find_series_exact(
+            name_lower, clz.publisher_normalized
+        )
+
+        if not series_list:
+            return StrategyResult(confidence=MatchConfidence.NO_MATCH)
+
+        # Find issues by cover date across all candidate series
+        best_match = None
+        best_issue_id = None
+        best_year_dist = float("inf")
+        best_issue_number = None
+
+        for series in series_list:
+            sid = series["id"]
+            # Check all issues in this series around the target year
+            for year_offset in range(-1, 2):  # -1, 0, +1
+                check_year = clz.year + year_offset
+                if check_year in self.adapter._year_to_issues:
+                    for s_id, iid, inr in self.adapter._year_to_issues[check_year]:
+                        if s_id == sid:
+                            year_dist = abs(check_year - clz.year)
+                            if year_dist < best_year_dist:
+                                best_year_dist = year_dist
+                                best_match = series
+                                best_issue_id = iid
+                                best_issue_number = inr
+
+        if best_match and best_issue_id:
+            return StrategyResult(
+                confidence=MatchConfidence.DATE_BASED_MATCH,
+                gcd_issue_id=best_issue_id,
+                gcd_series_id=best_match["id"],
+                strategy_name="date_based_match",
+                series_name=clz.series_name,
+                issue_number=best_issue_number or clz.issue_nr,
+                year_distance=int(best_year_dist),
+                match_details=f"matched_by_date={clz.year}",
             )
 
         return StrategyResult(confidence=MatchConfidence.NO_MATCH)
