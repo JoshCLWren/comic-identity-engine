@@ -34,10 +34,6 @@ from comic_identity_engine.services.catalog_browser import (
     CatalogBrowser,
     CatalogMatchResult,
 )
-from comic_identity_engine.services.gcd_matcher import (
-    GCDDumpMatcher,
-    GCDMatchResult,
-)
 
 __all__ = [
     "parse_url",
@@ -52,6 +48,4 @@ __all__ = [
     "SeriesExtractionResult",
     "CatalogBrowser",
     "CatalogMatchResult",
-    "GCDDumpMatcher",
-    "GCDMatchResult",
 ]

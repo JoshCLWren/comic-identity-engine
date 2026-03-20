@@ -1,8 +1,10 @@
 # Catalog Browsing Implementation - GCD Dump Strategy
 
-**Status:** Implemented | **Created:** 2026-03-19 | **Updated:** 2026-03-19
+**Status:** Implemented | **Created:** 2026-03-19 | **Updated:** 2026-03-20
 
 **Strategy:** Replaced HTTP scraping with local SQLite database for 10-100x faster matching.
+
+**Implementation:** `GCDLocalAdapter` (`comic_identity_engine/matching/adapter.py`) + `GCDMatchingService` (`comic_identity_engine/matching/service.py`)
 
 ---
 
@@ -446,6 +448,6 @@ Match Result:
 
 ---
 
-**Last Updated:** 2026-03-19
+**Last Updated:** 2026-03-20
 **Owner:** @josh
 **Status:** Implemented - integration pending

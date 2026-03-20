@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import sqlite3
 from dataclasses import dataclass, field
@@ -13,7 +14,7 @@ from comic_identity_engine.matching.normalizers import (
     strip_subtitle,
 )
 
-DB_PATH = "/mnt/bigdata/downloads/2026-03-15.db"
+DB_PATH = os.environ.get("GCD_DB_PATH", "/mnt/bigdata/downloads/2026-03-15.db")
 
 
 @dataclass

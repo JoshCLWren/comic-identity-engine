@@ -4,6 +4,8 @@ from comic_identity_engine.matching.normalizers import (
     normalize_publisher,
     normalize_series_name,
     normalize_series_name_strict,
+    parse_issue_nr,
+    parse_year,
     strip_subtitle,
     strip_vol_suffix,
 )
@@ -109,3 +111,49 @@ class TestNormalizePublisher:
 
     def test_lowercases(self) -> None:
         assert normalize_publisher("Dark Horse Comics") == "dark horse"
+
+
+class TestParseIssueNr:
+    def test_parses_integer_string(self) -> None:
+        assert parse_issue_nr({"Issue Nr": "42"}) == "42"
+
+    def test_parses_float_string(self) -> None:
+        assert parse_issue_nr({"Issue Nr": "42.0"}) == "42"
+
+    def test_returns_one_for_empty(self) -> None:
+        assert parse_issue_nr({"Issue Nr": ""}) == "1"
+
+    def test_returns_one_for_missing_key(self) -> None:
+        assert parse_issue_nr({}) == "1"
+
+    def test_returns_none_for_non_numeric(self) -> None:
+        assert parse_issue_nr({"Issue Nr": "AU"}) is None
+
+    def test_strips_whitespace(self) -> None:
+        assert parse_issue_nr({"Issue Nr": "  42  "}) == "42"
+
+
+class TestParseYear:
+    def test_parses_valid_integer(self) -> None:
+        assert parse_year({"Cover Year": 1991}) == 1991
+
+    def test_parses_valid_string(self) -> None:
+        assert parse_year({"Cover Year": "1991"}) == 1991
+
+    def test_returns_none_for_empty(self) -> None:
+        assert parse_year({"Cover Year": ""}) is None
+
+    def test_returns_none_for_missing_key(self) -> None:
+        assert parse_year({}) is None
+
+    def test_returns_none_for_out_of_range_low(self) -> None:
+        assert parse_year({"Cover Year": 1900}) is None
+
+    def test_returns_none_for_out_of_range_high(self) -> None:
+        assert parse_year({"Cover Year": 2030}) is None
+
+    def test_returns_none_for_non_numeric(self) -> None:
+        assert parse_year({"Cover Year": "nineteen ninety-one"}) is None
+
+    def test_parses_float_string(self) -> None:
+        assert parse_year({"Cover Year": "1991.0"}) == 1991
