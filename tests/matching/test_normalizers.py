@@ -6,6 +6,7 @@ from comic_identity_engine.matching.normalizers import (
     normalize_series_name_strict,
     parse_issue_nr,
     parse_year,
+    strip_diacritics,
     strip_subtitle,
     strip_vol_suffix,
 )
@@ -204,3 +205,29 @@ class TestParseYear:
 
     def test_parses_float_string(self) -> None:
         assert parse_year({"Cover Year": "1991.0"}) == 1991
+
+
+class TestStripDiacritics:
+    def test_strips_umlaut(self) -> None:
+        assert strip_diacritics("Rōnin") == "Ronin"
+
+    def test_strips_accent(self) -> None:
+        assert strip_diacritics("café") == "cafe"
+
+    def test_strips_tilde(self) -> None:
+        assert strip_diacritics("Español") == "Espanol"
+
+    def test_preserves_plain_ascii(self) -> None:
+        assert strip_diacritics("X-Men") == "X-Men"
+
+    def test_strips_combining_characters(self) -> None:
+        assert strip_diacritics("naïve") == "naive"
+
+    def test_handles_empty_string(self) -> None:
+        assert strip_diacritics("") == ""
+
+    def test_strips_circumflex(self) -> None:
+        assert strip_diacritics("Dûn") == "Dun"
+
+    def test_strips_cedilla(self) -> None:
+        assert strip_diacritics("garçon") == "garcon"
