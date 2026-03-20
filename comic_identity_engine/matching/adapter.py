@@ -5,12 +5,11 @@ from __future__ import annotations
 import os
 import re
 import sqlite3
+import unicodedata
 from dataclasses import dataclass, field
 from comic_identity_engine.matching.normalizers import (
     normalize_publisher,
     normalize_series_name,
-    normalize_series_name_strict,
-    strip_diacritics,
     strip_subtitle,
 )
 
@@ -38,27 +37,55 @@ class GCDLocalAdapter:
         default_factory=dict, repr=False
     )
     _barcode_map: dict[str, int] = field(default_factory=dict, repr=False)
+    _publisher_map: dict[int, str] = field(default_factory=dict, repr=False)
     _loaded: bool = field(default=False, repr=False)
 
     def load(self) -> None:
         """Load all data from SQLite into memory. Call once at startup."""
-        self._db = sqlite3.connect(DB_PATH)
-        self._db.row_factory = sqlite3.Row
+        if self._db is None:
+            self._db = sqlite3.connect(DB_PATH)
+            self._db.row_factory = sqlite3.Row
 
-        self._load_publishers()
-        self._load_series()
-        self._load_issues()
-        self._load_barcodes()
+        if not self._loaded:
+            self._load_publishers()
+            self._load_series()
+            self._load_issues()
+            self._load_barcodes()
+            self._loaded = True
 
-        self._loaded = True
+    def ensure_loaded(self) -> None:
+        """Lazy load on first use."""
+        if not self._loaded:
+            self.load()
 
-    def _load_publishers(self) -> None:
-        """Load publishers from gcd_publisher table."""
-        assert self._db is not None
-        rows = self._db.execute(
-            "SELECT id, name FROM gcd_publisher WHERE deleted = 0"
-        ).fetchall()
-        self._publisher_map: dict[int, str] = {row["id"]: row["name"] for row in rows}
+    def close(self) -> None:
+        """Close the database connection."""
+        if self._db is not None:
+            self._db.close()
+            self._db = None
+
+    def __del__(self) -> None:
+        """Ensure database connection is closed on deletion."""
+        self.close()
+
+    def _strip_diacritics(self, text: str) -> str:
+        """Normalize unicode diacritics so e.g. 'Rōnin' matches 'Ronin'."""
+        return (
+            unicodedata.normalize("NFKD", text)
+            .encode("ascii", "ignore")
+            .decode("ascii")
+        )
+
+    def _normalize_series_name_strict(self, name: str) -> str:
+        """Strip all punctuation and normalize &/and for deep matching."""
+        if not name:
+            return ""
+        name = normalize_series_name(name)
+        name = name.lower()
+        name = re.sub(r"&", "and", name)
+        name = re.sub(r"[^\w\s]", "", name)
+        name = re.sub(r"\s+", " ", name).strip()
+        return name
 
     def _gcd_normalize_name(self, name: str) -> str:
         """Normalize GCD series name for matching against CLZ.
@@ -67,52 +94,68 @@ class GCDLocalAdapter:
         1. strip_diacritics - handles unicode variants
         2. strip_subtitle - removes " : Subtitle" or " - Subtitle"
         3. normalize_series_name - removes Vol. X, publisher parens, II/III, Annual, (YYYY)
-        4. lower - case-insensitive comparison
+        4. lower case
         """
-        n = strip_diacritics(name)
-        n = strip_subtitle(n)
-        n = normalize_series_name(n)
-        return n.lower()
+        name = self._strip_diacritics(name)
+        name = strip_subtitle(name)
+        name = normalize_series_name(name)
+        return name.lower()
 
-    def _load_series(self) -> None:
-        """Load all active series from gcd_series table."""
+    def _load_publishers(self) -> None:
+        """Load publishers from gcd_publisher table."""
         assert self._db is not None
         rows = self._db.execute(
+            "SELECT id, name FROM gcd_publisher WHERE deleted = 0"
+        ).fetchall()
+        self._publisher_map = {row["id"]: row["name"] for row in rows}
+
+    def _load_series(self) -> None:
+        """Load series mappings with normalized names."""
+        assert self._db is not None
+        from datetime import datetime
+
+        current_year = datetime.now().year
+        rows = self._db.execute(
+            f"""
+            SELECT s.name, s.id, s.year_began, s.year_ended, s.issue_count, s.publisher_id
+            FROM gcd_series s
+            WHERE s.deleted = 0
+              AND s.language_id = 25
+              AND s.year_began <= {current_year}
+              AND (s.year_ended IS NULL OR s.year_ended >= 1950)
             """
-            SELECT name, id, year_began, year_ended, issue_count, publisher_id
-            FROM gcd_series
-            WHERE deleted = 0
-              AND language_id = 25
-              AND year_began <= 2026
-              AND (year_ended IS NULL OR year_ended >= 1950)
-        """
         ).fetchall()
 
         for row in rows:
-            raw_name = row["name"]
-            name_normalized = self._gcd_normalize_name(raw_name)
-            name_for_strict = strip_subtitle(raw_name)
-            name_strict = normalize_series_name_strict(name_for_strict)
-            publisher = self._publisher_map.get(row["publisher_id"], "")
+            name = self._strip_diacritics(row["name"]).lower()
+            name_strict = self._normalize_series_name_strict(name)
+            name_normalized = normalize_series_name(name)
+            publisher_normalized = ""
+            publisher_id = row["publisher_id"]
+            if publisher_id and publisher_id in self._publisher_map:
+                pub_name = self._publisher_map[publisher_id]
+                publisher_normalized = normalize_publisher(pub_name)
             series_info = {
                 "id": row["id"],
-                "name": raw_name,
+                "name": row["name"],
                 "name_normalized": name_normalized,
                 "name_strict": name_strict,
+                "publisher_normalized": publisher_normalized,
                 "year_began": row["year_began"],
                 "year_ended": row["year_ended"],
                 "issue_count": row["issue_count"],
-                "publisher": publisher,
-                "publisher_normalized": normalize_publisher(publisher),
             }
             self._series_id_to_info[row["id"]] = series_info
-            if name_normalized not in self._series_map:
-                self._series_map[name_normalized] = []
-            self._series_map[name_normalized].append(series_info)
+            if name not in self._series_map:
+                self._series_map[name] = []
+            self._series_map[name].append(series_info)
 
     def _load_issues(self) -> None:
-        """Load all issues from gcd_issue table."""
+        """Load issue mappings with cover year extraction."""
         assert self._db is not None
+        from datetime import datetime
+
+        current_year = datetime.now().year
         rows = self._db.execute(
             """
             SELECT series_id, number, id, key_date, publication_date,
@@ -121,7 +164,7 @@ class GCDLocalAdapter:
                         ELSE 'variant' END as match_type
             FROM gcd_issue
             WHERE deleted = 0
-        """
+            """
         ).fetchall()
 
         for row in rows:
@@ -153,12 +196,10 @@ class GCDLocalAdapter:
                     existing_type == "canonical" and new_type == "newsstand"
                 ):
                     self._issue_map[key] = (row["id"], row["match_type"])
-                if cover_year is not None:
-                    existing_cy = self._issue_cover_year.get(key)
-                    if existing_cy is None or cover_year < existing_cy:
+                    if cover_year is not None:
                         self._issue_cover_year[key] = cover_year
 
-            if cover_year is not None and 1950 <= cover_year <= 2026:
+            if cover_year is not None and 1950 <= cover_year <= current_year:
                 if cover_year not in self._year_to_issues:
                     self._year_to_issues[cover_year] = []
                 self._year_to_issues[cover_year].append(
@@ -166,27 +207,12 @@ class GCDLocalAdapter:
                 )
 
     def _load_barcodes(self) -> None:
-        """Load all barcodes from gcd_issue table."""
+        """Load barcode to issue ID mappings."""
         assert self._db is not None
-        rows = self._db.execute(
+        result = self._db.execute(
             "SELECT barcode, id FROM gcd_issue WHERE barcode IS NOT NULL AND deleted = 0"
         ).fetchall()
-        self._barcode_map = {row["barcode"]: row["id"] for row in rows}
-
-    def ensure_loaded(self) -> None:
-        """Lazy load on first use."""
-        if not self._loaded:
-            self.load()
-
-    def close(self) -> None:
-        """Close the database connection."""
-        if self._db is not None:
-            self._db.close()
-            self._db = None
-
-    def __del__(self) -> None:
-        """Ensure database connection is closed on deletion."""
-        self.close()
+        self._barcode_map = {row["barcode"]: row["id"] for row in result}
 
     # === Series queries ===
 

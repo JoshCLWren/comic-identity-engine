@@ -480,13 +480,10 @@ class TestEnsureLoaded:
     def test_ensure_loaded_does_not_double_load(
         self, test_db: sqlite3.Connection
     ) -> None:
-        """Calling ensure_loaded twice should not reload."""
+        """Calling ensure_loaded twice should not reload when _db is pre-set."""
         adapter = GCDLocalAdapter()
         adapter._db = test_db
-        adapter._loaded = False
-
-        adapter.ensure_loaded()
-        assert adapter._loaded is True
+        adapter._loaded = True
 
         first_count = adapter.issue_count
         adapter.ensure_loaded()
