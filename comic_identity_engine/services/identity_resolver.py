@@ -944,6 +944,10 @@ class IdentityResolver:
                 error_type=type(e).__name__,
             )
             return None
+        finally:
+            if scraper and hasattr(scraper, "close"):
+                close_method = getattr(scraper, "close")
+                await close_method()
 
     def _get_scraper(self, platform: str) -> Optional[ScraperProtocol]:
         """Get scraper instance for platform.
