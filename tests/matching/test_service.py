@@ -1226,3 +1226,150 @@ class TestTryVariantFallbackNoMatch:
         clz.issue_full = "1AU"
         result = svc._try_variant_fallback(clz, prior)
         assert result.confidence == MatchConfidence.NO_MATCH
+
+
+class TestTryFuzzySubtitleSeries:
+    def test_fuzzy_subtitle_match(self) -> None:
+        """B.P.R.D.: Hell on Earth should match B.P.R.D.: Hell on Earth — New World"""
+        adapter = MagicMock()
+        adapter.find_series_exact.return_value = [
+            {"id": 100, "name": "B.P.R.D.", "publisher_normalized": "dark horse"}
+        ]
+        adapter.iter_series_groups.return_value = [
+            [
+                {
+                    "id": 100,
+                    "name": "B.P.R.D.: Hell on Earth",
+                    "publisher_normalized": "dark horse",
+                }
+            ],
+            [
+                {
+                    "id": 101,
+                    "name": "B.P.R.D.: Hell on Earth — New World",
+                    "publisher_normalized": "dark horse",
+                }
+            ],
+        ]
+        adapter.find_issue.return_value = (500, "canonical")
+        adapter.get_issue_cover_year.return_value = 2010
+        adapter.find_issue_by_barcode.return_value = None
+        adapter.find_issue_by_barcode_prefix.return_value = None
+        adapter.find_series_strict.return_value = []
+        adapter.find_issues_by_number_and_year.return_value = []
+        svc = GCDMatchingService(adapter)
+        clz = make_clz(
+            series_name="B.P.R.D.: Hell on Earth — New World",
+            issue_nr="1",
+            year=2010,
+            publisher="dark horse",
+        )
+        result = svc._try_fuzzy_subtitle_series(clz)
+        assert result.confidence == MatchConfidence.FUZZY_SUBTITLE_SERIES
+        assert result.gcd_series_id in [100, 101]
+
+    def test_fuzzy_subtitle_no_colon_returns_no_match(self) -> None:
+        """Series without colon should not trigger fuzzy subtitle match"""
+        adapter = MagicMock()
+        adapter.find_series_exact.return_value = [
+            {"id": 10, "name": "X-Men", "publisher_normalized": "marvel"}
+        ]
+        adapter.iter_series_groups.return_value = []
+        adapter.find_issue_by_barcode.return_value = None
+        adapter.find_issue_by_barcode_prefix.return_value = None
+        adapter.find_series_strict.return_value = []
+        adapter.find_issues_by_number_and_year.return_value = []
+        svc = GCDMatchingService(adapter)
+        clz = make_clz(series_name="X-Men", issue_nr="1", year=1990)
+        result = svc._try_fuzzy_subtitle_series(clz)
+        assert result.confidence == MatchConfidence.NO_MATCH
+
+    def test_fuzzy_subtitle_filters_by_publisher(self) -> None:
+        """Should only match series with same publisher"""
+        adapter = MagicMock()
+        adapter.find_series_exact.return_value = [
+            {"id": 100, "name": "B.P.R.D.", "publisher_normalized": "marvel"}
+        ]
+        adapter.iter_series_groups.return_value = [
+            [{"id": 200, "name": "B.P.R.D.: Other", "publisher_normalized": "dc"}],
+        ]
+        adapter.find_issue_by_barcode.return_value = None
+        adapter.find_issue_by_barcode_prefix.return_value = None
+        adapter.find_series_strict.return_value = []
+        adapter.find_issues_by_number_and_year.return_value = []
+        svc = GCDMatchingService(adapter)
+        clz = make_clz(
+            series_name="B.P.R.D.: Hell on Earth",
+            issue_nr="1",
+            year=2010,
+            publisher="marvel",
+        )
+        result = svc._try_fuzzy_subtitle_series(clz)
+        assert result.confidence == MatchConfidence.NO_MATCH
+
+
+class TestTryDateBasedMatch:
+    def test_date_based_match_finds_issue_by_year(self) -> None:
+        """Should find issue by cover date when issue number doesn't match"""
+        adapter = MagicMock()
+        adapter.find_series_exact.return_value = [
+            {"id": 10, "name": "X-Men", "publisher_normalized": "marvel"}
+        ]
+        adapter.find_issues_by_year.side_effect = lambda year: {
+            1989: [(10, 100, "1")],
+            1990: [(10, 101, "2")],
+            1991: [(10, 102, "3")],
+        }.get(year, [])
+        adapter.find_issue_by_barcode.return_value = None
+        adapter.find_issue_by_barcode_prefix.return_value = None
+        adapter.find_series_strict.return_value = []
+        adapter.find_issues_by_number_and_year.return_value = []
+        svc = GCDMatchingService(adapter)
+        clz = make_clz(series_name="X-Men", issue_nr="999", year=1990)
+        result = svc._try_date_based_match(clz)
+        assert result.confidence == MatchConfidence.DATE_BASED_MATCH
+        assert result.gcd_issue_id == 101
+        assert result.issue_number == "2"
+
+    def test_date_based_match_no_year_returns_no_match(self) -> None:
+        """Should return NO_MATCH when no year provided"""
+        adapter = make_adapter()
+        svc = GCDMatchingService(adapter)
+        clz = make_clz(series_name="X-Men", issue_nr="1", year=None)
+        result = svc._try_date_based_match(clz)
+        assert result.confidence == MatchConfidence.NO_MATCH
+
+    def test_date_based_match_no_series_returns_no_match(self) -> None:
+        """Should return NO_MATCH when series not found"""
+        adapter = MagicMock()
+        adapter.find_series_exact.return_value = []
+        adapter.find_issue_by_barcode.return_value = None
+        adapter.find_issue_by_barcode_prefix.return_value = None
+        adapter.find_series_strict.return_value = []
+        adapter.iter_series_groups.return_value = []
+        adapter.find_issues_by_number_and_year.return_value = []
+        svc = GCDMatchingService(adapter)
+        clz = make_clz(series_name="Unknown Series", issue_nr="1", year=1990)
+        result = svc._try_date_based_match(clz)
+        assert result.confidence == MatchConfidence.NO_MATCH
+
+    def test_date_based_match_checks_year_range(self) -> None:
+        """Should check ±1 year around target year"""
+        adapter = MagicMock()
+        adapter.find_series_exact.return_value = [
+            {"id": 10, "name": "X-Men", "publisher_normalized": "marvel"}
+        ]
+        # Only return issues for 1989 (one year before target)
+        adapter.find_issues_by_year.side_effect = lambda year: {
+            1989: [(10, 100, "1")],
+        }.get(year, [])
+        adapter.find_issue_by_barcode.return_value = None
+        adapter.find_issue_by_barcode_prefix.return_value = None
+        adapter.find_series_strict.return_value = []
+        adapter.find_issues_by_number_and_year.return_value = []
+        svc = GCDMatchingService(adapter)
+        clz = make_clz(series_name="X-Men", issue_nr="999", year=1990)
+        result = svc._try_date_based_match(clz)
+        assert result.confidence == MatchConfidence.DATE_BASED_MATCH
+        assert result.gcd_issue_id == 100
+        assert result.year_distance == 1  # One year off

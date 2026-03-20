@@ -47,6 +47,36 @@ class TestStripSubtitle:
         assert result == "A: B"
 
 
+class TestExtractBaseSeriesName:
+    def test_strips_colon_subtitle(self) -> None:
+        from comic_identity_engine.matching.normalizers import extract_base_series_name
+
+        assert extract_base_series_name("B.P.R.D.: Hell on Earth") == "B.P.R.D."
+
+    def test_preserves_hyphen_in_name(self) -> None:
+        """Spider-Man should NOT become Spider"""
+        from comic_identity_engine.matching.normalizers import extract_base_series_name
+
+        assert extract_base_series_name("Spider-Man: Legacy") == "Spider-Man"
+        assert extract_base_series_name("X-Men: Legacy") == "X-Men"
+
+    def test_preserves_name_without_subtitle(self) -> None:
+        from comic_identity_engine.matching.normalizers import extract_base_series_name
+
+        assert extract_base_series_name("Amazing Spider-Man") == "Amazing Spider-Man"
+
+    def test_strips_em_dash_subtitle(self) -> None:
+        from comic_identity_engine.matching.normalizers import extract_base_series_name
+
+        result = extract_base_series_name("B.P.R.D. — Hell on Earth")
+        assert result == "B.P.R.D."
+
+    def test_empty_string_returns_empty(self) -> None:
+        from comic_identity_engine.matching.normalizers import extract_base_series_name
+
+        assert extract_base_series_name("") == ""
+
+
 class TestNormalizeSeriesName:
     def test_strips_vol_suffix(self) -> None:
         assert normalize_series_name("X-Men, Vol. 1") == "X-Men"

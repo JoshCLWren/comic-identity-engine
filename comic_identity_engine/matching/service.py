@@ -525,15 +525,15 @@ class GCDMatchingService:
             # Check all issues in this series around the target year
             for year_offset in range(-1, 2):  # -1, 0, +1
                 check_year = clz.year + year_offset
-                if check_year in self.adapter._year_to_issues:
-                    for s_id, iid, inr in self.adapter._year_to_issues[check_year]:
-                        if s_id == sid:
-                            year_dist = abs(check_year - clz.year)
-                            if year_dist < best_year_dist:
-                                best_year_dist = year_dist
-                                best_match = series
-                                best_issue_id = iid
-                                best_issue_number = inr
+                year_issues = self.adapter.find_issues_by_year(check_year)
+                for s_id, iid, inr in year_issues:
+                    if s_id == sid:
+                        year_dist = abs(check_year - clz.year)
+                        if year_dist < best_year_dist:
+                            best_year_dist = year_dist
+                            best_match = series
+                            best_issue_id = iid
+                            best_issue_number = inr
 
         if best_match and best_issue_id:
             return StrategyResult(

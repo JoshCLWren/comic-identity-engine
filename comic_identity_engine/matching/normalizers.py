@@ -43,8 +43,8 @@ def extract_base_series_name(name: str) -> str:
     """
     if not name:
         return ""
-    # Strip subtitle after colon, em-dash, or en-dash
-    result = re.sub(r"\s*[:\u2014\u2013-]\s*.+$", "", name)
+    # Strip subtitle after colon, em-dash, or en-dash (NOT regular hyphen)
+    result = re.sub(r"\s*[:\u2014\u2013]\s*.+$", "", name)
     return result.strip()
 
 
