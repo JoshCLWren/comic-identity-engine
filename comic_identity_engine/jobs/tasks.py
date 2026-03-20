@@ -60,7 +60,9 @@ from comic_identity_engine.errors import (
 from comic_identity_engine.jobs.error_handling import handle_task_error
 from comic_identity_engine.services import (
     IdentityResolver,
+    MatchCandidate,
     OperationsManager,
+    ResolutionResult,
     SeriesPageExtractor,
     parse_url,
 )
@@ -1183,6 +1185,94 @@ async def _mark_clz_row_active(
 
 ALL_PLATFORMS = {"gcd", "locg", "ccl", "aa", "cpg", "hip"}
 
+_GCD_MATCHING_SERVICE = None
+
+
+def _get_gcd_matching_service():
+    """Get or create the singleton GCD matching service.
+
+    Returns None if the GCD database is not available.
+    """
+    global _GCD_MATCHING_SERVICE
+    if _GCD_MATCHING_SERVICE is None:
+        from comic_identity_engine.matching.adapter import GCDLocalAdapter
+        from comic_identity_engine.matching.service import GCDMatchingService
+
+        adapter = GCDLocalAdapter()
+        adapter.load()
+        if not adapter._loaded:
+            logger.info("GCD database not available, closing adapter")
+            adapter.close()
+            return None
+
+        _GCD_MATCHING_SERVICE = GCDMatchingService(adapter=adapter)
+        logger.info(
+            "GCD matching service initialized",
+            series_count=adapter.series_count,
+            issue_count=adapter.issue_count,
+        )
+    return _GCD_MATCHING_SERVICE
+
+
+def _try_gcd_match(
+    row: dict[str, str],
+    issue_candidate,
+) -> dict[str, Any] | None:
+    """Try to match using GCD local database before falling back to HTTP-based resolution.
+
+    Args:
+        row: CSV row dictionary
+        issue_candidate: CLZ issue candidate from adapter
+
+    Returns:
+        Match result dictionary if high-confidence match found, None otherwise.
+        Result contains: gcd_issue_id, match_details
+    """
+    service = _get_gcd_matching_service()
+    if service is None:
+        return None
+
+    try:
+        from comic_identity_engine.matching.types import CLZInput
+
+        clz_input = CLZInput.from_csv_row(row)
+
+        result = service.match(clz_input)
+
+        if result.is_match() and result.confidence.value >= 90:
+            logger.info(
+                "GCD match found",
+                gcd_issue_id=result.gcd_issue_id,
+                confidence=result.confidence.value,
+                strategy_name=result.strategy_name,
+                series_title=issue_candidate.series_title,
+                issue_number=issue_candidate.issue_number,
+            )
+            return {
+                "gcd_issue_id": result.gcd_issue_id,
+                "strategy_name": result.strategy_name,
+                "confidence": result.confidence.value,
+            }
+
+        logger.debug(
+            "GCD match below threshold or no match",
+            confidence=result.confidence.value,
+            strategy_name=result.strategy_name,
+            series_title=issue_candidate.series_title,
+            issue_number=issue_candidate.issue_number,
+        )
+        return None
+
+    except Exception as e:
+        logger.warning(
+            "GCD matching failed",
+            error=str(e),
+            error_type=type(e).__name__,
+            series_title=issue_candidate.series_title,
+            issue_number=issue_candidate.issue_number,
+        )
+        return None
+
 
 def _group_clz_rows_by_series(
     rows: list[tuple[int, dict[str, str], str]],
@@ -2091,17 +2181,109 @@ async def _process_single_clz_row(
         source_series_id=issue_candidate.source_series_id,
     )
 
-    resolver = IdentityResolver(session)
-    result = await resolver.resolve_issue(
-        parsed_url=parsed_url,
-        upc=issue_candidate.upc,
-        series_title=issue_candidate.series_title,
-        series_start_year=issue_candidate.series_start_year,
-        issue_number=issue_candidate.issue_number,
-        cover_date=issue_candidate.cover_date,
-        variant_suffix=issue_candidate.variant_suffix,
-        variant_name=getattr(issue_candidate, "variant_name", None),
-    )
+    gcd_match_result = _try_gcd_match(row, issue_candidate)
+    result: ResolutionResult | None = None
+    gcd_match_used = False
+
+    if gcd_match_result:
+        logger.info(
+            "GCD match found",
+            operation_id=operation_id,
+            row=row_index,
+            gcd_issue_id=gcd_match_result["gcd_issue_id"],
+            strategy_name=gcd_match_result["strategy_name"],
+            confidence=gcd_match_result["confidence"],
+        )
+
+        existing_gcd_mapping = await mapping_repo.find_by_source(
+            "gcd",
+            str(gcd_match_result["gcd_issue_id"]),
+        )
+
+        if existing_gcd_mapping:
+            logger.info(
+                "Found existing canonical issue for GCD match",
+                operation_id=operation_id,
+                row=row_index,
+                gcd_issue_id=gcd_match_result["gcd_issue_id"],
+                canonical_issue_id=str(existing_gcd_mapping.issue_id),
+            )
+
+            issue_repo = IssueRepository(session)
+            gcd_issue = await issue_repo.find_by_id(existing_gcd_mapping.issue_id)
+            if gcd_issue:
+                dummy_candidate = MatchCandidate(
+                    issue_id=gcd_issue.id,
+                    series_run_id=gcd_issue.series_run_id,
+                    issue_number=gcd_issue.issue_number,
+                    series_title=gcd_issue.series_run.title,
+                    series_start_year=gcd_issue.series_run.start_year,
+                    match_reason=f"GCD match: {gcd_match_result['strategy_name']}",
+                    issue_confidence=gcd_match_result["confidence"] / 100.0,
+                )
+
+                result = ResolutionResult(
+                    issue_id=gcd_issue.id,
+                    matches=[dummy_candidate],
+                    best_match=dummy_candidate,
+                    created_new=False,
+                    explanation=f"Matched via GCD local database ({gcd_match_result['strategy_name']}, confidence: {gcd_match_result['confidence']}%)",
+                )
+                gcd_match_used = True
+                logger.info(
+                    "Used GCD match with existing canonical issue",
+                    operation_id=operation_id,
+                    row=row_index,
+                    issue_id=str(gcd_issue.id),
+                    gcd_issue_id=gcd_match_result["gcd_issue_id"],
+                )
+            else:
+                logger.warning(
+                    "GCD match found existing mapping but issue not found in database",
+                    operation_id=operation_id,
+                    row=row_index,
+                    gcd_issue_id=gcd_match_result["gcd_issue_id"],
+                )
+        else:
+            logger.info(
+                "GCD match found but no existing canonical issue, falling back to resolver",
+                operation_id=operation_id,
+                row=row_index,
+                gcd_issue_id=gcd_match_result["gcd_issue_id"],
+            )
+
+    if not gcd_match_used:
+        resolver = IdentityResolver(session)
+        result = await resolver.resolve_issue(
+            parsed_url=parsed_url,
+            upc=issue_candidate.upc,
+            series_title=issue_candidate.series_title,
+            series_start_year=issue_candidate.series_start_year,
+            issue_number=issue_candidate.issue_number,
+            cover_date=issue_candidate.cover_date,
+            variant_suffix=issue_candidate.variant_suffix,
+            variant_name=getattr(issue_candidate, "variant_name", None),
+        )
+
+    if result is None:
+        error_msg = (
+            "Failed to resolve issue: GCD dump match failed and no resolver result"
+        )
+        logger.warning(
+            "Failed to resolve CLZ row",
+            operation_id=operation_id,
+            row=row_index,
+            source_issue_id=source_issue_id,
+            error=error_msg,
+        )
+        return {
+            "row_index": row_index,
+            "row_key": row_key,
+            "source_issue_id": source_issue_id,
+            "resolved": False,
+            "error": error_msg,
+            "row_data": dict(row),
+        }
 
     if not result.issue_id:
         error_msg = f"Failed to resolve issue: {result.explanation}"
