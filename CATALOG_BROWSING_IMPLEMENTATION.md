@@ -162,17 +162,32 @@ If no match found, return failure with reason.
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              CLZ CSV Import                                 │
-│                           (comic_identity_engine)                           │
+│                           (comic_identity_engine/jobs/tasks.py)            │
 └─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
+                                     │
+                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                        GCDMatchingService.match()                           │
-│                    (comic_identity_engine/matching/)                       │
+│                      CLZAdapter.fetch_issue_from_csv_row()                 │
+│                        → IssueCandidate (CLZ internal model)                │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                     │
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         _try_gcd_match(row, issue_candidate)                 │
+│                        (comic_identity_engine/jobs/tasks.py)                │
+│                                                                             │
+│  1. CLZInput.from_csv_row(row) → CLZInput                                  │
+│  2. _get_gcd_matching_service() → GCDMatchingService (singleton)           │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                     │
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                       GCDMatchingService.match(clz_input)                   │
+│                        (comic_identity_engine/matching/)                    │
 │                                                                             │
 │  ┌─────────────┐     ┌──────────────────┐     ┌────────────────────────┐   │
 │  │  CLZInput   │────▶│ Round-Robin Loop │────▶│  GCDLocalAdapter       │   │
-│  │  from_csv   │     │ (all strategies)│     │  (SQLite dump in RAM)  │   │
+│  │             │     │ (all strategies) │     │  (SQLite dump in RAM)  │   │
 │  └─────────────┘     └──────────────────┘     └────────────────────────┘   │
 │                                                        │                    │
 │                                                        │                    │
@@ -184,40 +199,40 @@ If no match found, return failure with reason.
 │                     │  (_barcode)   │          │ (_series_map)│ │(_issue) ││
 │                     └──────────────┘          └──────────────┘ └──────────┘│
 └─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-                         ┌──────────────────┐
-                         │  StrategyResult  │
-                         │  - confidence    │
-                         │  - gcd_issue_id  │
-                         │  - strategy_name │
-                         └──────────────────┘
-                                    │
-                    ┌───────────────┴───────────────┐
-                    ▼                               ▼
-            ┌──────────────┐              ┌──────────────┐
-            │ Match Found  │              │ No Match     │
-            │ (confidence>0)│              │ (failure     │
-            │              │              │  reason)     │
-            └──────────────┘              └──────────────┘
-                    │                               │
-                    ▼                               ▼
-            ┌──────────────┐              ┌──────────────────┐
-            │ Create/Link │              │ Fallback Search  │
-            │ ExternalMapping│           │ (PlatformSearcher)│
-            └──────────────┘              └──────────────────┘
-                    │                               │
-                    ▼                               ▼
-            ┌──────────────────────────────────────────────┐
-            │              PostgreSQL DB                    │
-            │     (comic_identity_engine database)          │
-            │                                              │
-            │  external_mappings                           │
-            │  ├── source = 'gcd'                         │
-            │  ├── source_issue_id = '50800'              │
-            │  ├── source_url = 'https://...'             │
-            │  └── issue_id = <uuid>                       │
-            └──────────────────────────────────────────────┘
+                                     │
+                                     ▼
+                          ┌──────────────────┐
+                          │  StrategyResult  │
+                          │  - confidence    │
+                          │  - gcd_issue_id  │
+                          │  - strategy_name │
+                          └──────────────────┘
+                                     │
+                     ┌───────────────┴───────────────┐
+                     ▼                               ▼
+             ┌──────────────┐              ┌──────────────┐
+             │ Match Found  │              │ No Match     │
+             │ (confidence≥90)│             │ (confidence<90)│
+             └──────────────┘              └──────────────┘
+                     │                               │
+                     ▼                               ▼
+             ┌──────────────┐              ┌──────────────────────────────┐
+             │ Link to GCD  │              │ Fallback: IdentityResolver   │
+             │ via existing │              │ + PlatformSearcher          │
+             │ mapping      │              │ (HTTP-based resolution)      │
+             └──────────────┘              └──────────────────────────────┘
+                     │                               │
+                     └───────────────┬─────────────────┘
+                                     ▼
+             ┌──────────────────────────────────────────────┐
+             │              PostgreSQL DB                    │
+             │     (comic_identity_engine database)          │
+             │                                              │
+             │  external_mappings                           │
+             │  ├── source = 'gcd' (if high-confidence)     │
+             │  ├── source = 'clz' (always)                 │
+             │  └── issue_id = <uuid>                       │
+             └──────────────────────────────────────────────┘
 ```
 
 ---
@@ -401,9 +416,16 @@ Match Result:
 | File | Purpose |
 |------|---------|
 | `comic_identity_engine/matching/adapter.py` | `GCDLocalAdapter` - SQLite dump loader |
-| `comic_identity_engine/matching/service.py` | `GCDMatchingService` - Round-robin matcher |
+| `comic_identity_engine/matching/service.py` | `GCDMatchingService.match(clz_input)` - Round-robin matcher |
 | `comic_identity_engine/matching/types.py` | `CLZInput`, `StrategyResult`, `MatchConfidence` |
 | `comic_identity_engine/matching/normalizers.py` | Series name normalization functions |
+
+### Integration Points
+
+| File | Function | Purpose |
+|------|----------|---------|
+| `comic_identity_engine/jobs/tasks.py` | `_get_gcd_matching_service()` | Singleton getter for GCDMatchingService |
+| `comic_identity_engine/jobs/tasks.py` | `_try_gcd_match(row, issue_candidate)` | Integration point - tries GCD match before HTTP fallback |
 
 ### Test/Validation
 
@@ -431,9 +453,10 @@ Match Result:
 - [x] Issue existence validation
 - [x] Year-based disambiguation
 - [x] 96.4% match rate on CLZ collection
-- [ ] Wire into CLZ import pipeline (jobs/tasks.py)
+- [x] Wire into CLZ import pipeline (`_get_gcd_matching_service`, `_try_gcd_match` in jobs/tasks.py)
+- [x] High-confidence matches (≥90) link to existing GCD mappings
+- [x] Low-confidence matches fall back to IdentityResolver + PlatformSearcher
 - [ ] Add unit/integration tests
-- [ ] Add fallback to PlatformSearcher for low-confidence matches
 - [ ] Document refresh strategy for production deployment
 
 ---
@@ -442,12 +465,13 @@ Match Result:
 
 1. **Fuzzy matching** for subtitle differences
 2. **Date-based fallback** (CLZ Release Date vs GCD key_date)
-3. **Variant issue handling** for special formats (1/2, AU, Annual)
+3. **Variant issue handling** for special formats (1/2, AU, Annual) - partially implemented via `variant_fallback`
 4. **Caching** with scrapekit for frequent series lookups
-5. **Progress tracking** for batch imports
+5. **Confidence threshold tuning** for optimal match rate vs precision
+6. **Progress tracking** for batch imports
 
 ---
 
 **Last Updated:** 2026-03-20
 **Owner:** @josh
-**Status:** Implemented - integration pending
+**Status:** Implemented - fully integrated in CLZ import pipeline
