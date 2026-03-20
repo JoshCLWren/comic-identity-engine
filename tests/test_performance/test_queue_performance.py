@@ -70,9 +70,7 @@ class PerformanceMetrics:
             "failed_tasks": self.failed_tasks,
             "tasks_per_second": round(self.tasks_per_second, 2),
             "average_queue_depth": round(self.average_queue_depth, 2),
-            "average_worker_utilization": round(
-                self.average_worker_utilization * 100, 2
-            ),
+            "average_worker_utilization": round(self.average_worker_utilization, 2),
         }
 
 

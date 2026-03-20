@@ -27,7 +27,7 @@ from datetime import date, datetime
 from typing import TYPE_CHECKING, Any, Dict, Optional, Protocol
 
 import structlog
-from longbox_matcher import jaro_winkler_similarity
+from jellyfish import jaro_winkler_similarity
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -944,6 +944,10 @@ class IdentityResolver:
                 error_type=type(e).__name__,
             )
             return None
+        finally:
+            if scraper and hasattr(scraper, "close"):
+                close_method = getattr(scraper, "close")
+                await close_method()
 
     def _get_scraper(self, platform: str) -> Optional[ScraperProtocol]:
         """Get scraper instance for platform.

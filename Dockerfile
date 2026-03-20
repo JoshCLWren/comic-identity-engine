@@ -14,6 +14,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     gcc \
+    git \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
@@ -26,9 +27,19 @@ WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
 COPY comic_identity_engine/ ./comic_identity_engine/
 
-# Install dependencies using uv (including dev dependencies)
-# Git dependencies (comic-search-lib) are fetched automatically
-RUN uv sync --dev
+# Accept build arg for private repo access
+ARG DEPLOY_TOKEN
+
+# Configure git for private repos (if token provided) and install dependencies
+# These are combined in one RUN to ensure git config is available for uv sync
+RUN if [ -n "$DEPLOY_TOKEN" ]; then \
+        echo "Configuring git with deploy token..." && \
+        git config --global url."https://${DEPLOY_TOKEN}@github.com/".insteadOf "https://github.com/"; \
+    else \
+        echo "No DEPLOY_TOKEN provided, skipping git config"; \
+    fi && \
+    git config --list && \
+    uv sync --dev
 
 # Install Playwright browsers and required system packages for browser-backed scrapers.
 RUN uv run playwright install --with-deps chromium

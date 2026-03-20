@@ -16,10 +16,14 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build Docker image
-        run: docker compose build ci
+        run: docker compose build --build-arg DEPLOY_TOKEN="${DEPLOY_TOKEN}" ci
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
 
       - name: Run CI in Docker
         run: docker compose run --rm ci
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5

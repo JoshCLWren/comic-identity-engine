@@ -125,9 +125,9 @@ class ImportClzRequest(BaseModel):
         examples=["/uploads/collections/clz_collection_2024.csv"],
     )
     retry_failed_only: bool = Field(
-        default=True,
+        default=False,
         description="Requeue failed rows from an existing same-file import without reposting resolved work",
-        examples=[True],
+        examples=[False],
     )
     force: bool = Field(
         default=False,

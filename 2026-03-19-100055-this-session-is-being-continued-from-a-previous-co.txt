@@ -1,0 +1,633 @@
+╭─── Claude Code v2.1.79 ──────────────────────────────────────────────────────╮
+│                                                    │ Tips for getting        │
+│                 Welcome back Josh!                 │ started                 │
+│                                                    │ Run /init to create a … │
+│                       ▐▛███▜▌                      │ ─────────────────────── │
+│                      ▝▜█████▛▘                     │ Recent activity         │
+│                        ▘▘ ▝▝                       │ No recent activity      │
+│ Sonnet 4.6 · Claude Pro · joshisplutar@gmail.com's │                         │
+│  Organization                                      │                         │
+│     /mnt/extra/josh/code/comic-identity-engine     │                         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+✻ Conversation compacted (ctrl+o for history)
+
+  ⎿  Referenced file gcd_tests.py
+  ⎿  Read ../CLAUDE.md (136 lines)
+
+● Bash(uv run python gcd_tests.py --force 2>&1 | tail -15)
+  ⎿  ======================================================================
+     ==========
+     RESULTS:
+     … +13 lines (ctrl+o to expand)
+  ⎿  (timeout 2m)
+
+● Bash(python3 -c "
+      import csv…)
+  ⎿  Total false positives (>2yr gap, non-barcode): 0
+
+     Gap 10-: 0 issues
+     … +4 lines (ctrl+o to expand)
+
+● That's suspiciously perfect. Let me check that the column names are correct.
+
+  Searched for 2 patterns, read 1 file (ctrl+o to expand)
+
+● The enriched CSV only has gcd_issue_id, not gcd_cover_year. I need to join
+  back to GCD to get the cover year. Let me fix the false positive check script:
+
+● Bash(python3 -c "
+      import csv…)
+  ⎿  Loaded 1024362 GCD issue years
+     Total false positives (>2yr gap, non-barcode): 91
+     … +26 lines (ctrl+o to expand)
+
+● Down to 91 from 148. The Supreme cluster is fixed. Let me investigate the
+  X-Men cluster which dominates the 3-5yr range:
+
+● Bash(python3 -c "
+      import csv…)
+  ⎿    [6yr] CLZ=X-Men/X-Men Classic #28 (1988) -> GCD series="X-Men" (bega
+     n 1991, issue year 1994) [only_one_with_issue:newsstand]
+       [5yr] CLZ=X-Men/X-Men Classic #58 (1991) -> GCD series="X-Men" (bega
+     … +48 lines (ctrl+o to expand)
+
+● These are "X-Men Classic" issues — CLZ Series="X-Men Classic", Series
+  Group="X-Men". The algorithm matches to "X-Men" (1991) with 4-5yr gaps, but
+  doesn't retry because large_year_gap threshold is 6yr. The fix: when Series ≠
+  Series Group and gap > 3yr, retry with the actual Series name. Let me look at
+  the retry block:
+
+  Read 1 file (ctrl+o to expand)
+
+● I see the fix needed. The X-Men Classic issues have Series Group="X-Men" but
+  Series="X-Men Classic". The 4-5yr gaps don't hit the 6yr threshold, so no
+  retry. I need to add a condition: when Series ≠ Series Group and gap ≥ 4yr,
+  retry with the actual Series name:
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(gcd_tests.py)
+  ⎿  Added 14 lines, removed 1 line
+      586                          and year is not None
+      587                          and abs(matched_cover_yr - year) >= 6
+      588                      )
+      589 +                    # When Series != Series Group and there's 
+          +a 4+yr gap, the                                               
+      590 +                    # Series Group is too generic (e.g. "X-Men
+          +" group → "X-Men Classic").                                   
+      591 +                    # Retry with the specific Series name.    
+      592 +                    series_differs_from_group = bool(         
+      593 +                        series_group                          
+      594 +                        and normalize_series_name(row.get("Ser
+          +ies", "")).lower()                                            
+      595 +                        != series_group.lower()               
+      596 +                    )                                         
+      597 +                    moderate_year_gap = (                     
+      598 +                        matched_cover_yr is not None          
+      599 +                        and year is not None                  
+      600 +                        and abs(matched_cover_yr - year) >= 4 
+      601 +                    )                                         
+      602                      if (
+      603                          series_group
+      604                          and (
+     ...
+      606                              or series_match == "only_series"
+      607                              or (
+      608                                  series_match in ("closest_year
+           _with_issue", "only_one_with_issue")
+      596 -                                and large_year_gap            
+      609 +                                and (large_year_gap or (series
+          +_differs_from_group and moderate_year_gap))                   
+      610                              )
+      611                          )
+      612                          and series_id
+
+● Now I also need to make sure the "only upgrade if closer" guard also applies
+  to closest_year_with_issue when we're just doing a moderate gap retry (not a
+  large gap). Currently the only_one_with_issue guard applies but
+  closest_year_with_issue unconditionally replaces. Let me check and update that
+   too:
+
+  Read 1 file (ctrl+o to expand)
+
+● I need to extend the "only upgrade if closer" guard to also cover moderate-gap
+   retries (not just large_year_gap with only_one_with_issue):
+
+● Update(gcd_tests.py)
+  ⎿  Added 7 lines, removed 8 lines
+      641                                  issue_cover_year,
+      642                              )
+      643                              series_match_retry = f"{series_mat
+           ch_retry}_fallback_from_group"
+      644 -                            # For only_one_with_issue year-gap
+          - retries, only upgrade if                                     
+      645 -                            # the retry's issue cover year is 
+          -actually closer. This avoids                                  
+      646 -                            # losing a working match when the 
+          -full Series name does worse.                                  
+      647 -                            if (                              
+      648 -                                large_year_gap                
+      649 -                                and series_match == "only_one_
+          -with_issue"                                                   
+      650 -                                and series_id_retry is not Non
+          -e                                                             
+      651 -                            ):                                
+      644 +                            # For year-gap retries, only upgra
+          +de if the retry's issue                                       
+      645 +                            # cover year is actually closer. T
+          +his avoids losing a working                                   
+      646 +                            # match when the full Series name 
+          +does worse.                                                   
+      647 +                            is_year_gap_retry = (             
+      648 +                                large_year_gap or (series_diff
+          +ers_from_group and moderate_year_gap)                         
+      649 +                            ) and series_match in ("closest_ye
+          +ar_with_issue", "only_one_with_issue")                        
+      650 +                            if is_year_gap_retry and series_id
+          +_retry is not None:                                           
+      651                                  retry_cyr = issue_cover_year.g
+           et(
+      652                                      (series_id_retry, issue_nr
+           )
+      653                                  )
+
+● Bash(uv run python gcd_tests.py --force 2>&1 | tail -20)
+  ⎿  Built series ID index with 103810 series
+     Loading issue mappings...
+     Loaded 2280412 issues
+     … +37 lines (ctrl+o to expand)
+  ⎿  (timeout 2m)
+
+● Bash(python3 -c "
+      import csv…)
+  ⎿  Total false positives (>2yr gap, non-barcode): 71
+
+     Gap 10-+: 1 issues
+     … +21 lines (ctrl+o to expand)
+
+● Down to 71. But X-Men issues still show. Let me check the Series fields for
+  the remaining ones to understand why the retry didn't help:
+
+● Bash(python3 -c "
+      import csv…)
+  ⎿  CLZ SG='X-Men'                        S='X-Men Classic'
+                #11 (1987) -> GCD "X-Men" (1991) [only_one_with_issue:newss
+     tand] gap=5
+     … +41 lines (ctrl+o to expand)
+
+● The retry IS running but not upgrading. Let me check what GCD has for "X-Men
+  Classic" to understand why the retry doesn't improve:
+
+● Bash(python3 -c "
+      import sqlite3…)
+  ⎿  ID=2769 name='X-Men Classics Starring the X-Men' began=1983 ended=1984
+      issues=3
+     ID=3176 name='Classic X-Men' began=1986 ended=1990 issues=45
+     … +22 lines (ctrl+o to expand)
+
+● GCD calls it "Classic X-Men" but CLZ has "X-Men Classic" — word order is
+  reversed. The substring check won't catch this. I need to add a word-set
+  fallback to find_series_candidates:
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(gcd_tests.py)
+  ⎿  Added 8 lines
+      222              if search_terms in series_key or series_key in sea
+           rch_terms:
+      223                  add_candidates(series_list)
+      224  
+      225 +        # Word-set fallback: "X-Men Classic" vs "Classic X-Men
+          +" (same words, different order)                               
+      226 +        if not candidates:                                    
+      227 +            search_words = set(name_lower.split())            
+      228 +            if len(search_words) >= 2:                        
+      229 +                for series_key, series_list in series_map.item
+          +s():                                                          
+      230 +                    if set(series_key.split()) == search_words
+          +:                                                             
+      231 +                        add_candidates(series_list)           
+      232 +                                                              
+      233      # 5. Date-based fallback: if still no candidates and we ha
+           ve a year, try broader search
+      234      if not candidates and year is not None:
+      235          for series_list in series_map.values():
+
+● Bash(uv run python gcd_tests.py --force 2>&1 | tail -15)
+  ⎿  ======================================================================
+     ==========
+     RESULTS:
+     … +13 lines (ctrl+o to expand)
+  ⎿  (timeout 2m)
+  ⎿  Found 1 new diagnostic issue in 1 file (ctrl+o to expand)
+
+● Bash(python3 -c "
+      import csv…)
+  ⎿  Total false positives (>2yr gap, non-barcode): 71
+
+     Gap 10-+: 1 issues
+     … +24 lines (ctrl+o to expand)
+
+● Same count — the word-set fallback isn't helping. Let me check why by tracing
+  the "X-Men Classic" retry:
+
+  Read 1 file (ctrl+o to expand)
+
+● The word-set fallback only runs if not candidates after substring search, but
+  substring search finds "X-Men Classic Omnibus" (2017) etc. as partial matches,
+   so candidates is non-empty and the word-set fallback is skipped:
+
+● Update(gcd_tests.py)
+  ⎿  Added 7 lines, removed 7 lines
+      222              if search_terms in series_key or series_key in sea
+           rch_terms:
+      223                  add_candidates(series_list)
+      224  
+      225 -        # Word-set fallback: "X-Men Classic" vs "Classic X-Men
+          -" (same words, different order)                               
+      226 -        if not candidates:                                    
+      227 -            search_words = set(name_lower.split())            
+      228 -            if len(search_words) >= 2:                        
+      229 -                for series_key, series_list in series_map.item
+          -s():                                                          
+      230 -                    if set(series_key.split()) == search_words
+          -:                                                             
+      231 -                        add_candidates(series_list)           
+      225 +        # Word-set fallback: "X-Men Classic" vs "Classic X-Men
+          +" (same words, different order).                              
+      226 +        # Always run this — substring matches may only find wr
+          +ong-era entries.                                              
+      227 +        search_words = set(name_lower.split())                
+      228 +        if len(search_words) >= 2:                            
+      229 +            for series_key, series_list in series_map.items():
+      230 +                if set(series_key.split()) == search_words:   
+      231 +                    add_candidates(series_list)               
+      232  
+      233      # 5. Date-based fallback: if still no candidates and we ha
+           ve a year, try broader search
+      234      if not candidates and year is not None:
+
+● Bash(uv run python gcd_tests.py --force 2>&1 | tail -15)
+  ⎿  ======================================================================
+     ==========
+     RESULTS:
+     … +13 lines (ctrl+o to expand)
+  ⎿  (timeout 2m)
+
+● Bash(python3 -c "
+      import csv, sqlite3…)
+  ⎿  Total false positives: 71
+     X-Men Classic: 20
+       [6yr] X-Men Classic #28 (1988) -> GCD (1994) [only_one_with_issue:ne
+     … +9 lines (ctrl+o to expand)
+
+● Let me debug the exact path for X-Men Classic #17:
+
+● Bash(python3 -c "
+      import sys…)
+  ⎿  Error: Exit code 1
+     normalize(X-Men Classic): 'X-Men Classic'
+     normalize(X-Men): 'X-Men'
+
+     Traceback (most recent call last):
+       File "<string>", line 15, in <module>
+         series_map, series_id_to_info = g.load_series(db)
+                                         ~~~~~~~~~~~~~^^^^
+       File "/mnt/extra/josh/code/comic-identity-engine/gcd_tests.py", line 39, 
+     in load_series
+         name = strip_diacritics(row["name"]).lower()
+     … +2 lines (ctrl+o to see all)
+
+● Bash(python3 -c "
+      import sys…)
+  ⎿  search_words: {'x-men', 'classic'}
+     Word-set matches:
+       name='Classic X-Men' began=1986
+     … +4 lines (ctrl+o to expand)
+
+● Bash(python3 -c "
+      import sys…)
+  ⎿  Candidates for X-Men Classic, 1988:
+       ID=7191 name='X-Men Classic' began=1990 ended=1995
+     … +8 lines (ctrl+o to expand)
+
+● The word-set fallback is inside the if (not candidates or all_wrong_era)
+  block, but "x-men classic" direct lookup DOES find series (X-Men Classic
+  1990). Let me trace the full path from the initial "X-Men" group lookup:
+
+● Bash(python3 -c "
+      import sys…)
+  ⎿  Initial lookup (X-Men, #17, 1988): id=4254, match='only_one_with_issue
+     '
+       Series: X-Men (1991), issue cover year: 1993
+     … +6 lines (ctrl+o to expand)
+
+● The retry runs but find_best_series_id("X-Men Classic", "17", 1988) returns
+  "X-Men Classic" (1990) with only_series (no issue #17 there). "Classic X-Men"
+  (1986) has issue #17 in 1988, but the word-set fallback is inside the if not 
+  candidates block — it never runs because direct lookup finds "X-Men Classic"
+  first.
+
+  I need to move word-set matching to always run (not just when no candidates
+  exist):
+
+● Update(gcd_tests.py)
+  ⎿  Added 8 lines
+      193              add_candidates(series_map.get(name_lower[len(artic
+           le) :], []))
+      194              break
+      195  
+      196 +    # 3b. Word-set match: handles word-order variants ("X-Men 
+          +Classic" vs "Classic X-Men").                                 
+      197 +    # Always run so we don't miss reversed-word series when di
+          +rect lookup found wrong-era ones.                             
+      198 +    search_words = set(name_lower.split())                    
+      199 +    if len(search_words) >= 2:                                
+      200 +        for series_key, series_list in series_map.items():    
+      201 +            if set(series_key.split()) == search_words and ser
+          +ies_key != name_lower:                                        
+      202 +                add_candidates(series_list)                   
+      203 +                                                              
+      204      # 4. If no candidates (or all existing ones are from the w
+           rong era), try substring.
+      205      # "All wrong era" = every candidate ended >5yr before or s
+           tarted >5yr after target year.
+      206      all_wrong_era = (
+
+● Also remove the duplicate word-set check from inside the substring block:
+
+● Update(gcd_tests.py)
+  ⎿  Removed 8 lines
+      230              if search_terms in series_key or series_key in sea
+           rch_terms:
+      231                  add_candidates(series_list)
+      232  
+      233 -        # Word-set fallback: "X-Men Classic" vs "Classic X-Men
+          -" (same words, different order).                              
+      234 -        # Always run this — substring matches may only find wr
+          -ong-era entries.                                              
+      235 -        search_words = set(name_lower.split())                
+      236 -        if len(search_words) >= 2:                            
+      237 -            for series_key, series_list in series_map.items():
+      238 -                if set(series_key.split()) == search_words:   
+      239 -                    add_candidates(series_list)               
+      240 -                                                              
+      233      # 5. Date-based fallback: if still no candidates and we ha
+           ve a year, try broader search
+      234      if not candidates and year is not None:
+      235          for series_list in series_map.values():
+  ⎿  Found 1 new diagnostic issue in 1 file (ctrl+o to expand)
+
+● Bash(uv run python gcd_tests.py --force 2>&1 | tail -15)
+  ⎿  ======================================================================
+     ==========
+     RESULTS:
+     … +13 lines (ctrl+o to expand)
+  ⎿  (timeout 2m)
+
+● Bash(python3 -c "
+      import csv, sqlite3…)
+  ⎿  Total false positives (>2yr gap, non-barcode): 51
+
+     Gap 10-+: 1 issues
+     … +29 lines (ctrl+o to expand)
+
+● Supreme cluster is back — the similarity_score fix must have been undone. Let
+  me check:
+
+  Searched for 2 patterns, read 1 file (ctrl+o to expand)
+
+● Let me check what CLZ has for the Supreme issues and why reverse lookup is
+  being triggered:
+
+● Bash(python3 -c "
+      import csv…)
+  ⎿  SG='Supreme' Series='Supreme' #=44 year=1997 MT=reverse_lookup_closest
+     _name:Doctor Strange, Sorcerer Supreme:newsstand
+     SG='Supreme' Series='Supreme' #=45 year=1997 MT=reverse_lookup_closest
+     … +7 lines (ctrl+o to expand)
+
+● Bash(python3 -c "
+      import sys…)
+  ⎿  Candidates for Supreme, 1997:
+       ID=10536 name='Supreme' began=1997 ended=1998
+       ID=10535 name='Supreme' began=1997 ended=1997
+     … +6 lines (ctrl+o to expand)
+
+● Bash(python3 -c "
+      import sys…)
+  ⎿    ID=10536 'Supreme': issue #44 = None, cover year = None
+       ID=10535 'Supreme': issue #44 = None, cover year = None
+       ID=65536 'Supreme': issue #44 = None, cover year = None
+     … +2 lines (ctrl+o to expand)
+
+● Bash(python3 -c "
+      import sqlite3…)
+  ⎿  (No output)
+
+● Bash(python3 -c "
+      import sqlite3…)
+  ⎿  ID=4448 'Doctor Strange, Sorcerer Supreme Annual' (1992-1994): 3 issue
+     s, #s 2-4
+     ID=4612 'Supreme' (1992-1996): 43 issues, #s 0-42
+     … +13 lines (ctrl+o to expand)
+
+  Read 1 file (ctrl+o to expand)
+
+● re is imported. The fix: boost prefix matches to beat Jaccard's flat 0.25 for
+  single-word series names:
+
+● Update(gcd_tests.py)
+  ⎿  Added 17 lines, removed 9 lines
+      304  
+      305      score = 0.0
+      306  
+      307 -    # Substring match: penalized proportionally when one strin
+          -g is much longer                                              
+      308 -    # than the other (e.g. "supreme" in "doctor strange, sorce
+          -rer supreme" scores                                           
+      309 -    # lower than "supreme" in "supreme: the new adventures"). 
+      307      if s1 in s2 or s2 in s1:
+      311 -        overlap = min(len(s1), len(s2))                       
+      312 -        total = max(len(s1), len(s2))                         
+      313 -        score = max(score, 0.8 * overlap / total)             
+      308 +        shorter = s1 if len(s1) <= len(s2) else s2            
+      309 +        longer = s2 if len(s1) <= len(s2) else s1             
+      310 +        overlap = len(shorter)                                
+      311 +        total = len(longer)                                   
+      312 +        # Prefix match: "supreme" is a title prefix of "suprem
+          +e: the new adventures"                                        
+      313 +        # but not of "doctor strange, sorcerer supreme". Boost
+          + prefix matches so they                                       
+      314 +        # beat Jaccard's flat per-word score.                 
+      315 +        if longer.startswith(shorter):                        
+      316 +            score = max(score, min(0.9, 1.4 * overlap / total)
+          +)                                                             
+      317 +        else:                                                 
+      318 +            score = max(score, 0.8 * overlap / total)         
+      319  
+      315 -    # Word-overlap Jaccard similarity                         
+      316 -    words1 = set(s1.split())                                  
+      317 -    words2 = set(s2.split())                                  
+      320 +    # Word-overlap Jaccard (strip punctuation so "supreme:" ==
+          + "supreme")                                                   
+      321 +    def _words(s: str) -> set[str]:                           
+      322 +        return {re.sub(r"[^\w-]", "", w) for w in s.split() if
+          + re.sub(r"[^\w-]", "", w)}                                    
+      323 +                                                              
+      324 +    words1 = _words(s1)                                       
+      325 +    words2 = _words(s2)                                       
+      326      if words1 and words2:
+      327          intersection = len(words1 & words2)
+      328          union = len(words1 | words2)
+
+● Bash(uv run python gcd_tests.py --force 2>&1 | tail -15)
+  ⎿  Enriching:   0%|          | 0/5203 [00:00<?, ?it/s]Enriching:   0%|
+              | 14/5203 [00:00<00:48, 106.92it/s]Enriching:   0%|
+      | 25/5203 [00:00<02:46, 31.17it/s] Enriching:   1%|          | 32/52
+     … +207 lines (ctrl+o to expand)
+  ⎿  (timeout 2m)
+
+● Bash(python3 -c "
+      import csv, sqlite3…)
+  ⎿  Total false positives (>2yr gap, non-barcode): 47
+
+     Gap 10-+: 1 issues
+     … +35 lines (ctrl+o to expand)
+
+● Good progress — 47 total, down from 276. Let me look at the two remaining
+  major clusters: Warlock (10 issues) and Supreme #46-47:
+
+● Bash(python3 -c "
+      import sqlite3…)
+  ⎿  ID=4483 'Warlock and the Infinity Watch' (1992-1995): 42 issues
+
+     Supreme: The New Adventures issues:
+     … +6 lines (ctrl+o to expand)
+
+● Bash(python3 -c "
+      import sys…)
+  ⎿  normalize: 'Warlock and the Infinity Watch'
+     Candidates for Warlock and the Infinity Watch, 1992:
+       ID=4483 'Warlock and the Infinity Watch' (1992)
+     … +5 lines (ctrl+o to expand)
+
+● Bash(python3 -c "
+      import csv…)
+  ⎿  SG='Warlock' Series='Warlock and the Infinity Watch' #8 year=1992 MT=r
+     everse_lookup_closest_name:Warlock 5:canonical
+     SG='Warlock' Series='Warlock and the Infinity Watch' #9 year=1992 MT=r
+     … +12 lines (ctrl+o to expand)
+
+● Bash(python3 -c "
+      import sys…)
+  ⎿  Initial (Warlock, #8, 1992): id=14037, match='reverse_lookup_closest_n
+     ame:Warlock 5'
+       Series: Warlock 5 (1986), issue cover year: 1987
+     … +8 lines (ctrl+o to expand)
+
+● The initial lookup for "Warlock" returns reverse_lookup_closest_name which
+  isn't in the retry condition. I need to add that case. Also: the retry returns
+   only_series for Warlock even though issue #8 exists in issue_map — let me
+  trace:
+
+● Bash(python3 -c "
+      import sys…)
+  ⎿  Candidates: [(4483, 'Warlock and the Infinity Watch')]
+       (4483, '8') in issue_map: True, value: (2814469, 'newsstand')
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+● The initial "Warlock" lookup returns reverse_lookup_closest_name which isn't
+  in the retry trigger. I need to add that case. Two fixes needed: add
+  reverse_lookup to retry conditions, and also fix only_series early return to
+  actually check if the issue exists:
+
+  Actually, the only_series early return is fine — main() checks the issue
+  after. The key fix is just adding reverse_lookup to the retry trigger:
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(gcd_tests.py)
+  ⎿  Added 3 lines
+      624                                  series_match in ("closest_year
+           _with_issue", "only_one_with_issue")
+      625                                  and (large_year_gap or (series
+           _differs_from_group and moderate_year_gap))
+      626                              )
+      627 +                            # When Series Group lookup fell ba
+          +ck to reverse lookup but a more                               
+      628 +                            # specific Series name is availabl
+          +e, retry with that name.                                      
+      629 +                            or (series_match.startswith("rever
+          +se_lookup") and series_differs_from_group)                    
+      630                          )
+      631                          and series_id
+      632                      ):
+
+● Bash(uv run python gcd_tests.py --force 2>&1 | tail -15)
+  ⎿  Enriching:   0%|          | 0/5203 [00:00<?, ?it/s]Enriching:   0%|
+              | 14/5203 [00:00<00:49, 105.27it/s]Enriching:   0%|
+      | 25/5203 [00:00<02:45, 31.34it/s] Enriching:   1%|          | 32/52
+     … +209 lines (ctrl+o to expand)
+  ⎿  (timeout 2m)
+
+● Bash(python3 -c "
+      import csv, sqlite3…)
+  ⎿  Total false positives (>2yr gap, non-barcode): 47
+
+     Gap 10-+: 1 issues
+     … +35 lines (ctrl+o to expand)
+
+● The new condition enters the if block but should_retry isn't set for
+  reverse_lookup. Let me check and fix:
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(gcd_tests.py)
+  ⎿  Added 1 line, removed 1 line
+      637                              "only_series",
+      638                              "closest_year_with_issue",
+      639                              "only_one_with_issue",
+      640 -                        )                                     
+      640 +                        ) or series_match.startswith("reverse_
+          +lookup")                                                      
+      641                          if not should_retry:
+      642                              parts = series_match.split("_")
+      643                              if len(parts) >= 4:
+
+● Bash(uv run python gcd_tests.py --force 2>&1 | tail -15)
+  ⎿  Enriching:   0%|          | 0/5203 [00:00<?, ?it/s]Enriching:   0%|
+              | 14/5203 [00:00<00:48, 107.32it/s]Enriching:   0%|
+      | 25/5203 [00:00<02:47, 30.91it/s] Enriching:   1%|          | 32/52
+     … +249 lines (ctrl+o to expand)
+  ⎿  (timeout 2m)
+
+● Massive improvement — reverse_lookup_closest_name dropped from 245 to 44! Let
+  me check the false positives:
+
+● Bash(python3 -c "
+      import csv, sqlite3…)
+  ⎿  Total false positives (>2yr gap, non-barcode): 33
+
+     Gap 10-+: 1 issues
+     … +26 lines (ctrl+o to expand)
+
+● 33 false positives — down 88% from the original 276. Let me quickly check
+  Supreme #52 and the "only upgrade if closer" logic for the remaining
+  reverse_lookup_closest_name cases:
+
+● Bash(python3 -c "
+      import sys…)
+  ⎿  == Supreme #52 ==
+
+     find_best_series_id(Supreme, #52, 1997): id=3645, match='reverse_looku
+     … +3 lines (ctrl+o to expand)
+  ⎿  You've hit your limit · resets 12pm (America/Chicago)
+     /upgrade or /extra-usage to finish what you’re working on.
+
+✻ Worked for 1h 7m 52s
+
+❯ /usage                                                                        
+  ⎿  Status dialog dismissed
